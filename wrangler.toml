@@ -1,0 +1,44 @@
+name = "ark-sales"
+main = "src/index.ts"
+compatibility_date = "2024-10-22"
+compatibility_flags = ["nodejs_compat"]
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ark-sales-db"
+database_id = "ark-sales-db-local"
+migrations_dir = "migrations"
+
+[[queues.producers]]
+binding = "SALES_INGEST_QUEUE"
+queue = "ark-sales-ingest-queue"
+
+[[queues.consumers]]
+queue = "ark-sales-ingest-queue"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "ark-sales-ingest-dlq"
+
+[durable_objects]
+bindings = [
+  { name = "SALES_AGENT", class_name = "SalesAgent" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SalesAgent"]
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+ENVIRONMENT = "development"
+LEDGER_API_URL = "https://ledger.arksystems.site"
+ANGEL_API_URL = "https://angel.arksystems.site"
+COMMERCE_API_URL = "https://tiendas.arksystems.site"
+AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+RESEND_FROM_EMAIL = "ventas@arksystems.site"

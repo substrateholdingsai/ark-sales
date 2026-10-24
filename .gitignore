@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Cloudflare / Wrangler
+.wrangler/
+.dev.vars
+wrangler.toml.local
+
+# Build / output
+dist/
+*.log
+
+# Test / coverage
+coverage/
+.vitest/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.*
