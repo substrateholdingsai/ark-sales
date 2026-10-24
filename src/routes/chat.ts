@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { Env } from "../types";
+import { ensureAccountContactForLead } from "../crm/automation";
 
 export const chatRouter = new Hono<{ Bindings: Env }>();
 
@@ -32,6 +33,7 @@ chatRouter.post("/", async (c) => {
           despacho_nombre || null,
           tamano || null
         ).run();
+        await ensureAccountContactForLead(c.env.DB, { id: effectiveLeadId, email: email || "anonimo@lead.arksystems.site", despacho_nombre, tamano });
       } catch (dbErr) {
         console.error("[chatRouter] Error insertando o actualizando lead en D1:", dbErr);
       }

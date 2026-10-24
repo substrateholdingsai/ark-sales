@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { Env, LeadIngestPayload } from "../types";
 import { ToolExecutor } from "../tools";
+import { ensureAccountContactForLead } from "../crm/automation";
 
 export const webhookRouter = new Hono<{ Bindings: Env }>();
 
@@ -36,6 +37,7 @@ webhookRouter.post("/", async (c) => {
         diag.dolor_detectado,
         diag.especialista_asignado
       ).run();
+      await ensureAccountContactForLead(c.env.DB, { id: leadId, email, despacho_nombre, tamano: tamano || "1-5" });
     }
 
     // 3. Inicializar el Durable Object para tener el contexto listo para cuando el usuario chatee

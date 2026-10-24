@@ -1,5 +1,6 @@
 import { Env, LeadIngestPayload, AgentId } from "../types";
 import { CatalogService, FAIL_CLOSED_MESSAGE } from "../catalog/service";
+import { autoTaskOnQualifiedLead, ensureAccountContactForLead, autoTaskOnProposalSent } from "../crm/automation";
 
 export interface ToolDefinition {
   name: string;
@@ -262,12 +263,20 @@ export class ToolExecutor {
           VALUES (?, ?, ?, ?, 'pending', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         `).bind(outboxId, leadId, destination, JSON.stringify(payload)).run();
 
-        // Actualizar estado del lead a calificado
-        await this.env.DB.prepare(`
-          UPDATE sales_leads 
-          SET estado = 'calificado', score = ?, conversation_summary = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).bind(payload.score, summary, leadId).run();
+         // Actualizar estado del lead a calificado
+         await this.env.DB.prepare(`
+           UPDATE sales_leads 
+           SET estado = 'calificado', score = ?, conversation_summary = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?
+         `).bind(payload.score, summary, leadId).run();
+
+         // Asegurar cuenta/contacto y tarea inicial (Fase 5)
+         try {
+           const leadRow: any = await this.env.DB.prepare("SELECT id, email, despacho_nombre, tamano FROM sales_leads WHERE id = ?").bind(leadId).first();
+           if (leadRow) await autoTaskOnQualifiedLead(this.env.DB, leadRow);
+         } catch (e) {
+           console.warn("[entregarLead] automation error:", e);
+         }
       } catch (e) {
         console.error("[entregarLead] Error guardando en sales_pending_ingest D1:", e);
       }
@@ -360,18 +369,29 @@ export class ToolExecutor {
       }
     }
 
-    // Actualizar estado del lead en D1
-    if (this.env.DB) {
-      try {
-        await this.env.DB.prepare(`
-          UPDATE sales_leads 
-          SET estado = 'propuesta_enviada', updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).bind(leadId).run();
-      } catch (e) {
-        console.error("[enviarPropuesta] Error actualizando lead en D1:", e);
-      }
-    }
+     // Actualizar estado del lead en D1
+     if (this.env.DB) {
+       try {
+         await this.env.DB.prepare(`
+           UPDATE sales_leads 
+           SET estado = 'propuesta_enviada', updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?
+         `).bind(leadId).run();
+
+         // Actualizar oportunidad a propuesta_enviada y tarea de seguimiento (Fase 5)
+         try {
+           const opp: any = await this.env.DB.prepare("SELECT id, account_id, owner_user_id FROM sales_opportunities WHERE lead_id = ? LIMIT 1").bind(leadId).first();
+           if (opp) {
+             await this.env.DB.prepare("UPDATE sales_opportunities SET stage = 'propuesta_enviada', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(opp.id).run();
+             await autoTaskOnProposalSent(this.env.DB, { opportunityId: opp.id, accountId: opp.account_id, leadId, ownerUserId: opp.owner_user_id });
+           }
+         } catch (e) {
+           console.warn("[enviarPropuesta] opp automation error:", e);
+         }
+       } catch (e) {
+         console.error("[enviarPropuesta] Error actualizando lead en D1:", e);
+       }
+     }
 
     return {
       status: "propuesta_enviada",

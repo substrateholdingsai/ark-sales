@@ -438,8 +438,13 @@ export const WIDGET_JS_SOURCE = `
     let baseUrl = "";
     if (scriptTag && scriptTag.src) {
       try {
-        const parsed = new URL(scriptTag.src);
+        const parsed = new URL(scriptTag.src, window.location.href);
         baseUrl = parsed.origin;
+      } catch (e) {}
+    }
+    if (!baseUrl) {
+      try {
+        baseUrl = window.location.origin;
       } catch (e) {}
     }
 

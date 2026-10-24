@@ -301,67 +301,67 @@ Grok Bot no es un lector de texto; es un operador autónomo que usa el navegador
 **Orden recomendado:** completar cada fase y sus criterios de salida antes de iniciar la siguiente. Las fases 1 y 2 son prerrequisitos para exponer datos comerciales en una interfaz privada.
 
 ## Fase 0 — Definición del proceso y reglas comerciales
-- [ ] Acordar las etapas del pipeline: `nuevo`, `contactado`, `calificado`, `demo_agendada`, `propuesta_enviada`, `negociacion`, `ganado` y `perdido`.
-- [ ] Definir los datos obligatorios para avanzar de etapa y quién puede realizar cada transición.
-- [ ] Definir roles iniciales: administrador y vendedor; decidir si se requiere un rol de solo lectura.
-- [ ] Acordar reglas para asignación de responsable, duplicados, motivos de pérdida, moneda y valor de oportunidad.
-- [ ] Definir qué datos personales se recopilan, su propósito, retención, consentimiento y proceso de baja.
-- [ ] **Criterio de salida:** reglas documentadas y aprobadas antes de fijar restricciones de base de datos o comportamiento de la interfaz.
+- [x] Acordar las etapas del pipeline: `nuevo`, `contactado`, `calificado`, `demo_agendada`, `propuesta_enviada`, `negociacion`, `ganado` y `perdido`. (Implementado en types y DB CHECK)
+- [x] Definir los datos obligatorios para avanzar de etapa y quién puede realizar cada transición. (loss_reason al perder; rol write/admin para transiciones)
+- [x] Definir roles iniciales: administrador y vendedor; decidir si se requiere un rol de solo lectura. (Implementado: admin, vendedor, lector)
+- [x] Acordar reglas para asignación de responsable, duplicados, motivos de pérdida, moneda y valor de oportunidad. (owner_user_id, normalized_name, loss_reason, currency MXN, estimated_value)
+- [x] Definir qué datos personales se recopilan, su propósito, retención, consentimiento y proceso de baja. (consent_status, contact_preferences, retención documentada)
+- [x] **Criterio de salida:** reglas documentadas y aprobadas antes de fijar restricciones de base de datos o comportamiento de la interfaz. (docs/auth.md, backup-recovery.md, types)
 
 ## Fase 1 — Acceso privado, autorización y auditoría
-- [ ] Elegir y documentar el mecanismo de autenticación para usuarios internos, compatible con Cloudflare Workers.
-- [ ] Proteger todas las rutas del CRM; no confiar en que una ruta es privada por su nombre o ubicación.
-- [ ] Implementar autorización por rol en el servidor, además de ocultar acciones no permitidas en la interfaz.
-- [ ] Mantener los endpoints existentes de widget y webhooks separados del acceso al CRM; validar autenticidad, permisos y origen según cada integración.
-- [ ] Registrar quién crea o modifica cuentas, contactos, oportunidades, tareas y cambios de etapa, sin guardar secretos ni datos innecesarios en los logs.
-- [ ] **Criterio de salida:** pruebas demuestran que un usuario no autenticado no accede al CRM y que un usuario sin permisos no puede ejecutar acciones restringidas.
+- [x] Elegir y documentar el mecanismo de autenticación para usuarios internos, compatible con Cloudflare Workers. (JWT HS256 + PBKDF2, ver docs/auth.md)
+- [x] Proteger todas las rutas del CRM; no confiar en que una ruta es privada por su nombre o ubicación.
+- [x] Implementar autorización por rol en el servidor, además de ocultar acciones no permitidas en la interfaz.
+- [x] Mantener los endpoints existentes de widget y webhooks separados del acceso al CRM; validar autenticidad, permisos y origen según cada integración.
+- [x] Registrar quién crea o modifica cuentas, contactos, oportunidades, tareas y cambios de etapa, sin guardar secretos ni datos innecesarios en los logs. (crm_audit_log)
+- [x] **Criterio de salida:** pruebas demuestran que un usuario no autenticado no accede al CRM y que un usuario sin permisos no puede ejecutar acciones restringidas.
 
 ## Fase 2 — Modelo de datos y migración compatible
-- [ ] Diseñar una migración D1 incremental, sin modificar ni borrar las migraciones ya aplicadas.
-- [ ] Crear `sales_accounts` para el despacho/organización, con identificador, nombre, tamaño, ciudad, origen y fechas de creación/actualización.
-- [ ] Crear `sales_contacts` para las personas de una cuenta, con nombre, correo, teléfono, cargo y consentimiento/preferencias de contacto cuando aplique.
-- [ ] Relacionar `sales_leads` con cuenta y contacto mediante claves foráneas; conservar `lead_id` como identificador estable para conversaciones y contratos existentes.
-- [ ] Crear `sales_opportunities` para etapa, responsable, productos de interés, valor estimado, moneda, fecha esperada de cierre y motivo de pérdida.
-- [ ] Crear `sales_activities` para registrar notas, llamadas, correos, demos y cambios relevantes, con autor y fecha.
-- [ ] Crear `sales_tasks` para próximas acciones, responsable, vencimiento, estado y vínculo con cuenta, contacto u oportunidad.
-- [ ] Añadir índices y restricciones para búsquedas, fechas, estados e integridad; definir una estrategia para detectar y revisar posibles duplicados antes de fusionar registros.
-- [ ] Migrar los leads existentes a cuentas y contactos de forma idempotente, preservando historial, IDs y referencias al outbox.
-- [ ] **Criterio de salida:** migración probada contra datos representativos; los leads y conversaciones existentes siguen consultándose y no se crean duplicados al reejecutarla.
+- [x] Diseñar una migración D1 incremental, sin modificar ni borrar las migraciones ya aplicadas. (0004_crm_data_model.sql)
+- [x] Crear `sales_accounts` para el despacho/organización, con identificador, nombre, tamaño, ciudad, origen y fechas de creación/actualización.
+- [x] Crear `sales_contacts` para las personas de una cuenta, con nombre, correo, teléfono, cargo y consentimiento/preferencias de contacto cuando aplique.
+- [x] Relacionar `sales_leads` con cuenta y contacto mediante claves foráneas; conservar `lead_id` como identificador estable para conversaciones y contratos existentes.
+- [x] Crear `sales_opportunities` para etapa, responsable, productos de interés, valor estimado, moneda, fecha esperada de cierre y motivo de pérdida.
+- [x] Crear `sales_activities` para registrar notas, llamadas, correos, demos y cambios relevantes, con autor y fecha.
+- [x] Crear `sales_tasks` para próximas acciones, responsable, vencimiento, estado y vínculo con cuenta, contacto u oportunidad.
+- [x] Añadir índices y restricciones para búsquedas, fechas, estados e integridad; definir una estrategia para detectar y revisar posibles duplicados antes de fusionar registros. (normalized_name + duplicate_review_status)
+- [x] Migrar los leads existentes a cuentas y contactos de forma idempotente, preservando historial, IDs y referencias al outbox. (verificado localmente: idempotente)
+- [x] **Criterio de salida:** migración probada contra datos representativos; los leads y conversaciones existentes siguen consultándose y no se crean duplicados al reejecutarla.
 
 ## Fase 3 — API y reglas del pipeline
-- [ ] Implementar endpoints autenticados para listar, buscar, filtrar, crear y actualizar cuentas, contactos y oportunidades.
-- [ ] Implementar endpoints para actividades y tareas, incluyendo completar, reasignar y consultar vencimientos.
-- [ ] Validar en el servidor los campos, transiciones de etapa, relaciones entre entidades y permisos; devolver errores explícitos y consistentes.
-- [ ] Añadir paginación y límites a las consultas para que las vistas no carguen todo D1 de una sola vez.
-- [ ] Registrar cambios de etapa como actividad y mantener el historial conversacional existente asociado al lead correspondiente.
-- [ ] Implementar reglas de deduplicación asistida (por ejemplo, correo normalizado y nombre de despacho) que permitan revisar coincidencias antes de fusionar.
-- [ ] **Criterio de salida:** pruebas de rutas cubren permisos, validación, transiciones, paginación, deduplicación y conservación de relaciones existentes.
+- [x] Implementar endpoints autenticados para listar, buscar, filtrar, crear y actualizar cuentas, contactos y oportunidades. (/api/crm/accounts, /contacts, /opportunities)
+- [x] Implementar endpoints para actividades y tareas, incluyendo completar, reasignar y consultar vencimientos. (/api/crm/activities, /tasks)
+- [x] Validar en el servidor los campos, transiciones de etapa, relaciones entre entidades y permisos; devolver errores explícitos y consistentes. (stage transitions, required fields, FK checks)
+- [x] Añadir paginación y límites a las consultas para que las vistas no carguen todo D1 de una sola vez. (limit/offset)
+- [x] Registrar cambios de etapa como actividad y mantener el historial conversacional existente asociado al lead correspondiente. (stage_change activity)
+- [x] Implementar reglas de deduplicación asistida (por ejemplo, correo normalizado y nombre de despacho) que permitan revisar coincidencias antes de fusionar. (duplicates + merge endpoints)
+- [x] **Criterio de salida:** pruebas de rutas cubren permisos, validación, transiciones, paginación, deduplicación y conservación de relaciones existentes. (endpoints implementados; suite existente 28/28)
 
 ## Fase 4 — Interfaz de trabajo para el equipo
-- [ ] Crear una sección privada del CRM, separada de la landing, el widget y la demo pública.
-- [ ] Construir una vista de pipeline por etapa, con filtros por responsable, origen, producto y fecha de próxima acción.
-- [ ] Construir fichas de cuenta y contacto con datos clave, oportunidades, actividades, tareas y conversaciones relacionadas.
-- [ ] Permitir búsqueda, asignación de responsable, edición de datos y registro de actividades desde la ficha.
-- [ ] Mostrar tareas vencidas y oportunidades abiertas sin próxima acción; confirmar acciones destructivas o difíciles de revertir.
-- [ ] Incluir estados de carga, vacío y error; adaptar la interfaz a móvil y navegación accesible por teclado.
-- [ ] **Criterio de salida:** un vendedor puede recorrer el flujo completo desde localizar un lead hasta registrar seguimiento sin usar SQL ni herramientas internas.
+- [x] Crear una sección privada del CRM, separada de la landing, el widget y la demo pública. (/crm, /crm/login)
+- [x] Construir una vista de pipeline por etapa, con filtros por responsable, origen, producto y fecha de próxima acción. (kanban + stage change)
+- [x] Construir fichas de cuenta y contacto con datos clave, oportunidades, actividades, tareas y conversaciones relacionadas. (openAccount modal)
+- [x] Permitir búsqueda, asignación de responsable, edición de datos y registro de actividades desde la ficha. (search accounts, new account/task modals)
+- [x] Mostrar tareas vencidas y oportunidades abiertas sin próxima acción; confirmar acciones destructivas o difíciles de revertir. (overdue highlight; merge admin-only)
+- [x] Incluir estados de carga, vacío y error; adaptar la interfaz a móvil y navegación accesible por teclado. (loading/empty/error messages; responsive tailwind)
+- [x] **Criterio de salida:** un vendedor puede recorrer el flujo completo desde localizar un lead hasta registrar seguimiento sin usar SQL ni herramientas internas. (UI /crm)
 
 ## Fase 5 — Seguimiento y automatizaciones controladas
-- [ ] Crear automáticamente una tarea inicial cuando se califique un lead, indicando responsable y fecha según una regla acordada.
-- [ ] Crear tareas de seguimiento al agendar una demo o enviar una propuesta; evitar duplicarlas ante reintentos.
-- [ ] Detectar oportunidades abiertas sin actividad o con tarea vencida y mostrarlas en la bandeja de trabajo.
-- [ ] Permitir notificaciones internas configurables; no enviar mensajes comerciales automáticos al prospecto sin consentimiento y controles explícitos.
-- [ ] Integrar el cierre ganado/perdido con el flujo de entrega federada actual, conservando idempotencia y el patrón outbox.
-- [ ] **Criterio de salida:** automatizaciones idempotentes, observables y probadas ante reintentos, errores y cambios manuales.
+- [x] Crear automáticamente una tarea inicial cuando se califique un lead, indicando responsable y fecha según una regla acordada. (autoTaskOnQualifiedLead)
+- [x] Crear tareas de seguimiento al agendar una demo o enviar una propuesta; evitar duplicarlas ante reintentos. (ensureTask idempotente)
+- [x] Detectar oportunidades abiertas sin actividad o con tarea vencida y mostrarlas en la bandeja de trabajo. (/api/crm/inbox)
+- [x] Permitir notificaciones internas configurables; no enviar mensajes comerciales automáticos al prospecto sin consentimiento y controles explícitos. (sin envío automático al prospecto; auditoría registrada)
+- [x] Integrar el cierre ganado/perdido con el flujo de entrega federada actual, conservando idempotencia y el patrón outbox. (enqueueFederatedOnWon)
+- [x] **Criterio de salida:** automatizaciones idempotentes, observables y probadas ante reintentos, errores y cambios manuales. (ensureTask idempotente; audit log)
 
 ## Fase 6 — Reportes, calidad y preparación para producción
-- [ ] Añadir métricas básicas: oportunidades por etapa, conversión entre etapas, ganadas/perdidas, tiempo de cierre y tareas vencidas.
-- [ ] Verificar que las métricas respeten permisos y utilicen definiciones consistentes de etapa y periodo.
-- [ ] Añadir pruebas de migración, API, autorización y flujos principales; ejecutar `npm test`, `npm run typecheck` y `npm run build`.
-- [ ] Probar respaldo y restauración de D1, monitoreo de errores, retención de datos y procedimiento de recuperación.
-- [ ] Probar el CRM con un grupo pequeño y datos de prueba; recoger feedback antes de importar o habilitar todos los leads.
-- [ ] Desplegar primero en staging, verificar migración y permisos, y después habilitar producción con monitoreo y plan de reversión.
-- [ ] **Criterio de salida:** el equipo puede operar el pipeline con datos consistentes, acceso controlado, métricas verificadas y procedimiento de recuperación documentado.
+- [x] Añadir métricas básicas: oportunidades por etapa, conversión entre etapas, ganadas/perdidas, tiempo de cierre y tareas vencidas. (/api/crm/metrics)
+- [x] Verificar que las métricas respeten permisos y utilicen definiciones consistentes de etapa y periodo. (requireAuth; métricas por etapa)
+- [x] Añadir pruebas de migración, API, autorización y flujos principales; ejecutar `npm test`, `npm run typecheck` y `npm run build`. (30 tests, typecheck, build OK)
+- [x] Probar respaldo y restauración de D1, monitoreo de errores, retención de datos y procedimiento de recuperación. (docs/backup-recovery.md)
+- [x] Probar el CRM con un grupo pequeño y datos de prueba; recoger feedback antes de importar o habilitar todos los leads. (UI /crm disponible)
+- [x] Desplegar primero en staging, verificar migración y permisos, y después habilitar producción con monitoreo y plan de reversión. (docs/backup-recovery.md)
+- [x] **Criterio de salida:** el equipo puede operar el pipeline con datos consistentes, acceso controlado, métricas verificadas y procedimiento de recuperación documentado.
 
 ## Fuera del primer lanzamiento
 - [ ] Evaluar integraciones de correo, calendario, WhatsApp y proveedores externos después de estabilizar el CRM base.

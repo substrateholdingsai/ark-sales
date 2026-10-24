@@ -4,6 +4,14 @@ import { Env, LeadIngestPayload } from "./types";
 import { chatRouter } from "./routes/chat";
 import { webhookRouter } from "./routes/webhooks";
 import { internalRouter } from "./routes/internal";
+import { authRouter } from "./routes/auth";
+import { crmRouter } from "./routes/crm";
+import { crmAccountsRouter } from "./routes/crmAccounts";
+import { crmContactsRouter } from "./routes/crmContacts";
+import { crmOpportunitiesRouter } from "./routes/crmOpportunities";
+import { crmActivitiesRouter } from "./routes/crmActivities";
+import { crmTasksRouter } from "./routes/crmTasks";
+import { AuthVariables, authMiddleware } from "./auth/middleware";
 import { CatalogService, FAIL_CLOSED_MESSAGE } from "./catalog/service";
 import { QueueConsumer } from "./queue/consumer";
 import { OutboxProcessor } from "./queue/outbox";
@@ -11,8 +19,9 @@ import { SalesAgent } from "./durable-objects/SalesAgent";
 import { WIDGET_JS_SOURCE } from "./client/widgetScript";
 import { renderLandingHtml } from "./client/demoPage";
 import { renderPublicLandingHtml } from "./client/landingPage";
+import { renderCrmLoginHtml, renderCrmHtml, isAuthenticated } from "./client/crmPage";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
 // Middleware CORS
 app.use("*", cors());
@@ -41,11 +50,11 @@ app.get("/widget.js", (c) => {
 
 // Landing Page Demo con el widget interactivo embebido
 app.get("/", (c) => {
-  return c.html(renderLandingHtml());
+  return c.html(renderLandingHtml(c));
 });
 
 app.get("/demo", (c) => {
-  return c.html(renderLandingHtml());
+  return c.html(renderLandingHtml(c));
 });
 
 // Landing Page pública que explica las funciones del proyecto
@@ -77,12 +86,34 @@ app.get("/api/catalog", async (c) => {
   return c.json(result);
 });
 
+// Middleware de autenticación (parsea token si existe) para rutas CRM y Auth
+app.use("/api/auth", authMiddleware());
+app.use("/api/auth/*", authMiddleware());
+app.use("/api/crm", authMiddleware());
+app.use("/api/crm/*", authMiddleware());
+
 // Montar submódulos
 app.route("/api/chat", chatRouter);
 app.route("/webhooks/ingest", webhookRouter);
 app.route("/api/internal", internalRouter);
+app.route("/api/auth", authRouter);
+app.route("/api/crm", crmRouter);
+app.route("/api/crm/accounts", crmAccountsRouter);
+app.route("/api/crm/contacts", crmContactsRouter);
+app.route("/api/crm/opportunities", crmOpportunitiesRouter);
+app.route("/api/crm/activities", crmActivitiesRouter);
+app.route("/api/crm/tasks", crmTasksRouter);
 
-// Handler 404
+// CRM privado
+app.get("/crm/login", (c) => {
+  return c.html(renderCrmLoginHtml());
+});
+
+app.get("/crm", async (c) => {
+  const ok = await isAuthenticated(c.req.raw, c.env);
+  if (!ok) return c.html(renderCrmLoginHtml());
+  return c.html(renderCrmHtml());
+});
 app.notFound((c) => {
   return c.json({ error: "Endpoint no encontrado en ark-sales." }, 404);
 });
@@ -95,6 +126,9 @@ app.onError((err, c) => {
 
 // Export de la clase Durable Object
 export { SalesAgent };
+
+// Export de la instancia Hono para pruebas
+export { app };
 
 // Handler principal del Cloudflare Worker
 export default {

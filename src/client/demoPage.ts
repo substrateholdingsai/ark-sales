@@ -1,10 +1,76 @@
-export function renderLandingHtml(): string {
+function resolveRequestUrl(input: unknown): string {
+  if (!input) return "https://tu-dominio.com";
+  if (typeof input === "string") return input;
+  if (input instanceof Request) return input.url;
+  if (typeof input === "object") {
+    const obj = input as { req?: { url?: unknown }; url?: unknown };
+    if (obj.req && typeof obj.req.url === "string") return obj.req.url;
+    if (typeof obj.url === "string") return obj.url;
+  }
+  return "https://tu-dominio.com";
+}
+
+function resolveOrigin(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "https://tu-dominio.com";
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function renderLandingHtml(requestOrUrl?: unknown): string {
+  const resolvedUrl = resolveRequestUrl(requestOrUrl);
+  const origin = resolveOrigin(resolvedUrl);
+  const canonicalUrl = escapeHtml(resolvedUrl);
+  const ogImageUrl = escapeHtml(`${origin}/og-image.png`);
+  const metaDescription = "Diagnóstico agéntico para despachos contables en México: riesgos SAT, cobranza y comercio digital. Bundle Total ARK por $997 MXN/mes.";
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "ARK Sales & Pulse Engine",
+    "applicationCategory": "BusinessApplication / AccountingSoftware",
+    "operatingSystem": "All",
+    "description": "Motor agéntico e infraestructura operativa para despachos contables en México: contabilidad, cobranza y comercio digital.",
+    "offers": {
+      "@type": "Offer",
+      "price": "997",
+      "priceCurrency": "MXN",
+      "billingCycle": "Monthly",
+      "availability": "https://schema.org/InStock"
+    },
+    "provider": {
+      "@type": "Organization",
+      "name": "ARK Ecosystem"
+    }
+  });
   return `<!DOCTYPE html>
 <html lang="es-MX">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARK Sales · Infraestructura Agéntica para Despachos</title>
+    <title>ARK Sales | Infraestructura de IA para Despachos Contables en México</title>
+    <meta name="description" content="${escapeHtml(metaDescription)}">
+    <link rel="canonical" href="${canonicalUrl}">
+    <meta property="og:title" content="ARK Sales | Infraestructura de IA para Despachos Contables en México">
+    <meta property="og:description" content="${escapeHtml(metaDescription)}">
+    <meta property="og:url" content="${canonicalUrl}">
+    <meta property="og:site_name" content="ARK Ecosystem">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="${ogImageUrl}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="ARK Sales | Infraestructura de IA para Despachos Contables en México">
+    <meta name="twitter:description" content="${escapeHtml(metaDescription)}">
+    <meta name="twitter:image" content="${ogImageUrl}">
+    <script type="application/ld+json">${jsonLd}</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">

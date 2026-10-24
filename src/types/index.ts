@@ -40,6 +40,8 @@ export type LeadRecord = {
   estado: "nuevo" | "en_conversacion" | "calificado" | "propuesta_enviada" | "cerrado";
   score: number;
   conversation_summary: string | null;
+  account_id: string | null;
+  contact_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -56,6 +58,83 @@ export type PendingIngestRecord = {
   updated_at: string;
 };
 
+export type AccountRecord = {
+  id: string;
+  name: string;
+  normalized_name: string | null;
+  size: "1-5" | "6-20" | "21-50" | "50+" | null;
+  city: string | null;
+  origin: string | null;
+  duplicate_review_status: "pending" | "reviewed" | "merged";
+  merged_into_account_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ContactRecord = {
+  id: string;
+  account_id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  title: string | null;
+  consent_status: string | null;
+  contact_preferences: Record<string, any> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OpportunityStage =
+  | "nuevo" | "contactado" | "calificado" | "demo_agendada"
+  | "propuesta_enviada" | "negociacion" | "ganado" | "perdido";
+
+export type OpportunityRecord = {
+  id: string;
+  account_id: string | null;
+  contact_id: string | null;
+  lead_id: string | null;
+  stage: OpportunityStage;
+  owner_user_id: string | null;
+  products_interest: string[];
+  estimated_value: number | null;
+  currency: string;
+  expected_close_date: string | null;
+  loss_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ActivityType = "note" | "call" | "email" | "demo" | "stage_change" | "task" | "system";
+
+export type ActivityRecord = {
+  id: string;
+  account_id: string | null;
+  contact_id: string | null;
+  opportunity_id: string | null;
+  lead_id: string | null;
+  type: ActivityType;
+  author_user_id: string | null;
+  content: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string;
+};
+
+export type TaskStatus = "pending" | "in_progress" | "done" | "cancelled";
+
+export type TaskRecord = {
+  id: string;
+  account_id: string | null;
+  contact_id: string | null;
+  opportunity_id: string | null;
+  lead_id: string | null;
+  title: string;
+  description: string | null;
+  owner_user_id: string | null;
+  due_date: string | null;
+  status: TaskStatus;
+  created_at: string;
+  updated_at: string;
+};
 export type AgentSkill = {
   id: string;
   agent_id: string;
@@ -107,4 +186,5 @@ export interface Env {
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   AI_MODEL?: string;
+  CRM_JWT_SECRET?: string;
 }
