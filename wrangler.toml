@@ -9,7 +9,7 @@ binding = "AI"
 [[d1_databases]]
 binding = "DB"
 database_name = "ark-sales-db"
-database_id = "ark-sales-db-local"
+database_id = "d2f30a7e-e176-4608-b19e-316d34fb5b89"
 migrations_dir = "migrations"
 
 [[queues.producers]]
@@ -30,13 +30,17 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SalesAgent"]
+new_sqlite_classes = ["SalesAgent"]
 
 [triggers]
 crons = ["*/15 * * * *"]
 
+[[routes]]
+pattern = "sales.arksystems.site/*"
+zone_name = "arksystems.site"
+
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 LEDGER_API_URL = "https://ledger.arksystems.site"
 ANGEL_API_URL = "https://angel.arksystems.site"
 COMMERCE_API_URL = "https://tiendas.arksystems.site"
