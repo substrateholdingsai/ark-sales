@@ -285,9 +285,9 @@ Grok Bot no es un lector de texto; es un operador autónomo que usa el navegador
   - Embeber `<script src="https://sales.arksystems.site/widget.js" defer></script>` en la landing de `tiendas.arksystems.site`.
 
 ### 3. Automatización Física de Grok Bot (Computer-Use Daemon)
-- [ ] **Daemon de Ejecución de Grok Bot:**
+- [x] **Daemon de Ejecución de Grok Bot:**
   - Script o servicio Node/Python con Playwright/Puppeteer que corra en un servidor con navegador y consuma periódicamente las tareas de `/api/internal/skills/execute`.
-- [ ] **Webhook de X (Twitter):**
+- [x] **Webhook de X (Twitter):**
   - Listener o worker con la API de X v2 que escuche menciones de quejas del SAT o `@bot` y dispare `POST /api/internal/skills/execute` con la habilidad `tag_prospect_on_x`.
 
 ---
