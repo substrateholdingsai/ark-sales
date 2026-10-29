@@ -153,7 +153,63 @@ class GrokComputerRunner:
             await context.close()
 
     # --------------------------------------------------------------------------
-    # 3. REPORTAR RESULTADOS A ARK-SALES
+    # 3. EJECUCIÓN DE HABILIDAD: tag_prospect_on_x
+    # --------------------------------------------------------------------------
+    async def execute_tag_prospect_on_x(self, job: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Simula la interacción en X para responder a una queja del SAT.
+        En producción real, esto usaría Playwright para iniciar sesión y twittear,
+        o la API de X. Para este Runner autónomo simularemos la acción.
+        """
+        lead_id = job.get("lead_id")
+        username = job.get("username", "")
+        queja_sat = job.get("queja_sat", "")
+
+        if not username:
+            logger.error(f"❌ Job {lead_id} sin username de X. Abortando.")
+            return {"status": "failed", "error": "missing_username"}
+
+        logger.info(f"🐦 Ejecutando 'tag_prospect_on_x' para @{username} (Lead: {lead_id})")
+        logger.info(f"🐦 Queja recibida: '{queja_sat}'")
+
+        try:
+            # Simular proceso de respuesta y publicación del tweet
+            await asyncio.sleep(2)
+
+            thread_response = (
+                f"Hola @{username}, veo que estás teniendo problemas con el SAT. "
+                "En ARK Ledger blindamos operaciones con sellado criptográfico SHA-256 "
+                "y calculadoras preventivas para evitar multas. "
+                "Pruébalo aquí: https://sales.arksystems.site/demo"
+            )
+
+            logger.info(f"✅ Respuesta simulada enviada en X: {thread_response}")
+
+            summary = f"Prospecto contactado vía X (@{username}). Se le compartió el enlace a Ark Ledger tras quejarse sobre: '{queja_sat}'."
+
+            enriched_data = {
+                "lead_id": lead_id,
+                "status": "success",
+                "enrichment": {
+                    "research_summary": summary,
+                    "source": "grok_bot_twitter",
+                    "confidence_score": 1.0
+                }
+            }
+            # Remove the pending tag so we don't process it again
+            # In a real scenario, this would be updated in D1
+            return enriched_data
+        except Exception as e:
+            logger.error(f"💥 Error ejecutando 'tag_prospect_on_x' para {username}: {e}")
+            return {
+                "lead_id": lead_id,
+                "status": "failed",
+                "error": str(e),
+                "enrichment": {"research_summary": "La respuesta en X falló."}
+            }
+
+    # --------------------------------------------------------------------------
+    # 4. REPORTAR RESULTADOS A ARK-SALES
     # --------------------------------------------------------------------------
     async def report_enrichment(self, result: Dict[str, Any]):
         """Envía los datos enriquecidos de vuelta al Durable Object / D1 de ark-sales."""
@@ -166,10 +222,10 @@ class GrokComputerRunner:
             logger.error(f"❌ Fallo al reportar enriquecimiento para Lead {lead_id}: {e}")
 
     # --------------------------------------------------------------------------
-    # 4. BUCLE PRINCIPAL (Daemon)
+    # 5. BUCLE PRINCIPAL (Daemon)
     # --------------------------------------------------------------------------
     async def run_daemon(self):
-        logger.info("🔄 Daemon iniciado. Escuchando tareas de investigación...")
+        logger.info("🔄 Daemon iniciado. Escuchando tareas autónomas...")
         while True:
             job = await self.poll_pending_jobs()
             
@@ -177,6 +233,11 @@ class GrokComputerRunner:
                 skill = job.get("skill_name")
                 if skill == "research_prospect_web":
                     result = await self.execute_research_prospect_web(job)
+                    await self.report_enrichment(result)
+                elif skill == "tag_prospect_on_x":
+                    result = await self.execute_tag_prospect_on_x(job)
+                    # El webhook de enriquecimiento de ark-sales sobreescribirá el summary,
+                    # limpiando el tag [pending_twitter_tag] que estaba temporalmente
                     await self.report_enrichment(result)
                 else:
                     logger.warning(f"⚠️ Habilidad '{skill}' no reconocida por este runner.")

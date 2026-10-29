@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Hono } from "hono";
 import { internalRouter } from "../src/routes/internal";
 import { ToolExecutor } from "../src/tools";
@@ -117,6 +117,21 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
         if (/FROM agent_skills/i.test(query) && /is_active\s*=\s*1/i.test(query)) {
           return {
             all: vi.fn().mockResolvedValue({ results: mockSkills }),
+          };
+        }
+
+        if (/FROM sales_leads/i.test(query) && /\[pending_twitter_tag\]/i.test(query)) {
+          return {
+            first: vi.fn().mockImplementation(() => {
+              if ((global as any).__mockTwitterLead) {
+                return Promise.resolve({
+                  id: "lead_twitter_01",
+                  email: "contador_x@x.com",
+                  conversation_summary: "[pending_twitter_tag] El SAT se cayó de nuevo en plena nómina",
+                });
+              }
+              return Promise.resolve(null);
+            }),
           };
         }
 
@@ -261,7 +276,11 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
   });
 
   describe("Endpoints del Runner Autónomo (grok_bot_computer_runner.py)", () => {
-    it("GET /api/internal/skills/pending debe retornar el próximo job disponible", async () => {
+    beforeEach(() => {
+      (global as any).__mockTwitterLead = false;
+    });
+
+    it("GET /api/internal/skills/pending debe retornar el próximo job disponible para research_prospect_web", async () => {
       const res = await app.request("/api/internal/skills/pending", {}, createMockEnv());
       expect(res.status).toBe(200);
       const data: any = await res.json();
@@ -269,6 +288,18 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
       expect(data.job.lead_id).toBe("lead_existente_123");
       expect(data.job.despacho_nombre).toBe("Despacho Maya & Asociados");
       expect(data.job.skill_name).toBe("research_prospect_web");
+    });
+
+    it("GET /api/internal/skills/pending debe retornar job para tag_prospect_on_x si hay lead con [pending_twitter_tag]", async () => {
+      (global as any).__mockTwitterLead = true;
+      const res = await app.request("/api/internal/skills/pending", {}, createMockEnv());
+      expect(res.status).toBe(200);
+      const data: any = await res.json();
+      expect(data.job).toBeDefined();
+      expect(data.job.lead_id).toBe("lead_twitter_01");
+      expect(data.job.skill_name).toBe("tag_prospect_on_x");
+      expect(data.job.username).toBe("contador_x");
+      expect(data.job.queja_sat).toBe("El SAT se cayó de nuevo en plena nómina");
     });
 
     it("POST /api/internal/leads/:lead_id/enrich debe guardar la inteligencia extraída por Grok Bot", async () => {
