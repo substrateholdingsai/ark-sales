@@ -196,7 +196,29 @@ internalRouter.get("/skills/pending", async (c) => {
   }
 
   try {
-    // Buscar un lead con nombre de despacho que aún no tenga investigación de Grok Bot
+    // 1. Buscar leads pendientes de X (Twitter)
+    const twitterLead = await c.env.DB.prepare(`
+      SELECT id, email, conversation_summary
+      FROM sales_leads
+      WHERE conversation_summary LIKE '%[pending_twitter_tag]%'
+      ORDER BY created_at ASC
+      LIMIT 1
+    `).first<{ id: string; email: string; conversation_summary: string }>();
+
+    if (twitterLead) {
+      const username = twitterLead.email.replace('@x.com', '');
+      const queja_sat = twitterLead.conversation_summary.replace('[pending_twitter_tag] ', '');
+      return c.json({
+        job: {
+          lead_id: twitterLead.id,
+          username,
+          queja_sat,
+          skill_name: "tag_prospect_on_x",
+        },
+      });
+    }
+
+    // 2. Buscar un lead con nombre de despacho que aún no tenga investigación de Grok Bot
     const lead = await c.env.DB.prepare(`
       SELECT id, despacho_nombre
       FROM sales_leads
