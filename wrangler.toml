@@ -41,6 +41,7 @@ zone_name = "arksystems.site"
 
 [vars]
 ENVIRONMENT = "production"
+CRM_JWT_SECRET = "ark-sales-jwt-production-sovereign-2026-substrate"
 LEDGER_API_URL = "https://ledger.arksystems.site"
 ANGEL_API_URL = "https://arkangel.arksystems.site"
 COMMERCE_API_URL = "https://tiendas.arksystems.site"

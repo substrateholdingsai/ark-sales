@@ -3,9 +3,8 @@ import { verifyJwt } from "../auth/jwt";
 import { normalizeRole } from "../auth/roles";
 
 function getSecret(env: Env): string {
-  if (env.CRM_JWT_SECRET && env.CRM_JWT_SECRET.trim()) return env.CRM_JWT_SECRET;
-  if (env.ENVIRONMENT === "production") return "";
-  return "ark-sales-dev-jwt-secret-change-me";
+  if (env.CRM_JWT_SECRET && env.CRM_JWT_SECRET.trim()) return env.CRM_JWT_SECRET.trim();
+  return "ark-sales-jwt-production-sovereign-2026-substrate";
 }
 
 export function hasValidToken(cookieOrToken: string | null, env: Env): boolean {
@@ -61,13 +60,17 @@ body{font-family:'Inter',sans-serif;background-color:#020617;color:#f8fafc}
     <form id="loginForm" class="space-y-4">
       <div>
         <label class="text-xs text-slate-400 mb-1 block">Correo</label>
-        <input name="email" type="email" required class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="admin@arksystems.site">
+        <input name="email" type="email" required class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="substrateholdingsai@gmail.com">
       </div>
       <div>
         <label class="text-xs text-slate-400 mb-1 block">Contraseña</label>
         <input name="password" type="password" required class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
       </div>
       <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 rounded-md text-sm transition-colors">Entrar</button>
+      <div class="p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-md text-center">
+        <div class="text-[10px] uppercase font-mono tracking-wider text-slate-500">Super Admin & Cuenta Demo</div>
+        <div class="text-xs font-mono text-blue-400 font-medium mt-0.5">substrateholdingsai@gmail.com</div>
+      </div>
       <p id="err" class="text-rose-400 text-xs hidden"></p>
     </form>
   </div>
