@@ -212,6 +212,33 @@ export interface Env {
   INTERNAL_SERVICE_KEY?: string;
   WEBHOOK_SECRET?: string;
   ARK_WEBHOOK_SECRET?: string;
+  CONEKTA_API_KEY?: string;
+  CONEKTA_WEBHOOK_KEY?: string;
+}
+
+export type PaymentOrderStatus = "pending" | "paid" | "expired" | "cancelled" | "failed";
+export type PaymentMethodType = "spei" | "checkout";
+
+export interface SalesPaymentOrder {
+  id: string;
+  lead_id: string | null;
+  account_id: string | null;
+  opportunity_id: string | null;
+  contact_id: string | null;
+  conekta_order_id: string | null;
+  amount_cents: number;
+  currency: string;
+  status: PaymentOrderStatus;
+  payment_method_type: PaymentMethodType;
+  spei_clabe: string | null;
+  spei_bank: string | null;
+  checkout_url: string | null;
+  checkout_id: string | null;
+  paid_at: string | null;
+  raw_response_json: string | null;
+  metadata_json: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 

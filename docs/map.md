@@ -434,6 +434,21 @@ Grok Bot no es un lector de texto; es un operador autónomo que usa el navegador
 - [x] Desplegar primero en staging, verificar migración y permisos, y después habilitar producción con monitoreo y plan de reversión. (docs/backup-recovery.md)
 - [x] **Criterio de salida:** el equipo puede operar el pipeline con datos consistentes, acceso controlado, métricas verificadas y procedimiento de recuperación documentado.
 
+## Fase 7 — Super Admin Omni-Tenant, Resend & Telnyx Voice AI
+- [x] Panel Super Admin en `/superadmin` con autenticación soberana (PBKDF2 + JWT HS256) y rol de administrador.
+- [x] Integración de Resend con 4 plantillas HTML responsive (`propuesta_enterprise`, `onboarding_bienvenida`, `due_diligence_inmobiliario`, `recuperacion_cartera_flujo`) e interpolación de variables.
+- [x] Campañas de Voz AI automáticas multi-tenant con Telnyx (+52) y orquestación Llama 3.3 70B.
+- [x] Portal 3D interactivo en la landing page con botón y canvas Spline Vortex.
+
+## Fase 8 — Motor de Cobro Institucional Conekta (SPEI STP & Hosted Checkout)
+- [x] Migración D1 `0009_conekta_checkout.sql` con tabla `sales_payment_orders` para CLABEs interbancarias y órdenes de cobro.
+- [x] Cliente `ConektaService` (`src/services/conekta.ts`) nativo con Cloudflare Workers fetch y modo de simulación segura STP para desarrollo local.
+- [x] Tool Calling Agéntico: herramienta `generar_orden_pago` registrada en `TOOLS_DEFINITIONS` y `ToolExecutor` para que el closer emita CLABEs de 18 dígitos o checkout links en vivo según precios oficiales de `sales_config`.
+- [x] Webhook Reconciliador `POST /webhooks/conekta`: captura `order.paid` y `charge.paid`, transiciona la oportunidad a `ganado`, cierra el lead a 100 puntos, registra en `sales_activities` y encola `LEAD_INGEST_V3` federado a `SALES_INGEST_QUEUE`.
+- [x] Consola Super Admin: pestaña `Cobranza Conekta (SPEI / Checkout)` con KPIs de recaudación, emisión de órdenes, copia de CLABE STP formateada, generador de mensajes de WhatsApp y simulador de pagos.
+- [x] Suite de pruebas automatizadas: `tests/conekta.test.ts` con 9 tests unitarios/integración. Total ecosistema: 12 suites, 67 tests pasando (100% verde).
+- [x] Migración remota D1 aplicada y Cloudflare Worker desplegado a producción en `https://sales.arksystems.site`.
+
 ## Fuera del primer lanzamiento
 - [ ] Evaluar integraciones de correo, calendario, WhatsApp y proveedores externos después de estabilizar el CRM base.
 - [ ] Evaluar scoring predictivo o recomendaciones de IA con datos suficientes y revisión humana; no usar el score para decisiones automáticas irreversibles.

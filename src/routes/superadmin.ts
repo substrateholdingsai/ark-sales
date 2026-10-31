@@ -3,6 +3,7 @@ import { Env, EmailTemplate, EmailDispatch, VoiceCampaign, VoiceCampaignTarget }
 import { AuthVariables, requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
 import { normalizarTelefonoE164 } from "../voice/telnyx";
+import { ConektaService } from "../services/conekta";
 
 export const superadminRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
@@ -805,6 +806,161 @@ superadminRouter.get("/tenants/overview", async (c) => {
   return c.json({
     count: accounts.length,
     tenants: accounts,
+  });
+});
+
+// -------------------------------------------------------------
+// 5. Cobranza Conekta (SPEI STP & Hosted Checkout)
+// -------------------------------------------------------------
+
+// Estado de Conekta y resumen de cobranza
+superadminRouter.get("/billing/status", async (c) => {
+  const hasKey = Boolean(c.env.CONEKTA_API_KEY && c.env.CONEKTA_API_KEY.trim());
+  const maskedKey = hasKey
+    ? `${c.env.CONEKTA_API_KEY!.slice(0, 6)}...${c.env.CONEKTA_API_KEY!.slice(-4)}`
+    : null;
+
+  let totalOrders = 0;
+  let paidOrders = 0;
+  let pendingOrders = 0;
+  let totalRevenueMxn = 0;
+
+  if (c.env.DB) {
+    try {
+      const stats = await c.env.DB.prepare(`
+        SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN status = 'paid' THEN amount_cents ELSE 0 END) as revenue_cents
+        FROM sales_payment_orders
+      `).first<any>();
+      if (stats) {
+        totalOrders = stats.total || 0;
+        paidOrders = stats.paid || 0;
+        pendingOrders = stats.pending || 0;
+        totalRevenueMxn = (stats.revenue_cents || 0) / 100;
+      }
+    } catch {}
+  }
+
+  return c.json({
+    status: hasKey ? "connected" : "simulated_mode",
+    has_api_key: hasKey,
+    masked_key: maskedKey,
+    stats: {
+      total_orders: totalOrders,
+      paid_orders: paidOrders,
+      pending_orders: pendingOrders,
+      total_revenue_mxn: totalRevenueMxn,
+    },
+  });
+});
+
+// Listar órdenes de pago
+superadminRouter.get("/billing/orders", async (c) => {
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
+  let orders: any[] = [];
+  if (c.env.DB) {
+    try {
+      const res = await c.env.DB.prepare(`
+        SELECT 
+          p.*,
+          a.name as account_name,
+          l.email as lead_email,
+          l.despacho_nombre as lead_despacho
+        FROM sales_payment_orders p
+        LEFT JOIN sales_accounts a ON a.id = p.account_id
+        LEFT JOIN sales_leads l ON l.id = p.lead_id
+        ORDER BY p.created_at DESC 
+        LIMIT ?
+      `).bind(limit).all();
+      orders = res.results || [];
+    } catch (e) {
+      console.warn("[superadmin:billing] Error querying orders:", e);
+    }
+  }
+  return c.json({ count: orders.length, orders });
+});
+
+// Emitir nueva orden de pago (SPEI / Checkout)
+superadminRouter.post("/billing/create-order", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json().catch(() => ({}));
+  const {
+    account_id,
+    lead_id,
+    opportunity_id,
+    contact_id,
+    customer_name,
+    customer_email,
+    customer_phone,
+    amount_mxn,
+    product_name,
+    method,
+  } = body;
+
+  if (!customer_email) {
+    return c.json({ error: "El correo del cliente/despacho es obligatorio." }, 400);
+  }
+  if (!amount_mxn || amount_mxn <= 0) {
+    return c.json({ error: "El monto en MXN debe ser mayor a 0." }, 400);
+  }
+
+  const conekta = new ConektaService(c.env);
+  const result = await conekta.createPaymentOrder({
+    accountId: account_id || undefined,
+    leadId: lead_id || undefined,
+    opportunityId: opportunity_id || undefined,
+    contactId: contact_id || undefined,
+    customerName: customer_name || "Despacho Contable",
+    customerEmail: customer_email,
+    customerPhone: customer_phone || undefined,
+    amountCents: Math.round(amount_mxn * 100),
+    productName: product_name || "Servicio ARK Systems",
+    method: method === "checkout" ? "checkout" : "spei",
+  });
+
+  if (c.env.DB && user) {
+    await new AuditService(c.env.DB).record({
+      actor_user_id: user.sub,
+      action: "billing_order_created",
+      entity_type: "sales_payment_orders",
+      entity_id: result.orderId,
+      metadata: { method, amount_mxn, customer_email, order_id: result.orderId },
+      ip: clientIp(c),
+    });
+  }
+
+  return c.json(result);
+});
+
+// Simular pago completado (order.paid) para pruebas / desarrollo
+superadminRouter.post("/billing/simulate-paid", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { conekta_order_id } = body;
+  if (!conekta_order_id) {
+    return c.json({ error: "conekta_order_id es requerido." }, 400);
+  }
+
+  const conekta = new ConektaService(c.env);
+  const webhookResult = await conekta.processWebhookEvent({
+    type: "order.paid",
+    data: {
+      object: {
+        id: conekta_order_id,
+        payment_status: "paid",
+        created_at: Math.floor(Date.now() / 1000),
+      },
+    },
+  });
+
+  return c.json({
+    success: webhookResult.success,
+    message: webhookResult.success
+      ? `Orden ${conekta_order_id} marcada como PAGADA. Oportunidad avanzada a ganado.`
+      : webhookResult.error,
+    details: webhookResult,
   });
 });
 

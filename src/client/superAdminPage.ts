@@ -54,6 +54,9 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
       <button data-tab="tenants" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
         <i data-lucide="building-2" class="w-4 h-4"></i> Vista Multi-Tenant
       </button>
+      <button data-tab="billing" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+        <i data-lucide="credit-card" class="w-4 h-4"></i> Cobranza Conekta (SPEI / Checkout)
+      </button>
       <button data-tab="status" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
         <i data-lucide="activity" class="w-4 h-4"></i> Estado del Ecosistema
       </button>
@@ -306,9 +309,210 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
       </div>
     </div>
 
+    <!-- TAB: COBRANZA CONEKTA (SPEI / CHECKOUT) -->
+    <div id="tab-billing" class="tab-content hidden space-y-6">
+      <!-- Resumen de Métricas Conekta -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="glass-panel rounded-xl p-4 border-l-4 border-l-emerald-500">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-semibold text-slate-400">Total Recaudado</span>
+            <i data-lucide="dollar-sign" class="w-4 h-4 text-emerald-400"></i>
+          </div>
+          <div id="billingTotalRevenue" class="text-2xl font-extrabold text-emerald-400 font-mono">$0.00 MXN</div>
+          <div class="text-[11px] text-slate-500 mt-1">Confirmado en firme vía SPEI / Tarjeta</div>
+        </div>
+
+        <div class="glass-panel rounded-xl p-4 border-l-4 border-l-blue-500">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-semibold text-slate-400">Órdenes Pagadas</span>
+            <i data-lucide="check-circle" class="w-4 h-4 text-blue-400"></i>
+          </div>
+          <div id="billingPaidOrders" class="text-2xl font-extrabold text-blue-400 font-mono">0</div>
+          <div class="text-[11px] text-slate-500 mt-1">Con reconciliación automática CRM</div>
+        </div>
+
+        <div class="glass-panel rounded-xl p-4 border-l-4 border-l-amber-500">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-semibold text-slate-400">Órdenes Pendientes</span>
+            <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
+          </div>
+          <div id="billingPendingOrders" class="text-2xl font-extrabold text-amber-400 font-mono">0</div>
+          <div class="text-[11px] text-slate-500 mt-1">Esperando transferencia bancaria</div>
+        </div>
+
+        <div class="glass-panel rounded-xl p-4 border-l-4 border-l-indigo-500">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-semibold text-slate-400">Gateway Conekta</span>
+            <span id="billingModeBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">Conectado</span>
+          </div>
+          <div id="billingGatewayTitle" class="text-sm font-bold text-white mt-1">SPEI STP Directo</div>
+          <div class="text-[11px] text-indigo-300/80 mt-1">Tarifa plana ~$8.50 MXN (Ahorro >95% vs Stripe)</div>
+        </div>
+      </div>
+
+      <!-- Formulario para Emitir Orden de Pago y Tarjeta de Resultado -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Panel Izquierdo: Generar Nueva Orden -->
+        <div class="lg:col-span-5 glass-panel rounded-xl p-5 space-y-4">
+          <div class="flex items-center gap-2 pb-2 border-b border-slate-800">
+            <i data-lucide="receipt" class="w-4 h-4 text-emerald-400"></i>
+            <h3 class="text-sm font-bold text-white">Emitir Orden de Cobro Institucional</h3>
+          </div>
+          <form id="createOrderForm" class="space-y-3">
+            <div>
+              <label class="text-xs text-slate-400 block mb-1">Despacho / Cliente</label>
+              <select id="orderTenantSelect" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-slate-300">
+                <option value="">Seleccionar despacho registrado o manual...</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-slate-400 block mb-1">Nombre o Razón Social *</label>
+              <input id="orderCustomerName" required placeholder="Despacho Contable Morales S.C." class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">Correo Electrónico *</label>
+                <input id="orderCustomerEmail" type="email" required placeholder="director@despacho.com" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">Teléfono (WhatsApp)</label>
+                <input id="orderCustomerPhone" placeholder="+52 55 1234 5678" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">Concepto / Producto</label>
+                <select id="orderProductSelect" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-slate-300">
+                  <option value="bundle" data-price="10000">Paquete Enterprise ARK ($10,000 MXN)</option>
+                  <option value="ledger" data-price="6000">Ark Ledger ($6,000 MXN)</option>
+                  <option value="angel" data-price="4500">Ark Angel ($4,500 MXN)</option>
+                  <option value="custom" data-price="0">Monto Personalizado</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">Monto en MXN *</label>
+                <input id="orderAmountMxn" type="number" step="100" min="100" required value="10000" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500">
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-slate-400 block mb-1">Método de Cobro Preferido</label>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="flex items-center gap-2 p-2 rounded bg-slate-900 border border-slate-800 cursor-pointer hover:border-emerald-500/50">
+                  <input type="radio" name="orderMethodRadio" value="spei" checked class="text-emerald-500">
+                  <div>
+                    <div class="text-xs font-semibold text-white">SPEI (STP)</div>
+                    <div class="text-[10px] text-slate-400">CLABE 18 dígitos inmediata</div>
+                  </div>
+                </label>
+                <label class="flex items-center gap-2 p-2 rounded bg-slate-900 border border-slate-800 cursor-pointer hover:border-emerald-500/50">
+                  <input type="radio" name="orderMethodRadio" value="checkout" class="text-emerald-500">
+                  <div>
+                    <div class="text-xs font-semibold text-white">Hosted Checkout</div>
+                    <div class="text-[10px] text-slate-400">Link de pago con tarjeta</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <button type="submit" id="btnSubmitOrder" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-md text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20">
+              <i data-lucide="zap" class="w-4 h-4"></i> Generar Orden de Cobro
+            </button>
+          </form>
+        </div>
+
+        <!-- Panel Derecho: Última Orden Generada / Tarjeta de Pago -->
+        <div class="lg:col-span-7 space-y-4">
+          <div id="orderResultCard" class="glass-panel rounded-xl p-5 border border-emerald-500/30 hidden space-y-4 bg-gradient-to-br from-slate-900/90 to-emerald-950/20">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-xs font-bold uppercase text-emerald-400 tracking-wider">Orden Emitida Exitosamente</span>
+              </div>
+              <span id="resultOrderId" class="text-xs font-mono text-slate-400"></span>
+            </div>
+
+            <div id="speiResultSection" class="space-y-3">
+              <div class="text-xs text-slate-300">Proporciona los datos interbancarios al cliente para transferir desde cualquier banca móvil mexicana (Banamex, BBVA, Santander, Banorte, Hey, etc.):</div>
+              <div class="bg-slate-950 p-4 rounded-lg border border-emerald-500/30 space-y-2">
+                <div class="text-[10px] uppercase font-mono text-slate-400">CLABE Interbancaria (Sistema de Transferencias y Pagos STP)</div>
+                <div class="flex items-center justify-between gap-2">
+                  <div id="resultClabeDisplay" class="text-xl sm:text-2xl font-mono font-bold tracking-widest text-emerald-400 selection:bg-emerald-500 selection:text-black"></div>
+                  <button id="copyClabeBtn" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-all">
+                    <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copiar CLABE
+                  </button>
+                </div>
+                <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-xs">
+                  <div>
+                    <span class="text-[10px] text-slate-500 block">Banco Receptor:</span>
+                    <span class="font-bold text-white">STP</span>
+                  </div>
+                  <div>
+                    <span class="text-[10px] text-slate-500 block">Beneficiario:</span>
+                    <span class="font-bold text-white">ARK Systems</span>
+                  </div>
+                  <div>
+                    <span class="text-[10px] text-slate-500 block">Monto Exacto:</span>
+                    <span id="resultMontoDisplay" class="font-bold text-emerald-400 font-mono"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="checkoutResultSection" class="space-y-2 hidden">
+              <div class="text-xs text-slate-300">Enlace seguro de pago Hosted Conekta Checkout:</div>
+              <div class="flex items-center gap-2">
+                <input id="resultCheckoutUrlInput" readonly class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs font-mono text-slate-200">
+                <a id="resultCheckoutLink" target="_blank" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-xs font-semibold whitespace-nowrap flex items-center gap-1">
+                  <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Abrir
+                </a>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800 text-xs">
+              <button id="copyWhatsappBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md font-semibold flex items-center gap-2 transition-all shadow-md shadow-emerald-600/30">
+                <i data-lucide="message-square" class="w-4 h-4"></i> Copiar Mensaje para WhatsApp
+              </button>
+              <button id="simulatePaidBtn" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 px-3 py-2 rounded-md font-semibold flex items-center gap-1.5 transition-all text-xs">
+                <i data-lucide="play" class="w-3.5 h-3.5"></i> Simular Pago Recibido (order.paid)
+              </button>
+            </div>
+          </div>
+
+          <!-- Tabla de Órdenes Recientes -->
+          <div class="glass-panel rounded-xl overflow-hidden">
+            <div class="p-3 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300 flex items-center gap-2">
+                <i data-lucide="list" class="w-4 h-4 text-blue-400"></i> Historial de Órdenes de Pago Conekta
+              </span>
+              <button id="refreshOrdersBtn" class="text-xs text-slate-400 hover:text-white flex items-center gap-1">
+                <i data-lucide="refresh-cw" class="w-3 h-3"></i> Actualizar
+              </button>
+            </div>
+            <div class="overflow-x-auto max-h-[380px] overflow-y-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-900/90 text-slate-400 sticky top-0">
+                  <tr>
+                    <th class="py-2.5 px-3">Fecha</th>
+                    <th class="py-2.5 px-3">Despacho / Cliente</th>
+                    <th class="py-2.5 px-3">Método</th>
+                    <th class="py-2.5 px-3 text-right">Monto MXN</th>
+                    <th class="py-2.5 px-3 text-center">Estado</th>
+                    <th class="py-2.5 px-3">Detalle</th>
+                    <th class="py-2.5 px-3 text-center">Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="billingOrdersBody" class="divide-y divide-slate-800/60">
+                  <tr><td colspan="7" class="py-6 text-center text-slate-500">Cargando órdenes de pago...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB 4: ESTADO DEL ECOSISTEMA -->
     <div id="tab-status" class="tab-content hidden space-y-6">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="glass-panel rounded-xl p-4 border-l-4 border-l-blue-500">
           <div class="flex items-center justify-between mb-2">
             <span class="text-xs font-bold uppercase text-slate-400">Resend Email Gateway</span>
@@ -327,13 +531,22 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
           <div class="text-xs text-slate-400 font-mono">Voz en español neutro, Llama 3.3 70B & AMD</div>
         </div>
 
+        <div class="glass-panel rounded-xl p-4 border-l-4 border-l-indigo-500">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold uppercase text-slate-400">Conekta B2B Checkout</span>
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          </div>
+          <div class="text-lg font-bold text-white mb-1">SPEI STP & Webhooks</div>
+          <div class="text-xs text-slate-400 font-mono">Transición automática de etapa 'ganado' en CRM</div>
+        </div>
+
         <div class="glass-panel rounded-xl p-4 border-l-4 border-l-purple-500">
           <div class="flex items-center justify-between mb-2">
             <span class="text-xs font-bold uppercase text-slate-400">Cloudflare D1 Database</span>
             <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
           </div>
           <div class="text-lg font-bold text-white mb-1">ark-sales-db</div>
-          <div class="text-xs text-slate-400 font-mono">8 Migraciones aplicadas &middot; Esquema Multi-Tenant</div>
+          <div class="text-xs text-slate-400 font-mono">9 Migraciones aplicadas &middot; Esquema Multi-Tenant</div>
         </div>
       </div>
     </div>
@@ -453,6 +666,7 @@ document.querySelectorAll('.tab-btn').forEach(b => {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('hidden', c.id !== 'tab-' + tab));
     if (tab === 'voice') loadVoiceCampaigns();
     if (tab === 'tenants') loadTenantsOverview();
+    if (tab === 'billing') { loadBillingStatus(); loadBillingOrders(); }
   });
 });
 
@@ -785,9 +999,13 @@ async function loadTenantsOverview() {
   // Update tenant selectors
   const filterSelect = document.getElementById('tenantFilterSelect');
   const vcampSelect = document.getElementById('vcampTenantSelect');
+  const orderTenantSelect = document.getElementById('orderTenantSelect');
   const opts = '<option value="">Todos los Despachos (Global)</option>' + allTenants.map(t => '<option value="' + t.id + '">' + t.name + ' (' + (t.city || 'MX') + ')</option>').join('');
   filterSelect.innerHTML = opts;
   vcampSelect.innerHTML = opts;
+  if (orderTenantSelect) {
+    orderTenantSelect.innerHTML = '<option value="">Seleccionar despacho registrado o manual...</option>' + allTenants.map(t => '<option value="' + t.id + '">' + t.name + '</option>').join('');
+  }
 
   const tbody = document.getElementById('tenantsOverviewBody');
   if (!allTenants.length) {
@@ -825,11 +1043,241 @@ document.getElementById('tenantFilterSelect').addEventListener('change', (e) => 
   loadTemplates(e.target.value);
 });
 
+// -------------------------------------------------------------
+// COBRANZA CONEKTA (SPEI / CHECKOUT)
+// -------------------------------------------------------------
+let billingOrders = [];
+let currentOrderResult = null;
+
+async function loadBillingStatus() {
+  try {
+    const data = await API('/api/superadmin/billing/status');
+    const badge = document.getElementById('billingModeBadge');
+    if (data.has_api_key) {
+      badge.textContent = 'API Conectada (' + data.masked_key + ')';
+      badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800';
+    } else {
+      badge.textContent = 'Modo Simulado (STP Sandbox)';
+      badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800';
+    }
+    const st = data.stats || {};
+    document.getElementById('billingTotalRevenue').textContent = '$' + (st.total_revenue_mxn || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + ' MXN';
+    document.getElementById('billingPaidOrders').textContent = st.paid_orders || 0;
+    document.getElementById('billingPendingOrders').textContent = st.pending_orders || 0;
+  } catch (e) {
+    console.warn('Error loading billing status:', e);
+  }
+}
+
+async function loadBillingOrders() {
+  const tbody = document.getElementById('billingOrdersBody');
+  try {
+    const data = await API('/api/superadmin/billing/orders');
+    billingOrders = data.orders || [];
+    if (!billingOrders.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-500">Sin órdenes de pago registradas.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = billingOrders.map(o => {
+      const isPaid = o.status === 'paid';
+      const statusBadge = isPaid
+        ? '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">Pagado</span>'
+        : '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-950 text-amber-400 border border-amber-800">Pendiente</span>';
+      
+      const methodBadge = o.payment_method_type === 'spei'
+        ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-blue-950 text-blue-300 border border-blue-800">SPEI STP</span>'
+        : '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-950 text-purple-300 border border-purple-800">Checkout</span>';
+
+      const detail = o.payment_method_type === 'spei'
+        ? '<div class="font-mono text-emerald-400 text-[11px] select-all cursor-pointer" onclick="navigator.clipboard.writeText(\'' + (o.spei_clabe || '') + '\'); toast(\'CLABE copiada al portapapeles\')">' + (o.spei_clabe || 'N/A') + '</div>'
+        : (o.checkout_url ? '<a href="' + o.checkout_url + '" target="_blank" class="text-blue-400 hover:underline text-[11px]">Link Checkout &rarr;</a>' : 'N/A');
+
+      const action = !isPaid
+        ? '<button onclick="simulateOrderPaid(\'' + o.conekta_order_id + '\')" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[10px] font-semibold">Simular Pago</button>'
+        : '<span class="text-[10px] text-slate-500 font-mono">' + (o.paid_at ? o.paid_at.slice(0, 10) : 'Conciliado') + '</span>';
+
+      const customer = o.account_name || o.lead_despacho || o.lead_email || 'Cliente ARK';
+      const fecha = o.created_at ? o.created_at.slice(0, 10) : '—';
+      const monto = '$' + (o.amount_cents / 100).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
+      return \`
+        <tr class="hover:bg-slate-900/40">
+          <td class="py-2.5 px-3 font-mono text-slate-400 text-[11px]">\${fecha}</td>
+          <td class="py-2.5 px-3">
+            <div class="font-bold text-white">\${customer}</div>
+            <div class="text-[10px] font-mono text-slate-500">\${o.conekta_order_id || o.id}</div>
+          </td>
+          <td class="py-2.5 px-3">\${methodBadge}</td>
+          <td class="py-2.5 px-3 text-right font-mono font-bold text-white">\${monto}</td>
+          <td class="py-2.5 px-3 text-center">\${statusBadge}</td>
+          <td class="py-2.5 px-3">\${detail}</td>
+          <td class="py-2.5 px-3 text-center">\${action}</td>
+        </tr>
+      \`;
+    }).join('');
+    lucide.createIcons();
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-rose-400">Error al cargar órdenes de cobro.</td></tr>';
+  }
+}
+
+window.simulateOrderPaid = async function(orderId) {
+  if (!confirm('¿Simular webhook "order.paid" para la orden ' + orderId + '?')) return;
+  try {
+    const res = await API('/api/superadmin/billing/simulate-paid', {
+      method: 'POST',
+      body: JSON.stringify({ conekta_order_id: orderId }),
+    });
+    if (res.success) {
+      toast('Pago confirmado exitosamente. Oportunidad avanzada a ganado.');
+      loadBillingStatus();
+      loadBillingOrders();
+    } else {
+      toast(res.message || 'Error al simular pago', true);
+    }
+  } catch (e) {
+    toast('Error de red al simular pago', true);
+  }
+};
+
+// Auto-fill price on product selection
+document.getElementById('orderProductSelect')?.addEventListener('change', (e) => {
+  const sel = e.target;
+  const price = sel.options[sel.selectedIndex].dataset.price;
+  if (price && price !== '0') {
+    document.getElementById('orderAmountMxn').value = price;
+  }
+});
+
+// Auto-fill name on tenant select
+document.getElementById('orderTenantSelect')?.addEventListener('change', (e) => {
+  const tenantId = e.target.value;
+  if (!tenantId) return;
+  const t = allTenants.find(x => x.id === tenantId);
+  if (t) {
+    document.getElementById('orderCustomerName').value = t.name;
+  }
+});
+
+// Create Order Form Submit
+document.getElementById('createOrderForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btnSubmitOrder');
+  btn.disabled = true;
+  btn.textContent = 'Generando en Conekta...';
+
+  const tenantId = document.getElementById('orderTenantSelect').value;
+  const customerName = document.getElementById('orderCustomerName').value.trim();
+  const customerEmail = document.getElementById('orderCustomerEmail').value.trim();
+  const customerPhone = document.getElementById('orderCustomerPhone').value.trim();
+  const amountMxn = parseFloat(document.getElementById('orderAmountMxn').value) || 0;
+  const prodSelect = document.getElementById('orderProductSelect');
+  const productName = prodSelect.options[prodSelect.selectedIndex].text;
+  const methodRadio = document.querySelector('input[name="orderMethodRadio"]:checked');
+  const method = methodRadio ? methodRadio.value : 'spei';
+
+  try {
+    const res = await API('/api/superadmin/billing/create-order', {
+      method: 'POST',
+      body: JSON.stringify({
+        account_id: tenantId || undefined,
+        customer_name: customerName,
+        customer_email: customerEmail,
+        customer_phone: customerPhone || undefined,
+        amount_mxn: amountMxn,
+        product_name: productName,
+        method: method,
+      }),
+    });
+
+    if (res.success) {
+      currentOrderResult = res;
+      toast('Orden de cobro generada exitosamente');
+      
+      const card = document.getElementById('orderResultCard');
+      card.classList.remove('hidden');
+      document.getElementById('resultOrderId').textContent = res.orderId;
+
+      if (res.paymentMethodType === 'spei') {
+        document.getElementById('speiResultSection').classList.remove('hidden');
+        document.getElementById('checkoutResultSection').classList.add('hidden');
+        
+        const clabe = res.speiClabe || '';
+        const formattedClabe = clabe.replace(/(\d{4})(\d{4})(\d{4})(\d{4})(\d{2})/, '$1 $2 $3 $4 $5');
+        document.getElementById('resultClabeDisplay').textContent = formattedClabe || clabe;
+        document.getElementById('resultMontoDisplay').textContent = '$' + (res.amountCents / 100).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + ' MXN';
+      } else {
+        document.getElementById('speiResultSection').classList.add('hidden');
+        document.getElementById('checkoutResultSection').classList.remove('hidden');
+        document.getElementById('resultCheckoutUrlInput').value = res.checkoutUrl || '';
+        document.getElementById('resultCheckoutLink').href = res.checkoutUrl || '#';
+      }
+
+      loadBillingStatus();
+      loadBillingOrders();
+    } else {
+      toast(res.error || 'Error al generar la orden', true);
+    }
+  } catch (err) {
+    toast('Error de red al crear orden de cobro', true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="zap" class="w-4 h-4"></i> Generar Orden de Cobro';
+    lucide.createIcons();
+  }
+});
+
+// Copy CLABE button
+document.getElementById('copyClabeBtn')?.addEventListener('click', () => {
+  if (currentOrderResult && currentOrderResult.speiClabe) {
+    navigator.clipboard.writeText(currentOrderResult.speiClabe);
+    toast('CLABE de 18 dígitos copiada al portapapeles');
+  }
+});
+
+// Copy WhatsApp message button
+document.getElementById('copyWhatsappBtn')?.addEventListener('click', () => {
+  if (!currentOrderResult) return;
+  const monto = '$' + (currentOrderResult.amountCents / 100).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + ' MXN';
+  let msg = '';
+  if (currentOrderResult.paymentMethodType === 'spei') {
+    msg = 'Hola! Te comparto los datos bancarios para la activación formal de tu infraestructura en ARK Systems:\n' +
+      '- Banco: STP (Sistema de Transferencias y Pagos)\n' +
+      '- Beneficiario: ARK Systems\n' +
+      '- CLABE: ' + currentOrderResult.speiClabe + '\n' +
+      '- Monto exacto: ' + monto + '\n' +
+      '- Concepto: ' + (document.getElementById('orderCustomerName').value.trim() || 'Servicio ARK') + '\n\n' +
+      'En cuanto transfieras desde tu app bancaria, el sistema valida la recepción en tiempo real vía SPEI Banxico y te activa de inmediato. Cualquier duda me dices!';
+  } else {
+    msg = 'Hola! Aquí tienes el enlace seguro para formalizar tu acceso a ARK Systems:\n' +
+      currentOrderResult.checkoutUrl + '\n' +
+      'Monto: ' + monto + '\n' +
+      'Quedo atento para acompañarte en tu onboarding!';
+  }
+  navigator.clipboard.writeText(msg);
+  toast('Mensaje para WhatsApp copiado al portapapeles');
+});
+
+// Button simulate paid on result card
+document.getElementById('simulatePaidBtn')?.addEventListener('click', () => {
+  if (currentOrderResult && currentOrderResult.orderId) {
+    window.simulateOrderPaid(currentOrderResult.orderId);
+  }
+});
+
+// Button refresh orders
+document.getElementById('refreshOrdersBtn')?.addEventListener('click', () => {
+  loadBillingStatus();
+  loadBillingOrders();
+});
+
 // Boot
 lucide.createIcons();
 initResendStatus();
 loadTenantsOverview().then(() => loadTemplates());
 loadEmailDispatches();
+loadBillingStatus();
+loadBillingOrders();
 </script>
 </body>
 </html>`;
