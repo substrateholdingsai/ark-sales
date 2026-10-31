@@ -1,0 +1,67 @@
+{
+  "schema": "bobs.asset-manifest.v1",
+  "system": "ALTUM SURESTE",
+  "slug": "altum-sureste",
+  "cliente": "ALTUM Real Estate · Sureste & Caribe Mexicano",
+  "huesped": "service",
+  "kind": "vector-forge",
+  "stdlib_only": true,
+  "noise_seed": 6009,
+  "files": [
+    {
+      "path": "favicon.svg",
+      "bytes": 1452,
+      "kb": 1.42
+    },
+    {
+      "path": "logo-lockup.svg",
+      "bytes": 1923,
+      "kb": 1.88
+    },
+    {
+      "path": "monogram-altum.svg",
+      "bytes": 1473,
+      "kb": 1.44
+    },
+    {
+      "path": "pattern-greca.svg",
+      "bytes": 580,
+      "kb": 0.57
+    },
+    {
+      "path": "texture-chukum.svg",
+      "bytes": 831,
+      "kb": 0.81
+    },
+    {
+      "path": "texture-arena.svg",
+      "bytes": 828,
+      "kb": 0.81
+    },
+    {
+      "path": "texture-selva.svg",
+      "bytes": 828,
+      "kb": 0.81
+    },
+    {
+      "path": "divider-horizonte.svg",
+      "bytes": 800,
+      "kb": 0.78
+    },
+    {
+      "path": "og-image.svg",
+      "bytes": 4678,
+      "kb": 4.57
+    },
+    {
+      "path": "sprite-real-estate.svg",
+      "bytes": 2384,
+      "kb": 2.33
+    }
+  ],
+  "total_bytes": 15777,
+  "total_kb": 15.41,
+  "checks": {
+    "pattern_greca_under_4kb": true
+  }
+}

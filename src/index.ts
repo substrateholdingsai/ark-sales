@@ -25,6 +25,8 @@ import { renderLandingHtml } from "./client/demoPage";
 import { renderPublicLandingHtml } from "./client/landingPage";
 import { renderCrmLoginHtml, renderCrmHtml, isAuthenticated } from "./client/crmPage";
 import { renderSuperAdminHtml } from "./client/superAdminPage";
+import { renderAltumPage } from "./client/altumPage";
+import { getAltumAsset } from "./client/altumAssets";
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
@@ -91,6 +93,27 @@ for (const p of publicLandingPaths) {
     return c.html(renderPublicLandingHtml());
   });
 }
+
+// Showcase Inmobiliario ALTUM Sureste (Herméticamente aislado para no contaminar Ark)
+app.get("/altum", (c) => c.html(renderAltumPage()));
+app.get("/altum-sureste", (c) => c.html(renderAltumPage()));
+
+// Entrega de assets vectoriales ALTUM
+app.get("/assets/altum/:file", (c) => {
+  const file = c.req.param("file");
+  const asset = getAltumAsset(file);
+  if (!asset) {
+    return c.json({ error: "Asset no encontrado" }, 404);
+  }
+  return new Response(asset.content, {
+    status: 200,
+    headers: {
+      "Content-Type": asset.mime,
+      "Cache-Control": "public, max-age=86400",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+});
 
 // Endpoint pÃºblico para consultar catÃ¡logo oficial (Fail-Closed)
 app.get("/api/catalog", async (c) => {

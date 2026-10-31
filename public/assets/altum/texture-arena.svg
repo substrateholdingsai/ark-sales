@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+
+  <defs>
+
+    <filter id="arena" x="0" y="0" width="100%" height="100%">
+
+      <feTurbulence type="fractalNoise" baseFrequency="1.8" numOctaves="2" seed="6012" stitchTiles="stitch" result="n"/>
+
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.88
+
+                                                  0 0 0 0 0.84
+
+                                                  0 0 0 0 0.74
+
+                                                  0 0 0 0.10 0" result="t"/>
+
+      <feComposite in="t" in2="SourceGraphic" operator="in"/>
+
+    </filter>
+
+  </defs>
+
+  <rect width="256" height="256" fill="#F7F4ED"/>
+
+  <rect width="256" height="256" filter="url(#arena)"/>
+
+</svg>
+

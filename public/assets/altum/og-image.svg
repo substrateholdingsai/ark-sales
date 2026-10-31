@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+
+  <defs>
+
+    <linearGradient id="ogBg" x1="0" y1="0" x2="0" y2="1">
+
+      <stop offset="0" stop-color="#FFFDF7"/>
+
+      <stop offset="1" stop-color="#EFE7D5"/>
+
+    </linearGradient>
+
+    <filter id="ogArena" x="0" y="0" width="100%" height="100%">
+
+      <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="31" stitchTiles="stitch" result="n"/>
+
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.88  0 0 0 0 0.84  0 0 0 0 0.74  0 0 0 0.08 0"/>
+
+    </filter>
+
+  </defs>
+
+
+
+  <rect width="1200" height="630" fill="url(#ogBg)"/>
+
+  <rect width="1200" height="630" filter="url(#ogArena)"/>
+
+
+
+  <!-- marco -->
+
+  <rect x="40" y="40" width="1120" height="550" fill="none" stroke="#D9C9B0" stroke-width="1"/>
+
+
+
+  <!-- monograma grande -->
+
+  <g transform="translate(120 180) scale(2)">
+
+    <circle cx="64" cy="64" r="58" fill="#FFFDF7" stroke="#D9C9B0" stroke-width="2"/>
+
+    <g transform="translate(64 68) scale(1.05)">
+
+      
+
+      <path d="M-17.5 -5.0 L-17.5 -17.5 L-5.0 -17.5 L-5.0 -5.0 Z"
+
+            fill="none" stroke="#094F5B" stroke-width="1.5" stroke-linejoin="miter"/>
+
+      <path d="M-2.5 -5.0 L-2.5 -22.5 L17.5 -22.5 L17.5 -5.0 Z"
+
+            fill="none" stroke="#094F5B" stroke-width="1.5" stroke-linejoin="miter"/>
+
+      <line x1="-12.5" y1="-10.0" x2="-7.5" y2="-10.0"
+
+            stroke="#9E3F2C" stroke-width="1.25"/>
+
+      <line x1="2.5" y1="-12.5" x2="12.5" y2="-12.5"
+
+            stroke="#9E3F2C" stroke-width="1.25"/>
+
+    
+
+      <path d="M-20.0 12.5 Q-10.0 10.0, 0 12.5 T20.0 12.5"
+
+            fill="none" stroke="#2FB8CC" stroke-width="1.25" stroke-linecap="round"/>
+
+      <path d="M-17.5 16.5 Q-7.5 14.0, 2.5 16.5 T17.5 16.5"
+
+            fill="none" stroke="#0E6B7A" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+
+    
+
+    </g>
+
+  </g>
+
+
+
+  <!-- tipografía -->
+
+  <text x="430" y="270" font-family="Fraunces, Georgia, serif" font-size="100"
+
+        font-weight="700" letter-spacing="-2" fill="#1A2B3B">ALTUM</text>
+
+  <text x="432" y="322" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24"
+
+        font-weight="500" letter-spacing="10" fill="#094F5B">SURESTE</text>
+
+  <line x1="430" y1="348" x2="900" y2="348" stroke="#D9C9B0" stroke-width="1"/>
+
+  <text x="432" y="388" font-family="Inter, Helvetica, Arial, sans-serif" font-size="20"
+
+        fill="#3E4F5C">Real Estate · Caribe Mexicano</text>
+
+
+
+  <!-- destinos -->
+
+  <text x="432" y="440" font-family="'JetBrains Mono', Consolas, monospace" font-size="14"
+
+        letter-spacing="2" fill="#3E4F5C">RIVIERA MAYA · MÉRIDA · TULUM · HOLBOX · BACALAR · COZUMEL</text>
+
+
+
+  <!-- KPIs simuladas -->
+
+  <g transform="translate(430 480)">
+
+    <rect width="200" height="72" fill="#FFFDF7" stroke="#D9C9B0" rx="4"/>
+
+    <text x="16" y="26" font-family="Inter, sans-serif" font-size="10" letter-spacing="2" fill="#3E4F5C">PIEZAS CURADAS</text>
+
+    <text x="16" y="54" font-family="Fraunces, serif" font-size="26" font-weight="700" fill="#1A2B3B">148</text>
+
+  </g>
+
+  <g transform="translate(650 480)">
+
+    <rect width="200" height="72" fill="#FFFDF7" stroke="#D9C9B0" rx="4"/>
+
+    <text x="16" y="26" font-family="Inter, sans-serif" font-size="10" letter-spacing="2" fill="#3E4F5C">PORTAFOLIO MXN</text>
+
+    <text x="16" y="54" font-family="Fraunces, serif" font-size="26" font-weight="700" fill="#1A2B3B">$4.2B</text>
+
+  </g>
+
+  <g transform="translate(870 480)">
+
+    <rect width="200" height="72" fill="#FFFDF7" stroke="#D9C9B0" rx="4"/>
+
+    <text x="16" y="26" font-family="Inter, sans-serif" font-size="10" letter-spacing="2" fill="#3E4F5C">ASESORES ALTUM</text>
+
+    <text x="16" y="54" font-family="Fraunces, serif" font-size="26" font-weight="700" fill="#1A2B3B">24</text>
+
+  </g>
+
+
+
+  <!-- greca decorativa lateral -->
+
+  <g transform="translate(1040 120)" opacity="0.4">
+
+    <polyline points="0,0 24,0 24,8 16,8 16,16 8,16 8,24 0,24" fill="none" stroke="#094F5B" stroke-width="2"/>
+
+    <polyline points="0,40 24,40 24,48 16,48 16,56 8,56 8,64 0,64" fill="none" stroke="#9E3F2C" stroke-width="2"/>
+
+    <polyline points="0,80 24,80 24,88 16,88 16,96 8,96 8,104 0,104" fill="none" stroke="#8A6B1F" stroke-width="2"/>
+
+  </g>
+
+
+
+  <text x="1160" y="588" font-family="'JetBrains Mono', Consolas, monospace" font-size="11"
+
+        letter-spacing="2" fill="#3E4F5C" text-anchor="end">altumsureste.mx</text>
+
+</svg>
+

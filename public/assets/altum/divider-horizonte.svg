@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 60" width="600" height="60">
+
+  <line x1="0" y1="30" x2="250" y2="30" stroke="#D9C9B0" stroke-width="1.5"/>
+
+  <line x1="350" y1="30" x2="600" y2="30" stroke="#D9C9B0" stroke-width="1.5"/>
+
+  <!-- sol / luna naciente -->
+
+  <circle cx="300" cy="30" r="16" fill="none" stroke="#C89B3C" stroke-width="2"/>
+
+  <circle cx="300" cy="30" r="10" fill="#C89B3C" opacity="0.35"/>
+
+  <circle cx="300" cy="30" r="5" fill="#9E3F2C"/>
+
+  <!-- ondas de agua debajo -->
+
+  <path d="M220 45 Q260 40, 300 45 T380 45" fill="none" stroke="#2FB8CC" stroke-width="1.2" opacity="0.5"/>
+
+  <path d="M240 50 Q270 47, 300 50 T360 50" fill="none" stroke="#0E6B7A" stroke-width="1" opacity="0.35"/>
+
+</svg>
+
