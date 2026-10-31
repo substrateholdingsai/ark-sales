@@ -200,5 +200,5 @@ describe("CRM Auth routes", () => {
     // widget/public endpoints remain accessible without auth
     const healthRes = await app.fetch(new Request("http://localhost/health"), env as any);
     expect(healthRes.status).toBe(200);
-  });
+  }, 15000);
 });

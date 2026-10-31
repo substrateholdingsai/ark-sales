@@ -8,7 +8,6 @@ export function renderPublicLandingHtml(): string {
     <meta name="description" content="Ark Sales: El CRM agéntico y multi-tenant pensado para Agentes AI. 100% autónomo para prospectar, llamar con voz, enviar propuestas y cobrar vía SPEI; cómodo, visual y fácil de usar para humanos.">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script type="module" src="https://unpkg.com/@splinetool/viewer@1.9.72/build/spline-viewer.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fafc; }
@@ -119,34 +118,37 @@ export function renderPublicLandingHtml(): string {
                 </div>
             </div>
 
-            <!-- 3D VORTEX PORTAL CTA (Spline 3D + Interactive Physics Vortex) -->
+            <!-- 3D VORTEX PORTAL CTA (Interactive Physics Vortex) -->
             <div class="relative max-w-xl mx-auto my-8 group">
                 <div class="relative rounded-3xl p-[2px] bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400 shadow-[0_0_50px_rgba(37,99,235,0.3)] group-hover:shadow-[0_0_80px_rgba(56,189,248,0.55)] transition-all duration-500">
-                    <div class="relative bg-slate-950/95 rounded-[22px] p-6 text-center backdrop-blur-2xl overflow-hidden border border-slate-800/80">
-                        <canvas id="vortexCanvasLanding" class="absolute inset-0 w-full h-full pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity"></canvas>
+                    <div class="relative bg-slate-950/95 rounded-[22px] p-7 text-center backdrop-blur-2xl overflow-hidden border border-slate-800/80">
+                        <canvas id="vortexCanvasLanding" class="absolute inset-0 w-full h-full pointer-events-none opacity-85 group-hover:opacity-100 transition-opacity"></canvas>
                         
                         <div class="relative z-10 flex flex-col items-center">
-                            <div class="w-24 h-24 relative flex items-center justify-center mb-1">
-                                <spline-viewer url="https://prod.spline.design/IaZypc0K4Rnb07vW/scene.splinecode" class="w-32 h-32 pointer-events-none scale-110" loading-anim-type="none"></spline-viewer>
+                            <!-- Glowing Agentic Vortex Eye Core -->
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500/20 via-blue-600/30 to-indigo-500/20 border border-cyan-400/50 flex items-center justify-center mb-4 shadow-[0_0_35px_rgba(56,189,248,0.45)] relative group-hover:scale-110 transition-transform">
+                                <i data-lucide="orbit" class="w-8 h-8 text-cyan-300 animate-spin" style="animation-duration: 9s;"></i>
+                                <div class="absolute inset-0 rounded-2xl bg-cyan-400/15 blur-md animate-pulse"></div>
                             </div>
                             
-                            <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-blue-500/10 border border-cyan-400/30 text-cyan-300 font-mono text-[10px] uppercase tracking-widest mb-2">
-                                <i data-lucide="orbit" class="w-3 h-3 text-cyan-400 animate-spin"></i> Vórtice 3D · Puesto de Mando Soberano
+                            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-cyan-400/40 text-cyan-300 font-mono text-[11px] uppercase tracking-widest mb-2 shadow-sm">
+                                <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+                                <span>Vórtice 3D · Puesto de Mando Soberano</span>
                             </div>
                             
-                            <h3 class="text-xl font-extrabold text-white tracking-tight mb-1">
+                            <h3 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight mb-2">
                                 Consola Super Admin & Pipeline Agéntico
                             </h3>
-                            <p class="text-xs text-slate-400 mb-5 max-w-sm mx-auto">
+                            <p class="text-xs sm:text-sm text-slate-300 mb-6 max-w-md mx-auto leading-relaxed">
                                 Supervisa el pipeline omni-tenant, configura plantillas de correo, lanza campañas de voz con IA y controla la cobranza bancaria en tiempo real.
                             </p>
 
                             <div class="flex flex-wrap items-center justify-center gap-3 w-full">
-                                <a href="/superadmin" class="flex-1 min-w-[170px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
+                                <a href="/superadmin" class="flex-1 min-w-[170px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-5 rounded-xl text-xs transition-all shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
                                     <i data-lucide="shield-alert" class="w-4 h-4"></i>
                                     <span>Entrar a Super Admin</span>
                                 </a>
-                                <a href="/crm" class="flex-1 min-w-[150px] bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-slate-600 font-semibold py-2.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-2">
+                                <a href="/crm" class="flex-1 min-w-[150px] bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-slate-600 font-semibold py-3 px-5 rounded-xl text-xs transition-all flex items-center justify-center gap-2">
                                     <i data-lucide="layout-dashboard" class="w-4 h-4 text-amber-400"></i>
                                     <span>Abrir Tablero CRM</span>
                                 </a>
