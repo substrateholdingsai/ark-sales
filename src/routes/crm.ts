@@ -76,39 +76,56 @@ crmRouter.get("/audit", requireRole("admin"), async (c) => {
 
 // Work inbox
 crmRouter.get("/inbox", async (c) => {
-  const { results: opps } = await c.env.DB.prepare(`
-    SELECT o.* FROM sales_opportunities o
-    WHERE o.stage NOT IN ('ganado','perdido')
+  const db = c.env.DB;
+  const { results: oppRows } = await db.prepare(`
+    SELECT 
+      o.*,
+      MAX(a.created_at) AS last_activity_at,
+      COUNT(CASE WHEN t.due_date IS NOT NULL AND t.due_date < CURRENT_TIMESTAMP AND t.status IN ('pending', 'in_progress') THEN 1 END) AS overdue_tasks_count
+    FROM sales_opportunities o
+    LEFT JOIN sales_activities a ON a.opportunity_id = o.id
+    LEFT JOIN sales_tasks t ON t.opportunity_id = o.id
+    WHERE o.stage NOT IN ('ganado', 'perdido')
+    GROUP BY o.id
     ORDER BY o.updated_at ASC
   `).all<any>();
 
+  const openOppIds = new Set((oppRows || []).map((o: any) => o.id));
+
+  // Cargar tareas vencidas en un solo ciclo (sin N+1)
+  const { results: overdueTasksAll } = await db.prepare(`
+    SELECT * FROM sales_tasks
+    WHERE status IN ('pending','in_progress') AND due_date IS NOT NULL AND due_date < CURRENT_TIMESTAMP
+      AND opportunity_id IS NOT NULL
+  `).all<any>();
+
+  const overdueByOpp = new Map<string, any[]>();
+  for (const t of overdueTasksAll || []) {
+    if (!openOppIds.has(t.opportunity_id)) continue;
+    if (!overdueByOpp.has(t.opportunity_id)) overdueByOpp.set(t.opportunity_id, []);
+    overdueByOpp.get(t.opportunity_id)!.push(t);
+  }
+
   const inbox: any[] = [];
-  for (const o of opps || []) {
-    const lastAct: any = await c.env.DB.prepare(
-      "SELECT created_at FROM sales_activities WHERE opportunity_id = ? ORDER BY created_at DESC LIMIT 1"
-    ).bind(o.id).first();
-    const lastDate = lastAct?.created_at ? new Date(lastAct.created_at) : new Date(o.created_at);
+  for (const o of oppRows || []) {
+    const lastDate = o.last_activity_at ? new Date(o.last_activity_at) : new Date(o.created_at);
     const daysSince = (Date.now() - lastDate.getTime()) / 86400000;
     const noRecentActivity = daysSince >= 7;
+    const overdueTasks = overdueByOpp.get(o.id) || [];
+    const hasOverdue = overdueTasks.length > 0 || (o.overdue_tasks_count || 0) > 0;
 
-    const { results: overdueTasks } = await c.env.DB.prepare(`
-      SELECT * FROM sales_tasks
-      WHERE opportunity_id = ? AND status IN ('pending','in_progress')
-        AND due_date IS NOT NULL AND due_date < CURRENT_TIMESTAMP
-    `).bind(o.id).all<any>();
-
-    const hasOverdue = (overdueTasks || []).length > 0;
     if (noRecentActivity || hasOverdue) {
       inbox.push({
         opportunity: o,
         days_since_activity: Math.floor(daysSince),
         no_recent_activity: noRecentActivity,
-        overdue_tasks: overdueTasks || [],
+        overdue_tasks: overdueTasks,
+        overdue_tasks_count: o.overdue_tasks_count || overdueTasks.length,
       });
     }
   }
 
-  const { results: globalOverdue } = await c.env.DB.prepare(`
+  const { results: globalOverdue } = await db.prepare(`
     SELECT * FROM sales_tasks
     WHERE status IN ('pending','in_progress') AND opportunity_id IS NULL
       AND due_date IS NOT NULL AND due_date < CURRENT_TIMESTAMP

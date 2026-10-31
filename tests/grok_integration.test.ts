@@ -140,6 +140,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
     AI: null,
     SALES_INGEST_QUEUE: {} as any,
     SALES_AGENT: {} as any,
+    INTERNAL_SERVICE_KEY: "test-internal-key",
   });
 
   const app = new Hono<{ Bindings: Env }>();
@@ -147,21 +148,21 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
 
   describe("Endpoint /api/internal/context (Ingesta de Contexto para Grok Bot)", () => {
     it("debe retornar 400 si falta el parámetro lead_id", async () => {
-      const res = await app.request("/api/internal/context", {}, createMockEnv());
+      const res = await app.request("/api/internal/context", { headers: { "X-Ark-Internal-Key": "test-internal-key" } }, createMockEnv());
       expect(res.status).toBe(400);
       const data: any = await res.json();
       expect(data.error).toContain("lead_id");
     });
 
     it("debe retornar 404 si el lead no existe en sales_leads", async () => {
-      const res = await app.request("/api/internal/context?lead_id=inexistente", {}, createMockEnv());
+      const res = await app.request("/api/internal/context?lead_id=inexistente", { headers: { "X-Ark-Internal-Key": "test-internal-key" } }, createMockEnv());
       expect(res.status).toBe(404);
       const data: any = await res.json();
       expect(data.error).toContain("no encontrado");
     });
 
     it("debe retornar el Resumen Ejecutivo completo e historial para Grok Bot", async () => {
-      const res = await app.request("/api/internal/context?lead_id=lead_existente_123", {}, createMockEnv());
+      const res = await app.request("/api/internal/context?lead_id=lead_existente_123", { headers: { "X-Ark-Internal-Key": "test-internal-key" } }, createMockEnv());
       expect(res.status).toBe(200);
       const data: any = await res.json();
 
@@ -172,7 +173,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
       expect(data.score).toBe(85);
       expect(data.conversations.length).toBe(2);
       expect(data.executive_brief).toContain("RESUMEN EJECUTIVO PARA GROK BOT");
-      expect(data.executive_brief).toContain("Bundle ARK Total ($997 MXN/mes)");
+      expect(data.executive_brief).toContain("Paquete Enterprise");
     });
   });
 
@@ -182,7 +183,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
         "/api/internal/skills/execute",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Ark-Internal-Key": "test-internal-key" },
           body: JSON.stringify({
             skill_name: "research_prospect_web",
             payload: {
@@ -207,7 +208,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
         "/api/internal/skills/execute",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Ark-Internal-Key": "test-internal-key" },
           body: JSON.stringify({
             skill_name: "generate_custom_pdf",
             payload: {
@@ -229,7 +230,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
         "/api/internal/skills/execute",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Ark-Internal-Key": "test-internal-key" },
           body: JSON.stringify({
             skill_name: "skill_fantasma",
             payload: {},
@@ -262,7 +263,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
 
   describe("Endpoints del Runner Autónomo (grok_bot_computer_runner.py)", () => {
     it("GET /api/internal/skills/pending debe retornar el próximo job disponible", async () => {
-      const res = await app.request("/api/internal/skills/pending", {}, createMockEnv());
+      const res = await app.request("/api/internal/skills/pending", { headers: { "X-Ark-Internal-Key": "test-internal-key" } }, createMockEnv());
       expect(res.status).toBe(200);
       const data: any = await res.json();
       expect(data.job).toBeDefined();
@@ -276,7 +277,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
         "/api/internal/leads/lead_existente_123/enrich",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Ark-Internal-Key": "test-internal-key" },
           body: JSON.stringify({
             status: "success",
             enrichment: {

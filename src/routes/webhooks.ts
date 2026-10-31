@@ -7,6 +7,13 @@ export const webhookRouter = new Hono<{ Bindings: Env }>();
 
 webhookRouter.post("/", async (c) => {
   try {
+    const expectedSecret = c.env.WEBHOOK_SECRET || c.env.ARK_WEBHOOK_SECRET;
+    if (expectedSecret) {
+      const provided = c.req.header("X-Ark-Webhook-Secret") || "";
+      if (provided !== expectedSecret) {
+        return c.json({ error: "Unauthorized: invalid webhook secret." }, 401);
+      }
+    }
     const body = await c.req.json();
     const { email, despacho_nombre, tamano, dolor_principal, productos_interes, origen } = body;
 

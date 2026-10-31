@@ -42,7 +42,7 @@ zone_name = "arksystems.site"
 [vars]
 ENVIRONMENT = "production"
 LEDGER_API_URL = "https://ledger.arksystems.site"
-ANGEL_API_URL = "https://angel.arksystems.site"
+ANGEL_API_URL = "https://arkangel.arksystems.site"
 COMMERCE_API_URL = "https://tiendas.arksystems.site"
 AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 RESEND_FROM_EMAIL = "ventas@arksystems.site"

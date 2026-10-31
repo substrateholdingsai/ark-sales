@@ -1,7 +1,27 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { Env, AgentSkill, LeadExecutiveContext } from "../types";
 
 export const internalRouter = new Hono<{ Bindings: Env }>();
+
+internalRouter.use("*", async (c, next) => {
+  const expected = c.env.INTERNAL_SERVICE_KEY;
+  const authHeader = c.req.header("Authorization") || "";
+  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+  const provided = c.req.header("X-Ark-Internal-Key") || bearer;
+  if (!provided) {
+    return c.json({ error: "Unauthorized: invalid or missing internal key." }, 401);
+  }
+  if (expected) {
+    if (provided !== expected) {
+      return c.json({ error: "Unauthorized: invalid or missing internal key." }, 401);
+    }
+  } else if ((c.env.ENVIRONMENT || "development") === "production") {
+    return c.json({ error: "Unauthorized: internal key not configured." }, 401);
+  }
+  // In non-production without configured key, accept any non-empty key (dev/test convenience)
+  await next();
+});
 
 /**
  * 3. Endpoint de Ingesta de Contexto (/api/internal/context)
@@ -9,7 +29,12 @@ export const internalRouter = new Hono<{ Bindings: Env }>();
  * antes de abrir el CRM o interactuar con el prospecto en la computadora.
  */
 internalRouter.get("/context", async (c) => {
-  const leadId = c.req.query("lead_id");
+  const leadIdRaw = c.req.query("lead_id");
+  const leadIdParsed = z.string().min(1).safeParse(leadIdRaw);
+  if (!leadIdParsed.success) {
+    return c.json({ error: "El parámetro query 'lead_id' es obligatorio." }, 400);
+  }
+  const leadId = leadIdParsed.data;
   if (!leadId) {
     return c.json({ error: "El parámetro query 'lead_id' es obligatorio." }, 400);
   }
@@ -19,7 +44,12 @@ internalRouter.get("/context", async (c) => {
 internalRouter.post("/context", async (c) => {
   try {
     const body = await c.req.json();
-    const leadId = body.lead_id || c.req.query("lead_id");
+    const leadIdRaw = body.lead_id || c.req.query("lead_id");
+    const leadIdParsed = z.string().min(1).safeParse(leadIdRaw);
+    if (!leadIdParsed.success) {
+      return c.json({ error: "El campo 'lead_id' es obligatorio en el body o query." }, 400);
+    }
+    const leadId = leadIdParsed.data;
     if (!leadId) {
       return c.json({ error: "El campo 'lead_id' es obligatorio en el body o query." }, 400);
     }
@@ -65,7 +95,7 @@ async function handleGetContext(leadId: string, env: Env) {
 - Estado Comercial: ${lead.estado} (Score: ${lead.score}/100).
 - Total de Interacciones: ${totalInteractions}.
 - Último Mensaje Clave: "${lastInteraction}".
-- Directriz Operativa: Proponer el Bundle ARK Total ($997 MXN/mes) como estándar estructural. No vender soluciones aisladas.`;
+- Directriz Operativa: Proponer el Paquete Enterprise (Ark Angel cobranza IA + Ark Ledger cierre fiscal desde $6,000 MXN) con base de consumo sugerida ($8,000 - $12,000 MXN/mes).`;
 
   const contextResponse: LeadExecutiveContext = {
     lead_id: lead.id,

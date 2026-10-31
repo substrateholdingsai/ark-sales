@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { Env } from "../types";
+import { z } from "zod";
 import { AuthVariables } from "../auth/middleware";
 import { UserService } from "../auth/users";
 import { signJwt } from "../auth/jwt";
@@ -16,8 +17,19 @@ function getSecret(env: Env): string {
 authRouter.post("/login", async (c) => {
   try {
     const body = await c.req.json();
-    const email = body?.email ?? body?.username ?? body?.user;
-    const password = body?.password ?? body?.pass;
+    const loginSchema = z.object({
+      email: z.string().optional(),
+      username: z.string().optional(),
+      user: z.string().optional(),
+      password: z.string().optional(),
+      pass: z.string().optional(),
+    });
+    const parsed = loginSchema.safeParse(body || {});
+    if (!parsed.success) {
+      return c.json({ error: "Payload inválido" }, 400);
+    }
+    const email = parsed.data.email ?? parsed.data.username ?? parsed.data.user;
+    const password = parsed.data.password ?? parsed.data.pass;
     if (!email || !password) {
       return c.json({ error: "email y password son obligatorios." }, 400);
     }

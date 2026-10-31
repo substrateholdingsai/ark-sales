@@ -78,7 +78,7 @@ export class QueueConsumer {
       case "ledger":
         return this.env.LEDGER_API_URL || "https://ledger.arksystems.site";
       case "angel":
-        return this.env.ANGEL_API_URL || "https://angel.arksystems.site";
+        return this.env.ANGEL_API_URL || "https://arkangel.arksystems.site";
       case "commerce":
         return this.env.COMMERCE_API_URL || "https://tiendas.arksystems.site";
       case "bundle":

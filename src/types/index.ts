@@ -17,12 +17,28 @@ export type LeadIngestPayload = {
 
 export type AgentId = "intake" | "riesgo" | "flujo" | "closer";
 
+export type ProductKey =
+  | "ledger"
+  | "angel"
+  | "commerce"
+  | "bundle"
+  | "angel_voice"
+  | "angel_whatsapp"
+  | "package_starter"
+  | "package_professional"
+  | string;
+
 export type ProductConfig = {
   id: string;
-  product_key: "ledger" | "angel" | "commerce" | "bundle";
+  product_key: ProductKey;
   name: string;
   price_mxn: number;
+  price_usd?: number | null;
+  currency?: "MXN" | "USD";
   billing_period: string;
+  unit?: string;
+  pricing_model?: "subscription" | "usage" | "package" | "hybrid";
+  min_monthly_mxn?: number | null;
   description: string;
   features_json: string;
   features?: string[];
@@ -187,4 +203,76 @@ export interface Env {
   RESEND_FROM_EMAIL?: string;
   AI_MODEL?: string;
   CRM_JWT_SECRET?: string;
+  TELNYX_API_KEY?: string;
+  TELNYX_PHONE_NUMBER?: string;
+  TELNYX_CONNECTION_ID?: string;
+  TELNYX_PUBLIC_KEY?: string;
+  TELNYX_AI_ASSISTANT_ID?: string;
+  SALES_API_URL?: string;
+  INTERNAL_SERVICE_KEY?: string;
+  WEBHOOK_SECRET?: string;
+  ARK_WEBHOOK_SECRET?: string;
+}
+
+
+export interface EmailTemplate {
+  id: string;
+  tenant_id: string | null;
+  name: string;
+  slug: string;
+  category: "propuesta" | "onboarding" | "due_diligence" | "recuperacion" | "general";
+  subject: string;
+  html_content: string;
+  variables_json: string;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailDispatch {
+  id: string;
+  tenant_id: string | null;
+  account_id: string | null;
+  contact_id: string | null;
+  template_slug: string | null;
+  recipient_email: string;
+  recipient_name: string | null;
+  subject: string;
+  variables_payload_json: string | null;
+  status: "sent" | "failed" | "simulated";
+  resend_id: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface VoiceCampaign {
+  id: string;
+  tenant_id: string | null;
+  name: string;
+  description: string | null;
+  status: "draft" | "running" | "completed" | "paused";
+  assistant_id: string | null;
+  dolor_principal: string | null;
+  total_targets: number;
+  completed_calls: number;
+  failed_calls: number;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoiceCampaignTarget {
+  id: string;
+  campaign_id: string;
+  tenant_id: string | null;
+  account_id: string | null;
+  contact_id: string | null;
+  lead_id: string | null;
+  despacho_nombre: string | null;
+  to_phone: string;
+  status: "pending" | "initiated" | "completed" | "failed" | "no_answer";
+  call_control_id: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
 }

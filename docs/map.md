@@ -1,9 +1,9 @@
 # 📁 Project Map & Architecture Checklist — Ark Sales
 
-> **Misión:** Motor de adquisición agéntico y enrutamiento por dolor del ecosistema ARK.  
-> **Filosofía:** *"No vendemos productos aislados. Vendemos la infraestructura operativa de la economía agéntica."*  
-> **Target:** Despachos contables en México.  
-> **Estrategia comercial:** El **Bundle Total** (Ledger + Angel + Commerce por **$997 MXN/mes**) es la regla, no la excepción.
+> **Misión:** Motor de adquisición agéntico, calificación por dolor y enrutamiento multivertical del ecosistema ARK en México.  
+> **Filosofía:** *"No vendemos software genérico. Vendemos infraestructura de cobranza institucional con IA y blindaje fiscal inmutable para México."*  
+> **Target:** Despachos de Cobranza (BPO), Bienes Raíces (Inmobiliarias), Financieras de Autos / Leasing y Despachos Contables / Corporativos.  
+> **Estrategia comercial:** Cobranza por consumo real en USD (Voz $0.25/min, WhatsApp $0.20/msg) + Módulo Fiscal Ark Ledger (desde $6,000 MXN/mes) bajo el **Paquete Enterprise** ($8,000 – $12,000 MXN de consumo mínimo sugerido).
 
 ---
 
@@ -86,18 +86,34 @@ ark-sales/
 ├── tsconfig.json                  # Target ES2022, Bundler resolution, strict
 ├── wrangler.toml                  # Bindings D1, AI, Queue, DO, Crons, Envs
 ├── docs/
-│   └── map.md                     # Este mapa y checklist arquitectónico
+│   ├── map.md                     # Este mapa y checklist arquitectónico
+│   └── telnyx-voice-ai-setup.md    # Configuración del agente de voz en Telnyx (STT/LLM/TTS/prompt)
 ├── migrations/
 │   ├── 0001_init.sql              # Tablas de ventas, leads, catálogo inicial
-│   └── 0002_grok_skills.sql       # Registro de habilidades de computadora Grok Bot
+│   ├── 0002_grok_skills.sql       # Registro de habilidades de computadora Grok Bot
+│   ├── 0003_crm_auth.sql          # Autenticación, usuarios y auditoría del CRM
+│   ├── 0004_crm_data_model.sql    # Modelo relacional de cuentas, contactos, tareas y pipeline
+│   ├── 0005_pricing_arkledger_arkangel.sql # Catálogo Oficial Octubre 2026 (Ark Angel USD + Ark Ledger MXN)
+│   ├── 0006_telnyx_voice.sql      # Soporte telefónico E.164 y tracking de llamadas de cortesía Telnyx
+│   ├── 0007_telnyx_voice_ai.sql    # Tabla sales_voice_sessions: llamadas de voz IA, transcripciones, grabaciones y telemetría
+│   └── 0008_superadmin_templates_campaigns.sql # Tablas email_templates, email_dispatches, voice_campaigns, voice_campaign_targets
 ├── src/
 │   ├── index.ts                   # Hono App, exports DO, fetch, queue, scheduled
 │   ├── types/
-│   │   └── index.ts               # LEAD_INGEST_V3, D1 models, DO state, Env
+│   │   └── index.ts               # LEAD_INGEST_V3, D1 models, DO state, Env, EmailTemplate, VoiceCampaign
+│   ├── auth/
+│   │   ├── password.ts            # PBKDF2-SHA256 soberano (100k iteraciones, Web Crypto API)
+│   │   ├── jwt.ts                 # Tokens HS256 autofirmados en Edge
+│   │   ├── middleware.ts          # requireAuth, requireRole ('admin' | 'vendedor' | 'lector')
+│   │   ├── roles.ts               # Normalización y jerarquía de permisos RBAC
+│   │   ├── users.ts               # Servicio de gestión de usuarios en D1 (crm_users)
+│   │   └── audit.ts               # Ledger inmutable de auditoría con IP y actor (crm_audit_log)
+│   ├── voice/
+│   │   └── telnyx.ts              # Módulo de llamadas de cortesía con voz en español neutro (Telnyx Call Control)
 │   ├── catalog/
 │   │   └── service.ts             # Lectura D1 Fail-Closed (Cero Hardcoding)
 │   ├── tools/
-│   │   └── index.ts               # Tools Llama 3.3 (diagnóstico, catálogo, outbox, skills)
+│   │   └── index.ts               # Tools Llama 3.3 (diagnóstico, catálogo, outbox, skills, llamada cortesía)
 │   ├── agents/
 │   │   ├── prompts.ts             # Prompts de los 4 agentes (Intake, Riesgo, Flujo, Closer)
 │   │   └── orchestrator.ts        # Bucle de Tool Calling y enrutamiento por dolor
@@ -109,17 +125,35 @@ ark-sales/
 │   ├── routes/
 │   │   ├── chat.ts                # POST /api/chat (Frontend y DO bridge)
 │   │   ├── webhooks.ts            # POST /webhooks/ingest (Formularios y terceros)
+│   │   ├── telnyxWebhook.ts       # POST /webhooks/telnyx (Call Control events y POST /call)
+│   │   ├── telnyxVoiceAi.ts        # POST /webhooks/telnyx/voice-ai/* y /api/crm/voice/outbound-ai (Telnyx Voice AI Agents)
+│   │   ├── superadmin.ts          # Consola Super Admin (Resend, Templates, Campañas de Voz Telnyx, Multi-Tenant)
+│   │   ├── auth.ts                # Endpoints de login, registro bootstrap y sesión
+│   │   ├── crm.ts                 # Endpoints base del CRM, inbox de trabajo y usuarios admin
+│   │   ├── crmAccounts.ts         # Gestión de cuentas y deduplicación
+│   │   ├── crmContacts.ts         # Gestión de contactos
+│   │   ├── crmOpportunities.ts    # Pipeline comercial y etapas
+│   │   ├── crmActivities.ts       # Bitácora de actividades comerciales
+│   │   ├── crmTasks.ts            # Tareas y seguimiento de oportunidades
 │   │   └── internal.ts            # APIs Grok Bot (/context, /skills/execute, /skills)
 │   └── client/
 │       ├── widgetScript.ts        # GET /widget.js (Script universal sin dependencias)
-│       └── demoPage.ts            # GET / y /demo (Landing ARK Pulse v1.0)
+│       ├── demoPage.ts            # GET / y /demo (Landing ARK Pulse con Botón 3D Vortex y Spline)
+│       ├── landingPage.ts         # GET /landing, /public, /features (Landing institucional con 3D Vortex)
+│       ├── crmPage.ts             # GET /crm y /crm/login (SPA privada del CRM comercial)
+│       └── superAdminPage.ts      # GET /superadmin (Consola ejecutiva multi-tenant con preview HTML e IVR Telnyx)
 └── tests/
     ├── catalog.test.ts            # Tests Fail-Closed y Cero Hardcoding
     ├── tools.test.ts              # Tests de diagnóstico de dolor y contrato V3
     ├── orchestrator.test.ts       # Tests de enrutamiento y cambio de agente
     ├── outbox.test.ts             # Tests de resiliencia y reintentos del outbox
     ├── grok_integration.test.ts   # Tests de context y disparo de skills de Grok
-    └── widget.test.ts             # Tests del script de frontend y landing demo
+    ├── widget.test.ts             # Tests del script de frontend y landing demo
+    ├── auth_routes.test.ts        # Tests de autenticación y bootstrap
+    ├── crm_phase6.test.ts         # Tests de métricas y deduplicación CRM
+    ├── telnyx_voice.test.ts       # Tests de llamadas de cortesía Telnyx (13 tests)
+    ├── telnyx_voice_ai.test.ts    # Tests de Telnyx Voice AI Agents (tools, eventos, DO, fail-closed)
+    └── superadmin.test.ts         # Tests del panel Super Admin (Resend, templates, voz AI Telnyx, multi-tenant)
 ```
 
 ---
@@ -177,6 +211,19 @@ type LeadIngestPayload = {
 | `GET` | `/api/internal/skills` | Interno (Grok Bot) | Descubrimiento dinámico de habilidades activas registradas en D1 |
 | `GET` | `/api/internal/skills/pending` | Interno (Daemon Grok) | Polling de la siguiente tarea autónoma de investigación web pendiente |
 | `POST` | `/api/internal/leads/:lead_id/enrich` | Interno (Daemon Grok) | Ingesta de datos enriquecidos (tamaño, software detectado, confianza) |
+| `POST` | `/webhooks/telnyx/voice-ai/tools` | Telnyx Voice AI | Ejecución de herramientas por webhook: consultar catálogo, diagnosticar despacho, agendar/entregar lead |
+| `POST` | `/webhooks/telnyx/voice-ai/events` | Telnyx Voice AI | Eventos de cierre: call.completed, session.recording_ready, session.transcription_ready; persiste transcripción y sincroniza DO |
+| `POST` | `/api/crm/voice/outbound-ai` | CRM autenticado | Dispara llamada saliente interactiva vía Telnyx Voice AI con contexto dinámico del despacho |
+| `GET` | `/superadmin` | Super Admin | Consola ejecutiva Super Admin (Resend, Plantillas HTML, Campañas Telnyx, Multi-Tenant) |
+| `GET` | `/api/superadmin/resend/status` | Super Admin | Estado de conectividad de Resend, remitente y métricas de despacho |
+| `POST` | `/api/superadmin/resend/test` | Super Admin | Disparo de correo de prueba inmediato vía Resend |
+| `GET` | `/api/superadmin/templates` | Super Admin | Listado de plantillas HTML pre-diseñadas (filtrables por tenant) |
+| `POST` | `/api/superadmin/templates/:id/preview` | Super Admin | Previsualización en vivo de plantilla con variables inyectadas |
+| `POST` | `/api/superadmin/templates/:id/send` | Super Admin | Despacho de correo con plantilla y registro en `email_dispatches` |
+| `POST` | `/api/superadmin/voice/campaigns` | Super Admin | Creación de campañas de llamadas de voz AI Telnyx (omni-tenant o por despacho) |
+| `POST` | `/api/superadmin/voice/campaigns/:id/targets` | Super Admin | Población automática o manual de contactos telefónicos para la campaña |
+| `POST` | `/api/superadmin/voice/campaigns/:id/dispatch` | Super Admin | Disparo batch de llamadas salientes con IA y actualización en vivo |
+| `GET` | `/api/superadmin/tenants/overview` | Super Admin | Métricas consolidadas multi-tenant (contactos, opps, correos, sesiones de voz) |
 
 ---
 
@@ -235,16 +282,40 @@ Grok Bot no es un lector de texto; es un operador autónomo que usa el navegador
 - [x] Landing Page interactiva oficial [`GET /` y `/demo`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/src/client/demoPage.ts) bajo canon ARK Pulse v1.0.
 - [x] FAB flotante, selector dinámico de especialistas, notificaciones de transferencia y card interactivo del Bundle $997 MXN/mes.
 
+### Integración Telnyx Voice AI Agents (ark-sales ↔ Telnyx)
+- [x] Migración [`migrations/0007_telnyx_voice_ai.sql`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/migrations/0007_telnyx_voice_ai.sql) con tabla `sales_voice_sessions` (transcripciones, grabaciones, telemetría, índices).
+- [x] Router [`src/routes/telnyxVoiceAi.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/src/routes/telnyxVoiceAi.ts) montado en `/webhooks/telnyx/voice-ai` y `/api/crm/voice`.
+- [x] Endpoint de herramientas `POST /webhooks/telnyx/voice-ai/tools` (consultar catálogo, diagnosticar despacho, agendar/entregar lead, encola en `SALES_INGEST_QUEUE`).
+- [x] Endpoint de eventos `POST /webhooks/telnyx/voice-ai/events` (call.completed, session.recording_ready, session.transcription_ready): upsert de sesión, audio, transcripción en `sales_conversations`, actualización de lead y sincronización con `SalesAgent` DO.
+- [x] Endpoint protegido `POST /api/crm/voice/outbound-ai` (requireAuth) que dispara `POST https://api.telnyx.com/v2/ai/conversations` con número +52 y contexto dinámico.
+- [x] Guía [`docs/telnyx-voice-ai-setup.md`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/docs/telnyx-voice-ai-setup.md) con STT Deepgram Nova-2 (es-MX), LLM Llama 3.3 70B/gpt-4o-mini, TTS Cartesia/ElevenLabs y system prompt ejecutivo mexicano.
+- [x] Suite [`tests/telnyx_voice_ai.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/telnyx_voice_ai.test.ts) (tools, eventos, DO, fail-closed).
+- [x] Migración 0007 aplicada localmente sin conflictos; `npm test`, `npm run typecheck` y `npm run build` OK.
+
+### Consola Super Admin: Resend, Plantillas HTML & Campañas de Voz AI Telnyx Multi-Tenant
+- [x] Migración [`migrations/0008_superadmin_templates_campaigns.sql`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/migrations/0008_superadmin_templates_campaigns.sql) con tablas `email_templates`, `email_dispatches`, `voice_campaigns`, `voice_campaign_targets`.
+- [x] Semilla de 4 plantillas HTML pre-diseñadas (Propuesta Paquete Enterprise, Bienvenida Onboarding, Due Diligence Patrimonial Hermes, Reactivación de Cartera Morosa).
+- [x] Router Super Admin [`src/routes/superadmin.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/src/routes/superadmin.ts) protegido con RBAC (`requireRole("admin")`).
+- [x] Control de Resend con prueba inmediata, interpolación dinámica de variables y log histórico de envíos.
+- [x] Lanzador de campañas de voz AI Telnyx omni-tenant (para todos los despachos o filtrado por tenant) con telemetría en vivo, grabaciones y transcripciones.
+- [x] Consola interactiva frontend [`GET /superadmin`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/src/client/superAdminPage.ts) con preview HTML en vivo, navegación por tabs y acceso directo desde el CRM.
+- [x] Suite completa [`tests/superadmin.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/superadmin.test.ts) (12/12 tests verdes).
+
 ### Verificación y Calidad de Código
-- [x] Suite de 24 pruebas unitarias e integración en Vitest pasando al 100%:
-  - [`tests/catalog.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/catalog.test.ts) (3/3)
+- [x] Suite de 58 pruebas unitarias e integración en Vitest pasando al 100% (11 suites verdes):
+  - [`tests/catalog.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/catalog.test.ts) (4/4)
   - [`tests/tools.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/tools.test.ts) (5/5)
   - [`tests/orchestrator.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/orchestrator.test.ts) (3/3)
   - [`tests/outbox.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/outbox.test.ts) (3/3)
-  - [`tests/grok_integration.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/grok_integration.test.ts) (7/7)
+  - [`tests/grok_integration.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/grok_integration.test.ts) (9/9)
   - [`tests/widget.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/widget.test.ts) (3/3)
+  - [`tests/auth_routes.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/auth_routes.test.ts) (2/2)
+  - [`tests/crm_phase6.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/crm_phase6.test.ts) (2/2)
+  - [`tests/telnyx_voice.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/telnyx_voice.test.ts) (13/13)
+  - [`tests/telnyx_voice_ai.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/telnyx_voice_ai.test.ts) (2/2)
+  - [`tests/superadmin.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/superadmin.test.ts) (12/12)
 - [x] Verificación estricta de TypeScript (`npm run typecheck`): **0 errores**.
-- [x] Build y empaquetado de producción (`npm run build` / `wrangler deploy --dry-run`): **Exitoso (156.28 KiB)**.
+- [x] Build y empaquetado de producción (`npm run build` / `wrangler deploy --dry-run`): **Exitoso (500.10 KiB)**.
 
 ---
 

@@ -116,6 +116,9 @@ body{font-family:'Inter',sans-serif;background-color:#020617;color:#f8fafc}
         <span class="font-bold text-base tracking-tight">ARK <span class="text-slate-400 font-normal">CRM</span></span>
       </div>
       <div class="flex items-center gap-3 text-sm">
+        <a href="/superadmin" class="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-blue-900/60 to-indigo-900/60 border border-blue-600/40 hover:border-blue-500 rounded text-xs font-semibold text-blue-300 hover:text-white transition-all shadow-sm">
+          <i data-lucide="shield" class="w-3.5 h-3.5"></i> Super Admin
+        </a>
         <span id="userInfo" class="text-slate-400 font-mono text-xs"></span>
         <button id="logoutBtn" class="text-slate-300 hover:text-white text-xs">Salir</button>
       </div>

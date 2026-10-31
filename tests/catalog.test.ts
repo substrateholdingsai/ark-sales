@@ -65,4 +65,52 @@ describe("CatalogService (Cero Hardcoding & Fail-Closed)", () => {
     expect(result.products!["ledger"].features).toContain("Sello SHA-256");
     expect(result.products!["bundle"].price_mxn).toBe(997);
   });
+
+  it("debe procesar productos con precio por uso en USD (Ark Angel) y add-ons en MXN (Ark Ledger)", async () => {
+    const mockDb: any = {
+      prepare: vi.fn().mockReturnValue({
+        all: vi.fn().mockResolvedValue({
+          results: [
+            {
+              id: "cfg_angel_voice",
+              product_key: "angel_voice",
+              name: "Ark Angel — Voz IA",
+              price_mxn: 5.0,
+              price_usd: 0.25,
+              currency: "USD",
+              billing_period: "por_minuto",
+              unit: "minuto",
+              pricing_model: "usage",
+              description: "Llamada con IA en tiempo real",
+              features_json: '["Voz en tiempo real", "Motor Legal fail-closed"]',
+              status: "active",
+            },
+            {
+              id: "cfg_ledger",
+              product_key: "ledger",
+              name: "Ark Ledger (Cierre Fiscal)",
+              price_mxn: 6000.0,
+              currency: "MXN",
+              billing_period: "mensual",
+              unit: "mes",
+              pricing_model: "subscription",
+              min_monthly_mxn: 4500.0,
+              description: "Módulo Fiscal y Contable",
+              features_json: '["CFF", "CFDI 4.0", "SHA-256 + QR"]',
+              status: "active",
+            },
+          ],
+        }),
+      }),
+    };
+
+    const service = new CatalogService(mockDb);
+    const result = await service.getCatalog();
+
+    expect(result.success).toBe(true);
+    expect(result.products!["angel_voice"].price_usd).toBe(0.25);
+    expect(result.products!["angel_voice"].pricing_model).toBe("usage");
+    expect(result.products!["ledger"].price_mxn).toBe(6000);
+    expect(result.products!["ledger"].features).toContain("SHA-256 + QR");
+  });
 });

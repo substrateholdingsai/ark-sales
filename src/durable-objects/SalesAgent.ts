@@ -5,6 +5,7 @@ export interface SalesAgentSessionState {
   lead_id: string;
   agente_id: AgentId;
   history: ChatMessage[];
+  rolling_summary?: string;
   email?: string;
   despacho_nombre?: string;
   tamano?: string;
@@ -28,7 +29,7 @@ export class SalesAgent {
     if (url.pathname === "/chat" && request.method === "POST") {
       try {
         const body: any = await request.json();
-        const { message, lead_id, email, despacho_nombre, tamano } = body;
+        const { message, lead_id, email, despacho_nombre, tamano, stream } = body;
 
         if (!message) {
           return new Response(JSON.stringify({ error: "message is required" }), {
@@ -44,6 +45,30 @@ export class SalesAgent {
           despacho_nombre,
           tamano,
         });
+
+        if (stream === true) {
+          const text = result.response || "";
+          const encoder = new TextEncoder();
+          const readable = new ReadableStream({
+            start(controller) {
+              const chunkSize = 40;
+              for (let i = 0; i < text.length; i += chunkSize) {
+                const chunk = text.slice(i, i + chunkSize);
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ chunk })}\n\n`));
+              }
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, ...result })}\n\n`));
+              controller.close();
+            },
+          });
+          return new Response(readable, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              "Connection": "keep-alive",
+            },
+          });
+        }
 
         return new Response(JSON.stringify(result), {
           status: 200,
@@ -103,7 +128,19 @@ export class SalesAgent {
     const userMsg: ChatMessage = { role: "user", content: params.message };
     session.history.push(userMsg);
 
-    await this.persistMessageToD1({
+    const MAX_ACTIVE_TURNS = 10;
+    if (session.history.length > MAX_ACTIVE_TURNS) {
+      const overflow = session.history.length - MAX_ACTIVE_TURNS;
+      const oldTurns = session.history.slice(0, overflow);
+      const summaryParts = oldTurns.map((m) => `${m.role}: ${m.content}`).join(" | ");
+      session.rolling_summary = [session.rolling_summary, summaryParts].filter(Boolean).join(" \n");
+      if (session.rolling_summary && session.rolling_summary.length > 2000) {
+        session.rolling_summary = session.rolling_summary.slice(-2000);
+      }
+      session.history = session.history.slice(overflow);
+    }
+
+    const persistUserPromise = this.persistMessageToD1({
       lead_id: session.lead_id,
       agente_id: session.agente_id,
       role: "user",
@@ -115,6 +152,7 @@ export class SalesAgent {
       lead_id: session.lead_id,
       currentAgent: session.agente_id,
       history: session.history.slice(0, -1),
+      rollingSummary: session.rolling_summary,
       userMessage: params.message,
       leadContext: {
         email: session.email,
@@ -123,7 +161,9 @@ export class SalesAgent {
       },
     });
 
-    // 3. Si hubo cambio o transferencia de agente, actualizar sesión y D1
+    await persistUserPromise;
+
+    // 3. Si hubo cambio o transferencia de agente, actualizar sesiÃ³n y D1
     if (orchestration.transferred_to) {
       session.agente_id = orchestration.transferred_to;
       await this.updateLeadSpecialistInD1(session.lead_id, orchestration.transferred_to);
@@ -133,7 +173,7 @@ export class SalesAgent {
     const assistantMsg: ChatMessage = { role: "assistant", content: orchestration.response };
     session.history.push(assistantMsg);
 
-    await this.persistMessageToD1({
+    const persistAssistantPromise = this.persistMessageToD1({
       lead_id: session.lead_id,
       agente_id: session.agente_id,
       role: "assistant",
@@ -143,6 +183,7 @@ export class SalesAgent {
 
     // Guardar estado en DO Storage
     await this.state.storage.put("session", session);
+    await persistAssistantPromise;
 
     return {
       lead_id: session.lead_id,

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { Env } from "../types";
+import { z } from "zod";
 import { AuthVariables } from "../auth/middleware";
 import { requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
@@ -57,6 +58,8 @@ crmOpportunitiesRouter.get("/:id", async (c) => {
 crmOpportunitiesRouter.post("/", requireRole("write"), async (c) => {
   try {
     const body = await c.req.json();
+    const parsed = z.record(z.any()).safeParse(body);
+    if (!parsed.success) return c.json({ error: "Payload inválido." }, 400);
     const stage = body?.stage || "nuevo";
     const validStages = ["nuevo","contactado","calificado","demo_agendada","propuesta_enviada","negociacion","ganado","perdido"];
     if (!validStages.includes(stage)) return c.json({ error: "Etapa inválida." }, 400);

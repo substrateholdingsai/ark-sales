@@ -16,22 +16,27 @@ export async function ensureAccountContactForLead(db: any, lead: {
   const contactId = `ct_${lead.id}`;
   if (!db) return { accountId, contactId };
   try {
-    await db.prepare(`
+    const stmt1 = db.prepare(`
       INSERT OR IGNORE INTO sales_accounts (id, name, normalized_name, size, origin, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'lead', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(accountId, lead.despacho_nombre || lead.email || "Despacho", (lead.despacho_nombre || lead.email || "").toLowerCase().trim(), lead.tamano || null).run();
-  } catch {}
-  try {
-    await db.prepare(`
+    `).bind(accountId, lead.despacho_nombre || lead.email || "Despacho", (lead.despacho_nombre || lead.email || "").toLowerCase().trim(), lead.tamano || null);
+    const stmt2 = db.prepare(`
       INSERT OR IGNORE INTO sales_contacts (id, account_id, email, created_at, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(contactId, accountId, lead.email || null).run();
-  } catch {}
-  try {
-    await db.prepare(`
+    `).bind(contactId, accountId, lead.email || null);
+    const stmt3 = db.prepare(`
       UPDATE sales_leads SET account_id = ?, contact_id = ? WHERE id = ? AND (account_id IS NULL OR contact_id IS NULL)
-    `).bind(accountId, contactId, lead.id).run();
-  } catch {}
+    `).bind(accountId, contactId, lead.id);
+    if (typeof db.batch === "function") {
+      await db.batch([stmt1, stmt2, stmt3]);
+    } else {
+      await stmt1.run();
+      await stmt2.run();
+      await stmt3.run();
+    }
+  } catch (e) {
+    console.warn("[automation] ensureAccountContactForLead failed:", e);
+  }
   return { accountId, contactId };
 }
 

@@ -3,6 +3,8 @@ import { cors } from "hono/cors";
 import { Env, LeadIngestPayload } from "./types";
 import { chatRouter } from "./routes/chat";
 import { webhookRouter } from "./routes/webhooks";
+import { telnyxRouter } from "./routes/telnyxWebhook";
+import { telnyxVoiceAiRouter } from "./routes/telnyxVoiceAi";
 import { internalRouter } from "./routes/internal";
 import { authRouter } from "./routes/auth";
 import { crmRouter } from "./routes/crm";
@@ -11,6 +13,7 @@ import { crmContactsRouter } from "./routes/crmContacts";
 import { crmOpportunitiesRouter } from "./routes/crmOpportunities";
 import { crmActivitiesRouter } from "./routes/crmActivities";
 import { crmTasksRouter } from "./routes/crmTasks";
+import { superadminRouter } from "./routes/superadmin";
 import { AuthVariables, authMiddleware } from "./auth/middleware";
 import { CatalogService, FAIL_CLOSED_MESSAGE } from "./catalog/service";
 import { QueueConsumer } from "./queue/consumer";
@@ -20,11 +23,23 @@ import { WIDGET_JS_SOURCE } from "./client/widgetScript";
 import { renderLandingHtml } from "./client/demoPage";
 import { renderPublicLandingHtml } from "./client/landingPage";
 import { renderCrmLoginHtml, renderCrmHtml, isAuthenticated } from "./client/crmPage";
+import { renderSuperAdminHtml } from "./client/superAdminPage";
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
 // Middleware CORS
-app.use("*", cors());
+app.use("*", cors({
+  origin: (origin) => {
+    if (!origin) return "*";
+    if (origin.endsWith(".arksystems.site") || origin === "https://arksystems.site" || origin.includes("localhost")) {
+      return origin;
+    }
+    return "https://arksystems.site";
+  },
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowHeaders: ["Content-Type", "Authorization", "X-Ark-Internal-Key"],
+  credentials: true,
+}));
 
 // Health check
 app.get("/health", (c) => {
@@ -57,7 +72,7 @@ app.get("/demo", (c) => {
   return c.html(renderLandingHtml(c));
 });
 
-// Landing Page pública que explica las funciones del proyecto
+// Landing Page pÃºblica que explica las funciones del proyecto
 const publicLandingPaths = [
   "/landing",
   "/landing-page",
@@ -76,7 +91,7 @@ for (const p of publicLandingPaths) {
   });
 }
 
-// Endpoint público para consultar catálogo oficial (Fail-Closed)
+// Endpoint pÃºblico para consultar catÃ¡logo oficial (Fail-Closed)
 app.get("/api/catalog", async (c) => {
   const catalogService = new CatalogService(c.env.DB);
   const result = await catalogService.getCatalog();
@@ -86,16 +101,19 @@ app.get("/api/catalog", async (c) => {
   return c.json(result);
 });
 
-// Middleware de autenticación (parsea token si existe) para rutas CRM y Auth
+// Middleware de autenticaciÃ³n (parsea token si existe) para rutas CRM y Auth
 app.use("/api/auth", authMiddleware());
 app.use("/api/auth/*", authMiddleware());
 app.use("/api/crm", authMiddleware());
 app.use("/api/crm/*", authMiddleware());
+app.use("/api/superadmin", authMiddleware());
+app.use("/api/superadmin/*", authMiddleware());
 
 // Montar submódulos
 app.route("/api/chat", chatRouter);
-app.route("/webhooks/ingest", webhookRouter);
-app.route("/api/internal", internalRouter);
+app.route("/webhooks/telnyx", telnyxRouter);
+app.route("/webhooks/telnyx/voice-ai", telnyxVoiceAiRouter);
+app.route("/api/crm/voice", telnyxVoiceAiRouter);
 app.route("/api/auth", authRouter);
 app.route("/api/crm", crmRouter);
 app.route("/api/crm/accounts", crmAccountsRouter);
@@ -103,6 +121,7 @@ app.route("/api/crm/contacts", crmContactsRouter);
 app.route("/api/crm/opportunities", crmOpportunitiesRouter);
 app.route("/api/crm/activities", crmActivitiesRouter);
 app.route("/api/crm/tasks", crmTasksRouter);
+app.route("/api/superadmin", superadminRouter);
 
 // CRM privado
 app.get("/crm/login", (c) => {
@@ -113,6 +132,13 @@ app.get("/crm", async (c) => {
   const ok = await isAuthenticated(c.req.raw, c.env);
   if (!ok) return c.html(renderCrmLoginHtml());
   return c.html(renderCrmHtml());
+});
+
+// Consola Super Admin (Multi-Tenant, Resend & Telnyx Voice AI)
+app.get("/superadmin", async (c) => {
+  const ok = await isAuthenticated(c.req.raw, c.env);
+  if (!ok) return c.html(renderCrmLoginHtml());
+  return c.html(renderSuperAdminHtml());
 });
 app.notFound((c) => {
   return c.json({ error: "Endpoint no encontrado en ark-sales." }, 404);
@@ -148,8 +174,9 @@ export default {
     const outbox = new OutboxProcessor(env);
     ctx.waitUntil(
       outbox.processOutbox().then((stats) => {
-        console.log(`[ark-sales cron] Outbox completado. Procesados: ${stats.processed}, Éxitos: ${stats.succeeded}, Fallos: ${stats.failed}`);
+        console.log(`[ark-sales cron] Outbox completado. Procesados: ${stats.processed}, Ã‰xitos: ${stats.succeeded}, Fallos: ${stats.failed}`);
       })
     );
   },
 };
+

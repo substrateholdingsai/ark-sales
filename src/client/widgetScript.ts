@@ -317,14 +317,14 @@ export const WIDGET_JS_SOURCE = `
     </div>
     <div class="ark-body" id="ark-body">
       <div class="ark-msg assistant">
-        Hola. Soy <strong>El Triador</strong> de ARK Systems. Ayudo a despachos contables mexicanos a erradicar dolores de cálculos SAT, cobranza morosa y modernización agéntica.
+        Hola. Soy <strong>El Triador</strong> de ARK Systems. Infraestructura agéntica de cobranza multicanal (Ark Angel) y blindaje fiscal DOF (Ark Ledger) en México.
         <br><br>
-        ¿Cuál es el mayor obstáculo que enfrenta tu despacho hoy?
+        ¿En qué operación necesitas acelerar recuperación de cartera o blindar cumplimiento hoy?
         <div class="ark-quick-replies" id="ark-quick-replies">
-          <button class="ark-quick-btn" data-pain="Auditorías y errores en cálculos del SAT">🏛️ Problemas con el SAT</button>
-          <button class="ark-quick-btn" data-pain="Clientes que no pagan honorarios a tiempo">💸 Cartera vencida y morosos</button>
-          <button class="ark-quick-btn" data-pain="Queremos vender paquetes y servicios online">🌐 Vender en línea</button>
-          <button class="ark-quick-btn" data-pain="Todo el despacho está en caos y descontrol">🔥 Todo está en caos</button>
+          <button class="ark-quick-btn" data-pain="Cobranza masiva para despacho o call center BPO con guion CONDUSEF y softphone">🏢 Cobranza BPO / Call Center</button>
+          <button class="ark-quick-btn" data-pain="Cobranza de rentas, cuotas de mantenimiento y pagarés con monitor antilavado LFPIORPI">🏡 Inmobiliarias & Rentas</button>
+          <button class="ark-quick-btn" data-pain="Crédito automotriz, mensualidades vencidas y recargos CFF Art. 17-A y 21">🚗 Financieras de Autos & Leasing</button>
+          <button class="ark-quick-btn" data-pain="Honorarios de despacho contable, CFDI 4.0, Anexo 24 y multas SAT">💼 Despachos Contables & SAT</button>
         </div>
       </div>
     </div>
@@ -391,13 +391,13 @@ export const WIDGET_JS_SOURCE = `
       const card = document.createElement("div");
       card.className = "ark-bundle-card";
       card.innerHTML = \`
-        <h4>🚀 BUNDLE ECOSISTEMA ARK TOTAL</h4>
-        <div class="ark-bundle-price">$997 MXN/mes</div>
-        <p style="font-size:11px;color:#94A3B8;margin:0 0 8px 0;">Ledger (Fiscal SHA-256) + Angel (Cobranza fail-closed) + Commerce (Tienda digital).</p>
-        <button class="ark-bundle-btn" id="ark-btn-accept-proposal">Formalizar Propuesta y Recibir Contrato</button>
+        <h4>🚀 PROPUESTA OFICIAL ARK SYSTEMS</h4>
+        <div class="ark-bundle-price">Cobranza IA + Ark Ledger</div>
+        <p style="font-size:11px;color:#94A3B8;margin:0 0 8px 0;">Voz IA ($0.25 USD/min) + WhatsApp ($0.20 USD) + Cierre Fiscal SHA-256 (desde $6,000 MXN). Motor Legal fail-closed y Grok Bot incluidos.</p>
+        <button class="ark-bundle-btn" id="ark-btn-accept-proposal">Formalizar Propuesta y Recibir Cotización</button>
       \`;
       card.querySelector("#ark-btn-accept-proposal").addEventListener("click", () => {
-        inputEl.value = "Acepto el Bundle ARK Total por $997 MXN/mes. Favor de enviar la propuesta formal.";
+        inputEl.value = "Acepto la propuesta oficial de Ark Angel + Ark Ledger. Favor de enviar la cotización formal.";
         sendMessage();
       });
       msg.appendChild(card);
@@ -488,7 +488,7 @@ export const WIDGET_JS_SOURCE = `
         updateAgentBadge(data.agente_id);
       }
 
-      const isBundleOffer = (data.response && (data.response.includes("997") || data.response.toLowerCase().includes("bundle")));
+      const isBundleOffer = (data.response && (data.response.includes("Enterprise") || data.response.toLowerCase().includes("bundle") || data.response.includes("6,000") || data.response.toLowerCase().includes("propuesta")));
       appendMessage(data.response || "Permíteme verificar con el equipo.", "assistant", {
         card: isBundleOffer ? "bundle" : undefined
       });

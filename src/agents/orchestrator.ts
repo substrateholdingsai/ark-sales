@@ -1,5 +1,5 @@
 import { Env, ChatMessage, AgentId } from "../types";
-import { SYSTEM_PROMPTS } from "./prompts";
+import { SYSTEM_PROMPTS, AGENT_GUARDRAILS } from "./prompts";
 import { ToolExecutor, TOOLS_DEFINITIONS } from "../tools";
 import { FAIL_CLOSED_MESSAGE } from "../catalog/service";
 
@@ -26,6 +26,7 @@ export class AgentOrchestrator {
     lead_id: string;
     currentAgent: AgentId;
     history: ChatMessage[];
+    rollingSummary?: string;
     userMessage: string;
     leadContext?: {
       email?: string;
@@ -33,18 +34,23 @@ export class AgentOrchestrator {
       tamano?: string;
     };
   }): Promise<OrchestrationResult> {
-    const { lead_id, currentAgent, history, userMessage, leadContext } = params;
+    const { lead_id, currentAgent, history, rollingSummary, userMessage, leadContext } = params;
     let activeAgent = currentAgent;
     let transferredTo: AgentId | undefined;
     const toolsCalled: { name: string; args: any; result: any }[] = [];
 
     // 1. Preparar lista de mensajes con el system prompt del agente actual
-    const systemPrompt = SYSTEM_PROMPTS[activeAgent];
+    const systemPrompt = SYSTEM_PROMPTS[activeAgent] + "\n" + AGENT_GUARDRAILS;
     const messages: any[] = [
       { role: "system", content: systemPrompt },
-      ...history.map((m) => ({ role: m.role, content: m.content })),
-      { role: "user", content: userMessage },
     ];
+    if (rollingSummary) {
+      messages.push({ role: "system", content: `Antecedentes resumidos de la conversación: ${rollingSummary}` });
+    }
+    messages.push(
+      ...history.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user", content: userMessage }
+    );
 
     const modelName = this.env.AI_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
     const context = {
@@ -74,42 +80,45 @@ export class AgentOrchestrator {
 
         // Caso A: El modelo generó llamadas a herramientas
         if (aiResponse?.tool_calls && Array.isArray(aiResponse.tool_calls) && aiResponse.tool_calls.length > 0) {
-          for (const call of aiResponse.tool_calls) {
+          const parsedCalls = aiResponse.tool_calls.map((call: any) => {
             const toolName = call.name || call.function?.name;
             let args = call.arguments || call.function?.arguments || {};
-            if (typeof args === "string") {
-              try {
-                args = JSON.parse(args);
-              } catch {
-                args = {};
-              }
+            if (typeof args === 'string') {
+              try { args = JSON.parse(args); } catch { args = {}; }
             }
+            return { call, toolName, args };
+          });
 
-            // Ejecución de la herramienta
-            const toolResult = await this.toolExecutor.execute(toolName, args, context);
+          const results = await Promise.allSettled(
+            parsedCalls.map(async ({ call, toolName, args }: any) => {
+              const toolResult = await this.toolExecutor.execute(toolName, args, context);
+              return { call, toolName, args, toolResult };
+            })
+          );
+
+          for (const settled of results) {
+            if (settled.status !== 'fulfilled') continue;
+            const { call, toolName, args, toolResult } = settled.value;
             toolsCalled.push({ name: toolName, args, result: toolResult });
 
-            // Verificar si hubo diagnóstico que recomiende transferencia de agente
-            if (toolName === "diagnosticar_despacho" && toolResult?.especialista_asignado) {
+            if (toolName === 'diagnosticar_despacho' && toolResult?.especialista_asignado) {
               if (toolResult.especialista_asignado !== activeAgent) {
                 transferredTo = toolResult.especialista_asignado;
                 activeAgent = toolResult.especialista_asignado;
               }
             }
 
-            // Agregar respuesta de la tool al historial de mensajes para el siguiente turno del LLM
             messages.push({
-              role: "assistant",
+              role: 'assistant',
               content: null,
               tool_calls: [call],
             });
             messages.push({
-              role: "tool",
+              role: 'tool',
               name: toolName,
               content: JSON.stringify(toolResult),
             });
-          }
-          // Continúa el loop para que el LLM formule su respuesta final con los datos de las herramientas
+          }          // Continúa el loop para que el LLM formule su respuesta final con los datos de las herramientas
           continue;
         }
 
@@ -184,7 +193,7 @@ export class AgentOrchestrator {
       } else {
         const ledger = cat.catalogo?.["ledger"];
         const bundle = cat.catalogo?.["bundle"];
-        responseText = `En ARK protegemos su despacho con ${ledger?.name || "Ark Ledger"} ($${ledger?.price_mxn || 399} MXN/mes) con sellado SHA-256 inmutable. Sin embargo, por solo $${bundle?.price_mxn || 997} MXN/mes obtiene el Bundle Ecosistema Total con Ark Angel y Commerce incluidos.`;
+        responseText = `En ARK blindamos su despacho con ${ledger?.name || "Ark Ledger"} (desde $${ledger?.price_mxn || 6000} MXN/mes) con timbrado CFDI 4.0 y sellado SHA-256 inmutable. Como add-on se complementa con Ark Angel (cobranza IA por uso real: Voz $0.25 USD/min y WhatsApp $0.20 USD/msg) o en el Paquete Enterprise integral.`;
       }
     } else if (currentAgent === "flujo") {
       const cat = await this.toolExecutor.execute("consultar_catalogo_completo", {}, context);
@@ -195,7 +204,7 @@ export class AgentOrchestrator {
       } else {
         const angel = cat.catalogo?.["angel"];
         const bundle = cat.catalogo?.["bundle"];
-        responseText = `Para erradicar la morosidad implementamos ${angel?.name || "Ark Angel"} ($${angel?.price_mxn || 499} MXN/mes). Le recomendamos el Bundle ARK completo por $${bundle?.price_mxn || 997} MXN/mes para habilitar cobros en línea e inmutabilidad fiscal.`;
+        responseText = `Para erradicar la morosidad implementamos ${angel?.name || "Ark Angel"} con facturación por uso real (Voz IA a $0.25 USD/min y WhatsApp a $0.20 USD/msg) con Grok Bot y Motor Legal fail-closed incluidos. Para operaciones completas, el Paquete Enterprise integra Ark Ledger y cobranza omnicanal.`;
       }
     } else {
       // Closer
@@ -208,12 +217,12 @@ export class AgentOrchestrator {
         const bundle = cat.catalogo?.["bundle"];
         const leadDelivered = await this.toolExecutor.execute(
           "entregar_lead",
-          { destination: "bundle", score: 95, summary: `Acuerdo de Bundle cerrado para ${context.despachoNombre || "Despacho"}` },
+          { destination: "bundle", score: 95, summary: `Acuerdo Enterprise cerrado para ${context.despachoNombre || "Despacho"}` },
           context
         );
         toolsCalled.push({ name: "entregar_lead", args: { destination: "bundle", score: 95 }, result: leadDelivered });
 
-        responseText = `Excelente decisión. El ${bundle?.name || "Bundle Ecosistema Total"} está preparado para su despacho por $${bundle?.price_mxn || 997} MXN/mes. Su entrega ha sido procesada de manera federada.`;
+        responseText = `Excelente decisión. El ${bundle?.name || "Paquete Enterprise (Ark Angel + Ark Ledger)"} está preparado para su despacho. La cobranza omnicanal con IA y el módulo fiscal inmutable han sido programados para entrega federada.`;
       }
     }
 

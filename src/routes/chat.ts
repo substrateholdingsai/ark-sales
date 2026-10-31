@@ -1,13 +1,27 @@
 import { Hono } from "hono";
 import { Env } from "../types";
+import { z } from "zod";
 import { ensureAccountContactForLead } from "../crm/automation";
+
+const chatSchema = z.object({
+  message: z.string().min(1),
+  lead_id: z.string().optional(),
+  email: z.string().email().optional().or(z.literal("")),
+  despacho_nombre: z.string().optional(),
+  tamano: z.string().optional(),
+  stream: z.boolean().optional(),
+});
 
 export const chatRouter = new Hono<{ Bindings: Env }>();
 
 chatRouter.post("/", async (c) => {
   try {
     const body = await c.req.json();
-    const { lead_id, message, email, despacho_nombre, tamano } = body;
+    const parsed = chatSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "Payload inválido", details: parsed.error.flatten() }, 400);
+    }
+    const { lead_id, message, email, despacho_nombre, tamano, stream } = parsed.data;
 
     if (!message || typeof message !== "string") {
       return c.json({ error: "El campo 'message' es obligatorio y debe ser texto." }, 400);
@@ -52,12 +66,24 @@ chatRouter.post("/", async (c) => {
         email,
         despacho_nombre,
         tamano,
+        stream: stream === true,
       }),
     });
 
     if (!doResponse.ok) {
       const errText = await doResponse.text();
       return c.json({ error: `Error en SalesAgent DO: ${errText}` }, 500);
+    }
+
+    if (stream === true) {
+      return new Response(doResponse.body, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
     }
 
     const data = await doResponse.json();
