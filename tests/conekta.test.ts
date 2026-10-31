@@ -407,7 +407,7 @@ describe("Conekta SPEI STP & Hosted Checkout Suite", () => {
       }, mockEnv);
 
       expect(res.status).toBe(200);
-      const json = await res.json();
+      const json = await res.json() as any;
       expect(json.status).toBe("simulated_mode");
       expect(json.has_api_key).toBe(false);
       expect(json.stats).toBeDefined();
@@ -431,7 +431,7 @@ describe("Conekta SPEI STP & Hosted Checkout Suite", () => {
       }, mockEnv);
 
       expect(res.status).toBe(200);
-      const json = await res.json();
+      const json = await res.json() as any;
       expect(json.success).toBe(true);
       expect(json.paymentMethodType).toBe("spei");
       expect(json.speiClabe).toBeDefined();
@@ -463,7 +463,7 @@ describe("Conekta SPEI STP & Hosted Checkout Suite", () => {
       }, mockEnv);
 
       expect(res.status).toBe(200);
-      const json = await res.json();
+      const json = await res.json() as any;
       expect(json.success).toBe(true);
       expect(mockDb._opportunities[0].stage).toBe("ganado");
     });

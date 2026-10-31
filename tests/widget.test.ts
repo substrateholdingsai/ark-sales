@@ -31,18 +31,18 @@ describe("Chat Widget & Landing Demo Frontend", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("ARK Sales");
-    expect(html).toContain("El Bundle Total ARK");
+    expect(html).toContain("El CRM pensado para Agentes AI");
     expect(html).toContain('<script src="/widget.js"');
   });
 
-  it("debe entregar la demo en GET /demo", async () => {
+  it("debe entregar la demo en GET /demo con el acceso de vortice", async () => {
     const req = new Request("http://localhost/demo");
     const res = await worker.fetch(req, mockEnv);
 
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("PULSE");
-    expect(html).toContain("Enrutamiento por Dolor");
+    expect(html).toContain("ARK Sales");
+    expect(html).toContain("Vórtice 3D");
     expect(html).toContain("Llama 3.3 70B");
   });
 });
