@@ -4,6 +4,10 @@ import { AuthVariables, requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
 import { normalizarTelefonoE164 } from "../voice/telnyx";
 import { ConektaService } from "../services/conekta";
+import { PreSendGate } from "../services/gate";
+import { DncService } from "../services/dnc";
+import { AtsHarvester } from "../services/atsHarvester";
+import { IntentHandler } from "../services/intentHandler";
 
 export const superadminRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
@@ -319,9 +323,32 @@ superadminRouter.post("/templates/:id/send", async (c) => {
       return c.json({ error: "Plantilla no encontrada" }, 404);
     }
 
+    // 1. Verificación en Lista Do Not Contact (DNC / Opt-out)
+    const dncService = new DncService(c.env.DB);
+    const isBlocked = await dncService.isBlocked(to, tenant_id);
+    if (isBlocked) {
+      return c.json({
+        error: "RECIPIENT_IN_DNC_LIST",
+        details: "El destinatario ha solicitado la baja permanente (Do Not Contact). Despacho abortado por cumplimiento CAN-SPAM / PROFECO."
+      }, 403);
+    }
+
     const vars = variables || {};
-    const renderedHtml = interpolateTemplate(template.html_content, vars);
-    const renderedSubject = interpolateTemplate(template.subject, vars);
+    const rawRenderedHtml = interpolateTemplate(template.html_content, vars);
+    const rawRenderedSubject = interpolateTemplate(template.subject, vars);
+
+    // 2. Pre-Send Deterministic Gate (Harvey Quality & Anti-AI Filter)
+    const gate = PreSendGate.check(rawRenderedSubject, rawRenderedHtml);
+    if (!gate.ok) {
+      return c.json({
+        error: "PRE_SEND_GATE_VIOLATION",
+        reasons: gate.reasons,
+        details: "El correo fue bloqueado por el Guardián Pre-Envío por violar directrices de calidad, variables rotas o frases cliché."
+      }, 422);
+    }
+
+    const renderedSubject = gate.sanitizedSubject;
+    const renderedHtml = gate.sanitizedBody;
     const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@arksystems.site";
 
     const dispatchId = `disp_${crypto.randomUUID().slice(0, 8)}`;
@@ -961,6 +988,108 @@ superadminRouter.post("/billing/simulate-paid", async (c) => {
       ? `Orden ${conekta_order_id} marcada como PAGADA. Oportunidad avanzada a ganado.`
       : webhookResult.error,
     details: webhookResult,
+  });
+});
+
+// -------------------------------------------------------------
+// 7. Motor Agéntico Harvey: DNC, Pre-Send Gate & ATS Signals
+// -------------------------------------------------------------
+
+// Validador rápido de Pre-Send Gate para pruebas desde consola
+superadminRouter.post("/gate/validate", async (c) => {
+  const body = await c.req.json();
+  const { subject, body: emailBody, email_type } = body || {};
+  const result = PreSendGate.check(subject || "", emailBody || "", { emailType: email_type });
+  return c.json(result);
+});
+
+// Clasificador de intenciones (Harvey Intent Matrix)
+superadminRouter.post("/intent/classify", async (c) => {
+  const body = await c.req.json();
+  const { text, stage } = body || {};
+  const deterministic = IntentHandler.classifyDeterministic(text || "");
+  if (deterministic) {
+    return c.json(deterministic);
+  }
+  return c.json({
+    intent: "question",
+    confidence: 0.70,
+    deterministic: false,
+    shouldAutoReply: true,
+    requiresHumanEscalation: false,
+    permanentDnc: false,
+    recommendedAction: IntentHandler.getResponseGuideline("question", stage)
+  });
+});
+
+// Registrar o consultar Do Not Contact (DNC)
+superadminRouter.get("/dnc", async (c) => {
+  if (!c.env.DB) return c.json({ count: 0, list: [] });
+  const rows = await c.env.DB.prepare("SELECT * FROM crm_dnc_list ORDER BY created_at DESC LIMIT 100").all();
+  return c.json({ count: rows.results?.length || 0, list: rows.results || [] });
+});
+
+superadminRouter.post("/dnc", async (c) => {
+  const body = await c.req.json();
+  const { email, reason, tenant_id, phone } = body || {};
+  if (!email) return c.json({ error: "El email es obligatorio" }, 400);
+  const dnc = new DncService(c.env.DB);
+  await dnc.add(email, reason || "manual", tenant_id, phone);
+  return c.json({ success: true, email, message: "Contacto agregado a lista DNC de por vida." });
+});
+
+// Cosechador ATS a $0 USD (Greenhouse, Lever, Ashby)
+superadminRouter.post("/ats/harvest", async (c) => {
+  const body = await c.req.json();
+  const { platform, company_token, tenant_id } = body || {};
+  if (!platform || !company_token) {
+    return c.json({ error: "platform ('greenhouse'|'lever'|'ashby') y company_token son requeridos." }, 400);
+  }
+
+  let result;
+  if (platform === "greenhouse") {
+    result = await AtsHarvester.fetchGreenhouse(company_token);
+  } else if (platform === "lever") {
+    result = await AtsHarvester.fetchLever(company_token);
+  } else if (platform === "ashby") {
+    result = await AtsHarvester.fetchAshby(company_token);
+  } else {
+    return c.json({ error: "Plataforma no soportada. Usa 'greenhouse', 'lever' o 'ashby'." }, 400);
+  }
+
+  // Guardar señales relevantes en D1 si DB disponible
+  if (c.env.DB && result.relevantSignals.length > 0) {
+    for (const sig of result.relevantSignals) {
+      const sigId = `sig_${crypto.randomUUID().slice(0, 8)}`;
+      await c.env.DB.prepare(
+        `INSERT INTO crm_ats_signals (id, tenant_id, company_domain, company_name, ats_platform, job_title, job_department, job_location, matched_product, signal_strength, suggested_hook, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
+      )
+      .bind(
+        sigId,
+        tenant_id ?? null,
+        `${company_token}.com`,
+        company_token,
+        platform,
+        sig.title,
+        sig.department ?? null,
+        sig.location ?? null,
+        sig.matchedProduct,
+        sig.signalStrength,
+        sig.suggestedHook
+      )
+      .run()
+      .catch(() => {});
+    }
+  }
+
+  return c.json({
+    success: true,
+    platform,
+    company: company_token,
+    total_jobs_scanned: result.totalJobs,
+    signals_found: result.relevantSignals.length,
+    signals: result.relevantSignals,
   });
 });
 
