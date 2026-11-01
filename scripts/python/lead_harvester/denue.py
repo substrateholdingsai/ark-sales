@@ -16,22 +16,34 @@ BASE_URL = "https://www.inegi.org.mx/app/api/denue/v1/consulta/"
 PROFILES_SCIAN: dict[str, list[str]] = {
     "ark": ["541210", "531110", "531210", "522250", "561490"],
     "futura_capital": [
-        # Cluster 1: Brokers, Inmobiliarias y Asesores de Inversión
         "531210", "531311", "523920",
-        # Cluster 2: Médicos Especialistas, Clínicas y Laboratorios (MB Medical Tower)
         "621111", "621112", "621211", "621511", "622111",
-        # Cluster 3: Logística, Autotransporte, Almacenes y Aduanas (Logistic Park Tamanché)
         "484111", "484121", "493111", "488511",
-        # Cluster 4: Hospitalidad y Patrimonial (The MB Hotel, Soletta, Azureno, Aldea Balhá, Paseos Temozón, Recoleta)
         "721111", "721190", "531110", "551110",
     ],
 }
 
 PROFILES_ENTIDADES: dict[str, list[str]] = {
     "ark": ["0"],
-    # 31=Yucatán, 09=CDMX, 19=Nuevo León, 14=Jalisco, 23=Quintana Roo
     "futura_capital": ["31", "09", "19", "14", "23"],
 }
+
+# Palabras clave y coordenadas estratégicas para Futura Capital en Yucatán
+FUTURA_GEO_CLUSTERS = [
+    # Mérida Norte (Zona Médica Faro del Mayab / Christus Muguerza / MB Medical Tower / Temozón)
+    {"query": "clinica", "coords": "21.0185,-89.6123", "radio": 5000, "scian_default": "621111"},
+    {"query": "medica", "coords": "21.0421,-89.6013", "radio": 5000, "scian_default": "621112"},
+    {"query": "consultorio", "coords": "21.0421,-89.6013", "radio": 5000, "scian_default": "621111"},
+    {"query": "inmobiliaria", "coords": "21.0340,-89.5980", "radio": 5000, "scian_default": "531210"},
+    {"query": "bienes raices", "coords": "21.0185,-89.6123", "radio": 5000, "scian_default": "531210"},
+    # Corredor Tamanché / Mérida-Progreso (Logistic Park)
+    {"query": "logistica", "coords": "21.1349,-89.6458", "radio": 5000, "scian_default": "493111"},
+    {"query": "bodega", "coords": "21.1349,-89.6458", "radio": 5000, "scian_default": "493111"},
+    # Puerto de Progreso (Logística Portuaria y Autotransporte)
+    {"query": "transporte", "coords": "21.2812,-89.6650", "radio": 5000, "scian_default": "484111"},
+    {"query": "almacen", "coords": "21.2812,-89.6650", "radio": 5000, "scian_default": "493111"},
+    {"query": "aduana", "coords": "21.2812,-89.6650", "radio": 5000, "scian_default": "488511"},
+]
 
 
 class DenueHarvester(BaseHarvester):
@@ -74,37 +86,64 @@ class DenueHarvester(BaseHarvester):
     async def _from_api(self) -> AsyncIterator[RawLead]:
         if not self.token:
             raise RuntimeError("INEGI_TOKEN not set")
-        scian_list = PROFILES_SCIAN.get(self.profile, PROFILES_SCIAN["ark"])
+        
         async with httpx.AsyncClient(timeout=30.0) as client:
-            for entidad in self.entidades:
-                for scian in scian_list:
+            if self.profile == "futura_capital":
+                # Consulta geográfica sobre los corredores estratégicos de Yucatán
+                seen_ids: set[str] = set()
+                for cluster in FUTURA_GEO_CLUSTERS:
                     await self._throttle()
-                    url = f"{BASE_URL}BuscarAreaAct/{scian}/{entidad}/0/1/{self.page_size}/{self.token}"
-                    resp = await client.get(url)
-                    if resp.status_code == 404:
+                    q = cluster["query"]
+                    coords = cluster["coords"]
+                    radio = cluster["radio"]
+                    scian_def = cluster["scian_default"]
+                    url = f"{BASE_URL}Buscar/{q}/{coords}/{radio}/{self.token}"
+                    try:
+                        resp = await client.get(url)
+                        if resp.status_code != 200:
+                            continue
+                        payload = resp.json()
+                        if not isinstance(payload, list):
+                            continue
+                        for item in payload:
+                            lead_key = item.get("CLEE") or item.get("Id") or f"{item.get('Nombre')}_{item.get('Telefono')}"
+                            if lead_key in seen_ids:
+                                continue
+                            seen_ids.add(lead_key)
+                            yield self._normalize(item, scian_def)
+                    except Exception:
                         continue
-                    resp.raise_for_status()
-                    payload = resp.json()
-                    if not isinstance(payload, list):
+            else:
+                for scian in PROFILES_SCIAN["ark"]:
+                    await self._throttle()
+                    url = f"{BASE_URL}BuscarAreaAct/{scian}/0/0/1/{self.page_size}/{self.token}"
+                    try:
+                        resp = await client.get(url)
+                        if resp.status_code != 200:
+                            continue
+                        payload = resp.json()
+                        if not isinstance(payload, list):
+                            continue
+                        for item in payload:
+                            yield self._normalize(item, scian)
+                    except Exception:
                         continue
-                    for item in payload:
-                        yield self._normalize(item, scian)
 
     def _normalize(self, item: dict, scian: Optional[str] = None) -> RawLead:
-        code = scian or item.get("Codigo_Actividad") or item.get("scian")
+        code = scian or item.get("Codigo_Actividad") or item.get("scian") or item.get("Clase_actividad")
         raw_tel = (item.get("Telefono") or item.get("telefono") or "").strip() or None
         raw_email = (item.get("Correo_e") or item.get("email") or "").strip() or None
         tenant_id = "acc_futura_capital" if self.profile == "futura_capital" else item.get("tenant_id")
         return RawLead(
             razon_social=item.get("Nombre") or item.get("razon_social", ""),
             rfc=item.get("RFC"),
-            actividad=item.get("Actividad") or item.get("actividad", ""),
+            actividad=item.get("Actividad") or item.get("actividad") or item.get("Nombre_Act") or "",
             scian_code=code,
             empleados_rango=item.get("Estrato") or item.get("empleados_rango"),
             ciudad=item.get("Municipio") or item.get("ciudad"),
             estado=item.get("Entidad") or item.get("estado"),
-            lat=item.get("Latitud") or item.get("lat"),
-            lon=item.get("Longitud") or item.get("lon"),
+            lat=float(item["Latitud"]) if item.get("Latitud") else item.get("lat"),
+            lon=float(item["Longitud"]) if item.get("Longitud") else item.get("lon"),
             sitio_web=item.get("Sitio_Web") or item.get("sitio_web"),
             telefono=raw_tel,
             email=raw_email,
