@@ -1,4 +1,9 @@
-# 📁 Project Map & Architecture Checklist — Ark Sales
+## Lead Harvester (Python)
+- Ubicación: scripts/python/lead_harvester/
+- FASE 1-2: BaseHarvester, DENUE, profiling HTTP, scoring híbrido, ingesta.
+- Migración: migrations/0010_sales_observations.sql
+- Endpoint classify: POST /api/internal/leads/:lead_id/classify
+
 
 > **Misión:** Motor de adquisición agéntico, calificación por dolor y enrutamiento multivertical del ecosistema ARK en México.  
 > **Filosofía:** *"No vendemos software genérico. Vendemos infraestructura de cobranza institucional con IA y blindaje fiscal inmutable para México."*  
