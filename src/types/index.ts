@@ -210,6 +210,7 @@ export interface Env {
   TELNYX_AI_ASSISTANT_ID?: string;
   SALES_API_URL?: string;
   INTERNAL_SERVICE_KEY?: string;
+  INTERNAL_API_TOKEN?: string;
   WEBHOOK_SECRET?: string;
   ARK_WEBHOOK_SECRET?: string;
   CONEKTA_API_KEY?: string;

@@ -23,7 +23,7 @@ import { SalesAgent } from "./durable-objects/SalesAgent";
 import { WIDGET_JS_SOURCE } from "./client/widgetScript";
 import { renderLandingHtml } from "./client/demoPage";
 import { renderPublicLandingHtml } from "./client/landingPage";
-import { renderCrmLoginHtml, renderCrmHtml, isAuthenticated } from "./client/crmPage";
+import { renderCrmLoginHtml, renderCrmHtml, isAuthenticated, isAdminAuthenticated } from "./client/crmPage";
 import { renderSuperAdminHtml } from "./client/superAdminPage";
 import { renderAltumPage } from "./client/altumPage";
 import { getAltumAsset } from "./client/altumAssets";
@@ -34,7 +34,13 @@ const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 app.use("*", cors({
   origin: (origin) => {
     if (!origin) return "*";
-    if (origin.endsWith(".arksystems.site") || origin === "https://arksystems.site" || origin.includes("localhost")) {
+    if (
+      origin.endsWith(".arksystems.site") ||
+      origin === "https://arksystems.site" ||
+      origin.endsWith(".futuracapital.mx") ||
+      origin === "https://futuracapital.mx" ||
+      origin.includes("localhost")
+    ) {
       return origin;
     }
     return "https://arksystems.site";
@@ -161,10 +167,11 @@ app.get("/crm", async (c) => {
   return c.html(renderCrmHtml());
 });
 
-// Consola Super Admin (Multi-Tenant, Resend & Telnyx Voice AI)
+// Consola Super Admin (Multi-Tenant, Resend & Telnyx Voice AI) — Exclusivo rol admin
 app.get("/superadmin", async (c) => {
-  const ok = await isAuthenticated(c.req.raw, c.env);
-  if (!ok) return c.html(renderCrmLoginHtml());
+  const { authenticated, isAdmin } = await isAdminAuthenticated(c.req.raw, c.env);
+  if (!authenticated) return c.html(renderCrmLoginHtml());
+  if (!isAdmin) return c.json({ error: "Acceso denegado: Se requiere rol de Super Administrador." }, 403);
   return c.html(renderSuperAdminHtml());
 });
 app.notFound((c) => {

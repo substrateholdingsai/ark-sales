@@ -1,17 +1,46 @@
 import { Hono } from "hono";
 import { Env } from "../types";
 import { z } from "zod";
-import { AuthVariables } from "../auth/middleware";
-import { requireAuth, requireRole } from "../auth/middleware";
+import { AuthVariables, getJwtSecret, requireAuth, requireRole } from "../auth/middleware";
 import { UserService } from "../auth/users";
 import { signJwt, verifyJwt } from "../auth/jwt";
 import { AuditService, clientIp } from "../auth/audit";
 
 export const authRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
-function getSecret(env: Env): string {
-  if (env.CRM_JWT_SECRET && env.CRM_JWT_SECRET.trim()) return env.CRM_JWT_SECRET.trim();
-  return "ark-sales-jwt-production-sovereign-2026-substrate";
+// Protección en memoria + D1 contra fuerza bruta en login y abuso de forgot-password
+const loginFailuresMap = new Map<string, number[]>();
+const forgotRequestsMap = new Map<string, number[]>();
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutos
+const MAX_LOGIN_FAILURES = 5;
+const MAX_FORGOT_REQUESTS = 3;
+
+function pruneAndCount(map: Map<string, number[]>, key: string): number {
+  const now = Date.now();
+  const arr = (map.get(key) || []).filter((ts) => now - ts < WINDOW_MS);
+  if (arr.length > 0) map.set(key, arr);
+  else map.delete(key);
+  return arr.length;
+}
+
+function recordAttempt(map: Map<string, number[]>, key: string): void {
+  const now = Date.now();
+  const arr = (map.get(key) || []).filter((ts) => now - ts < WINDOW_MS);
+  arr.push(now);
+  map.set(key, arr);
+}
+
+export function resetAuthRateLimitsForTests(): void {
+  loginFailuresMap.clear();
+  forgotRequestsMap.clear();
+}
+
+function requireJwtSecret(env: Env): string {
+  const s = getJwtSecret(env);
+  if (!s) {
+    throw new Error("CRM_JWT_SECRET no configurado en producción.");
+  }
+  return s;
 }
 
 authRouter.post("/login", async (c) => {
@@ -33,21 +62,33 @@ authRouter.post("/login", async (c) => {
     if (!email || !password) {
       return c.json({ error: "email y password son obligatorios." }, 400);
     }
+    const cleanEmail = String(email).trim().toLowerCase();
+    const ip = clientIp(c) || "unknown_ip";
+    const rateKey = `${ip}:${cleanEmail}`;
+
+    if (pruneAndCount(loginFailuresMap, rateKey) >= MAX_LOGIN_FAILURES || pruneAndCount(loginFailuresMap, `ip:${ip}`) >= MAX_LOGIN_FAILURES * 2) {
+      return c.json({ error: "Demasiados intentos fallidos. Por seguridad, intenta de nuevo en 15 minutos." }, 429);
+    }
+
     const svc = new UserService(c.env.DB);
-    const user = await svc.authenticate(String(email), String(password));
+    const user = await svc.authenticate(cleanEmail, String(password));
     if (!user) {
+      recordAttempt(loginFailuresMap, rateKey);
+      recordAttempt(loginFailuresMap, `ip:${ip}`);
       const audit = new AuditService(c.env.DB);
       await audit.record({
         action: "auth.login_failed",
         entity_type: "auth",
-        metadata: { email: String(email).trim().toLowerCase() },
+        metadata: { email: cleanEmail },
         ip: clientIp(c),
       });
       return c.json({ error: "Credenciales inválidas." }, 401);
     }
+    loginFailuresMap.delete(rateKey);
+    const secret = requireJwtSecret(c.env);
     const token = await signJwt(
       { sub: user.id, email: user.email, role: user.role, name: user.name ?? undefined },
-      getSecret(c.env)
+      secret
     );
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -57,7 +98,11 @@ authRouter.post("/login", async (c) => {
       entity_type: "auth",
       ip: clientIp(c),
     });
-    c.header("Set-Cookie", `ark_sales_token=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax`);
+    const isProd = (c.env.ENVIRONMENT || "development") === "production";
+    c.header(
+      "Set-Cookie",
+      `ark_sales_token=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax${isProd ? "; Secure" : ""}`
+    );
     return c.json({ token, access_token: token, user });
   } catch (err: any) {
     return c.json({ error: err.message || "Error en login" }, 500);
@@ -92,13 +137,20 @@ authRouter.post("/forgot-password", async (c) => {
     const body = await c.req.json();
     const email = String(body?.email || "").trim().toLowerCase();
     if (!email) return c.json({ error: "email es obligatorio." }, 400);
+    const ip = clientIp(c) || "unknown_ip";
+    const rateKey = `${ip}:${email}`;
+    if (pruneAndCount(forgotRequestsMap, rateKey) >= MAX_FORGOT_REQUESTS) {
+      return c.json({ error: "Demasiadas solicitudes de recuperación. Intenta más tarde." }, 429);
+    }
+    recordAttempt(forgotRequestsMap, rateKey);
+
     const svc = new UserService(c.env.DB);
     const user = await svc.findByEmail(email);
     if (!user) return c.json({ success: true, message: "Si el correo existe, se enviará un enlace de recuperación." });
 
     const token = await signJwt(
       { sub: user.id, email: user.email, role: "reset", name: user.name ?? undefined },
-      getSecret(c.env),
+      requireJwtSecret(c.env),
       15 * 60
     );
 
@@ -137,7 +189,7 @@ authRouter.post("/reset-password", async (c) => {
     if (!token || !password) return c.json({ error: "token y password son obligatorios." }, 400);
     if (password.length < 6) return c.json({ error: "La contraseña debe tener al menos 6 caracteres." }, 400);
 
-    const payload = await verifyJwt(token, getSecret(c.env));
+    const payload = await verifyJwt(token, requireJwtSecret(c.env));
     if (!payload || payload.role !== "reset") return c.json({ error: "Token inválido o expirado." }, 400);
 
     const svc = new UserService(c.env.DB);
@@ -177,7 +229,7 @@ authRouter.post("/invite", requireAuth(), requireRole("admin"), async (c) => {
 
     const token = await signJwt(
       { sub: user.id, email: user.email, role: "reset", name: user.name ?? undefined },
-      getSecret(c.env),
+      requireJwtSecret(c.env),
       24 * 60 * 60
     );
 

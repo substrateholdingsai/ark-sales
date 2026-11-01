@@ -7,10 +7,13 @@ export type AuthVariables = {
   user: (JwtPayload & { role: CrmRole }) | null;
 };
 
-function getSecret(env: Env): string {
+export function getJwtSecret(env: Env): string | null {
   const s = env.CRM_JWT_SECRET;
   if (s && s.trim()) return s.trim();
-  return "ark-sales-jwt-production-sovereign-2026-substrate";
+  if ((env.ENVIRONMENT || "development") === "production") {
+    return null;
+  }
+  return "ark-sales-dev-only-jwt-secret";
 }
 
 export function authMiddleware() {
@@ -35,7 +38,11 @@ export function authMiddleware() {
     }
 
     try {
-      const secret = getSecret(c.env);
+      const secret = getJwtSecret(c.env);
+      if (!secret) {
+        await next();
+        return;
+      }
       const payload = await verifyJwt(token, secret);
       if (payload) {
         const role = normalizeRole(payload.role);

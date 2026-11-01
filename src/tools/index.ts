@@ -3,6 +3,25 @@ import { CatalogService, FAIL_CLOSED_MESSAGE } from "../catalog/service";
 import { autoTaskOnQualifiedLead, ensureAccountContactForLead, autoTaskOnProposalSent } from "../crm/automation";
 import { dispararLlamadaCortesia } from "../voice/telnyx";
 import { ConektaService } from "../services/conekta";
+import { DncService } from "../services/dnc";
+
+// Cuotas por lead en memoria para evitar abuso de APIs de pago desde el widget de chat
+const toolUsageByLead = new Map<string, { calls: number; emails: number; orders: number }>();
+
+function checkAndIncrementToolQuota(leadId: string, type: "calls" | "emails" | "orders", maxAllowed: number): boolean {
+  const key = leadId || "anonymous";
+  const current = toolUsageByLead.get(key) || { calls: 0, emails: 0, orders: 0 };
+  if (current[type] >= maxAllowed) {
+    return false;
+  }
+  current[type] += 1;
+  toolUsageByLead.set(key, current);
+  return true;
+}
+
+export function resetToolQuotasForTests(): void {
+  toolUsageByLead.clear();
+}
 
 export interface ToolDefinition {
   name: string;
@@ -211,15 +230,33 @@ export class ToolExecutor {
         error: res.error,
       };
     }
+    let objectionsPlaybook: any[] = [];
+    if (this.env.DB) {
+      try {
+        const { results } = await this.env.DB.prepare(
+          "SELECT product_key, objection_question, official_answer FROM tenant_objection_playbooks ORDER BY product_key, id"
+        ).all<any>();
+        if (Array.isArray(results) && results.length > 0) {
+          objectionsPlaybook = results;
+        }
+      } catch {}
+    }
     return {
       status: "success",
       catalogo: res.products,
+      ...(objectionsPlaybook.length > 0 ? { objections_playbook: objectionsPlaybook } : {}),
     };
   }
 
   diagnosticarDespacho(dolor: string, tamano?: string, productosInteres?: string[]) {
     const dLower = dolor.toLowerCase();
-    
+    const futuraProds = Array.isArray(productosInteres)
+      ? productosInteres.filter((p) => typeof p === "string" && p.startsWith("futura_"))
+      : [];
+    const esInmobiliarioFutura =
+      futuraProds.length > 0 ||
+      /inmobiliari|consultorio.*m[eé]dic|bodega|log[ií]stica.*cedis|preventa|yucat[aá]n|futura.*capital|temoz[oó]n|sisal|chicxulub|telchac/i.test(dLower);
+
     // 1. Detección de dolor
     const esFiscal = /sat|auditor[ií]a|c[aá]lculo|fiscal|multa|cfdi|declaraci[oó]n|impuesto|p[oó]liza|sellado/i.test(dLower);
     const esCobranza = /cobranza|moros|flujo|cartera vencida|falta de pago|liquid/i.test(dLower);
@@ -231,7 +268,18 @@ export class ToolExecutor {
     let productosRecomendados: string[] = [];
     let dolorDetectadoKey = "sat_fiscal_calculo";
 
-    if (esGeneral || (esFiscal && esCobranza)) {
+    if (esInmobiliarioFutura) {
+      especialistaSugerido = "closer";
+      vertical = "bundle";
+      productosRecomendados = futuraProds.length > 0 ? futuraProds : ["futura_soletta_sisal", "futura_mb_medical_tower", "futura_logistic_park"];
+      dolorDetectadoKey = dLower.includes("medico") || dLower.includes("consultorio")
+        ? "inversion_consultorio_medico"
+        : dLower.includes("logistica") || dLower.includes("cedis") || dLower.includes("bodega")
+          ? "expansion_logistica_cedis"
+          : dLower.includes("broker") || dLower.includes("alianza")
+            ? "alianza_broker_inmobiliario"
+            : "inversion_patrimonial_yucatan";
+    } else if (esGeneral || (esFiscal && esCobranza)) {
       especialistaSugerido = "closer";
       vertical = "bundle";
       productosRecomendados = ["bundle", "ledger", "angel", "commerce"];
@@ -384,6 +432,28 @@ export class ToolExecutor {
     let resendSent = false;
     let resendMessageId = null;
 
+    // Verificar DNC y cuota de envío por lead antes de gastar saldo de Resend
+    if (this.env.DB) {
+      try {
+        const dnc = new DncService(this.env.DB);
+        if (await dnc.isBlocked(email)) {
+          return {
+            status: "blocked_dnc",
+            lead_id: leadId,
+            message: "El destinatario se encuentra en la lista Do Not Contact (DNC).",
+          };
+        }
+      } catch {}
+    }
+
+    if (!checkAndIncrementToolQuota(leadId, "emails", 3)) {
+      return {
+        status: "quota_exceeded",
+        lead_id: leadId,
+        message: "Ya se envió la propuesta comercial a este correo recientemente.",
+      };
+    }
+
     // Disparar vía Resend si RESEND_API_KEY está configurada
     if (this.env.RESEND_API_KEY) {
       try {
@@ -513,6 +583,14 @@ export class ToolExecutor {
     industria?: string,
     context?: any
   ) {
+    const leadId = context?.lead_id || telefono;
+    if (!checkAndIncrementToolQuota(leadId, "calls", 2)) {
+      return {
+        success: false,
+        error: "CALL_QUOTA_EXCEEDED",
+        message: "Se alcanzó el límite de llamadas de cortesía para esta sesión.",
+      };
+    }
     return await dispararLlamadaCortesia(this.env, {
       to: telefono,
       despachoNombre: despachoNombre || context?.despachoNombre,
@@ -528,6 +606,13 @@ export class ToolExecutor {
     productoKey?: string,
     context?: { leadEmail?: string; despachoNombre?: string; tamano?: string }
   ) {
+    if (!checkAndIncrementToolQuota(leadId, "orders", 3)) {
+      return {
+        status: "error",
+        error: "ORDER_QUOTA_EXCEEDED",
+        message: "Se alcanzó el límite de órdenes de pago generadas para esta sesión.",
+      };
+    }
     let email = context?.leadEmail || "contacto@despacho.com";
     let despachoNombre = context?.despachoNombre || "Estimado Colega Contable";
     let accountId: string | null = null;

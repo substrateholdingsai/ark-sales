@@ -980,7 +980,7 @@ superadminRouter.post("/billing/simulate-paid", async (c) => {
         created_at: Math.floor(Date.now() / 1000),
       },
     },
-  });
+  }, "__INTERNAL_SIMULATE__");
 
   return c.json({
     success: webhookResult.success,
@@ -1091,6 +1091,460 @@ superadminRouter.post("/ats/harvest", async (c) => {
     signals_found: result.relevantSignals.length,
     signals: result.relevantSignals,
   });
+});
+
+// -------------------------------------------------------------
+// 8. Cohortes (Super Admin)
+// -------------------------------------------------------------
+
+export function isSafeSelectQuery(sql: string): boolean {
+  const trimmed = (sql || "").trim().replace(/;+$/, "");
+  if (!/^select\s+/i.test(trimmed)) return false;
+  if (trimmed.includes(";")) return false;
+  if (/\b(drop|delete|update|insert|alter|pragma|attach|detach|replace|create|truncate)\b/i.test(trimmed)) {
+    return false;
+  }
+  return true;
+}
+
+async function runCohortQuery(db: any, sql: string, limit?: number): Promise<any[]> {
+  if (!db || !sql) return [];
+  const trimmed = sql.trim().replace(/;+$/, "");
+  if (!isSafeSelectQuery(trimmed)) {
+    throw new Error("SQL de cohorte rechazado por política de seguridad (solo SELECT permitido).");
+  }
+  const wrapped = limit
+    ? `SELECT * FROM (${trimmed}) LIMIT ${Math.max(1, Math.min(limit, 1000))}`
+    : `SELECT * FROM (${trimmed})`;
+  const res = await db.prepare(wrapped).all();
+  return res?.results || [];
+}
+
+async function countCohortQuery(db: any, sql: string): Promise<number> {
+  if (!db || !sql) return 0;
+  const trimmed = sql.trim().replace(/;+$/, "");
+  if (!isSafeSelectQuery(trimmed)) return 0;
+  try {
+    const r: any = await db.prepare(`SELECT COUNT(*) as cnt FROM (${trimmed})`).first();
+    return r?.cnt || 0;
+  } catch {
+    return 0;
+  }
+}
+
+superadminRouter.get("/cohorts", async (c) => {
+  if (!c.env.DB) return c.json({ count: 0, cohorts: [] });
+  let cohorts: any[] = [];
+  try {
+    const res = await c.env.DB.prepare("SELECT * FROM sales_cohorts ORDER BY created_at DESC").all();
+    cohorts = res?.results || [];
+  } catch (e) {
+    console.warn("[superadmin:cohorts] Error listing cohorts:", e);
+  }
+
+  const out: any[] = [];
+  for (const ch of cohorts) {
+    const lead_count = await countCohortQuery(c.env.DB, ch.query_sql);
+    out.push({ ...ch, lead_count });
+  }
+  return c.json({ count: out.length, cohorts: out });
+});
+
+superadminRouter.post("/cohorts/:id/preview", async (c) => {
+  try {
+    const id = c.req.param("id");
+    if (!c.env.DB) return c.json({ error: "DB no disponible" }, 503);
+    const cohort: any = await c.env.DB.prepare("SELECT * FROM sales_cohorts WHERE cohort_id = ?").bind(id).first();
+    if (!cohort) return c.json({ error: "Cohorte no encontrada" }, 404);
+
+    const body = await c.req.json().catch(() => ({}));
+    const limit = Math.min(parseInt(body?.limit ?? "50", 10) || 50, 200);
+
+    let leads: any[] = [];
+    try {
+      leads = await runCohortQuery(c.env.DB, cohort.query_sql, limit);
+    } catch (err: any) {
+      return c.json({ error: "Error ejecutando query de cohorte", details: err?.message }, 400);
+    }
+    const total = await countCohortQuery(c.env.DB, cohort.query_sql);
+
+    return c.json({
+      success: true,
+      cohort,
+      total,
+      count: leads.length,
+      leads,
+    });
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error generando preview" }, 500);
+  }
+});
+
+superadminRouter.post("/cohorts/:id/launch-email", async (c) => {
+  try {
+    const id = c.req.param("id");
+    if (!c.env.DB) return c.json({ error: "DB no disponible" }, 503);
+
+    const cohort: any = await c.env.DB.prepare("SELECT * FROM sales_cohorts WHERE cohort_id = ?").bind(id).first();
+    if (!cohort) return c.json({ error: "Cohorte no encontrada" }, 404);
+
+    const body = await c.req.json().catch(() => ({}));
+    const templateId = body?.template_id || body?.template_slug || body?.template;
+    if (!templateId) return c.json({ error: "template_id es obligatorio" }, 400);
+
+    const template: any = await c.env.DB
+      .prepare("SELECT * FROM email_templates WHERE id = ? OR slug = ?")
+      .bind(templateId, templateId)
+      .first();
+    if (!template) return c.json({ error: "Plantilla no encontrada" }, 404);
+
+    const leads = await runCohortQuery(c.env.DB, cohort.query_sql, body?.limit ? parseInt(body.limit, 10) : 500);
+    const accountIds = leads.map((l: any) => l.id).filter(Boolean);
+
+    let contacts: any[] = [];
+    if (accountIds.length > 0) {
+      const placeholders = accountIds.map(() => "?").join(",");
+      const res = await c.env.DB
+        .prepare(
+          `SELECT c.*, a.name as account_name FROM sales_contacts c LEFT JOIN sales_accounts a ON a.id = c.account_id WHERE c.email IS NOT NULL AND c.email != '' AND c.account_id IN (${placeholders})`
+        )
+        .bind(...accountIds)
+        .all();
+      contacts = res?.results || [];
+    }
+
+    const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@arksystems.site";
+    const customVars = body?.variables || {};
+    const dncService = new DncService(c.env.DB);
+
+    let dispatched = 0;
+    let failed = 0;
+    let skipped = 0;
+    const results: any[] = [];
+
+    for (const ct of contacts) {
+      const to = ct.email;
+      try {
+        const isBlocked = await dncService.isBlocked(to, body?.tenant_id);
+        if (isBlocked) {
+          skipped++;
+          results.push({ recipient: to, status: "skipped_dnc" });
+          continue;
+        }
+
+        const vars = {
+          despacho_nombre: ct.account_name || ct.name || "Despacho",
+          contacto_nombre: ct.name || "Contacto",
+          ...customVars,
+        };
+        const rawSubject = interpolateTemplate(template.subject, vars);
+        const rawHtml = interpolateTemplate(template.html_content, vars);
+        const gate = PreSendGate.check(rawSubject, rawHtml);
+        if (!gate.ok) {
+          failed++;
+          results.push({ recipient: to, status: "blocked_gate", reasons: gate.reasons });
+          continue;
+        }
+        const subject = gate.sanitizedSubject;
+        const html = gate.sanitizedBody;
+
+        const dispatchId = `disp_${crypto.randomUUID().slice(0, 8)}`;
+        let resendId: string | null = null;
+        let status: "sent" | "failed" | "simulated" = "simulated";
+        let errorMessage: string | null = null;
+
+        if (c.env.RESEND_API_KEY) {
+          try {
+            const resp = await fetch("https://api.resend.com/emails", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ from: fromEmail, to: [to], subject, html }),
+            });
+            if (resp.ok) {
+              const data: any = await resp.json();
+              resendId = data?.id || null;
+              status = "sent";
+            } else {
+              status = "failed";
+              errorMessage = await resp.text();
+            }
+          } catch (e: any) {
+            status = "failed";
+            errorMessage = e?.message || "RESEND_NETWORK_ERROR";
+          }
+        } else {
+          resendId = `sim_${dispatchId}`;
+          status = "simulated";
+        }
+
+        if (status === "failed") failed++;
+        else dispatched++;
+
+        if (c.env.DB) {
+          try {
+            await c.env.DB.prepare(
+              `INSERT INTO email_dispatches (id, tenant_id, account_id, contact_id, template_slug, recipient_email, recipient_name, subject, variables_payload_json, status, resend_id, error_message, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+            )
+              .bind(
+                dispatchId,
+                body?.tenant_id || ct.account_id || null,
+                ct.account_id || null,
+                ct.id || null,
+                template.slug,
+                to,
+                ct.name || null,
+                subject,
+                JSON.stringify(vars),
+                status,
+                resendId,
+                errorMessage
+              )
+              .run();
+          } catch {}
+        }
+
+        results.push({ recipient: to, status, dispatch_id: dispatchId, resend_id: resendId, error: errorMessage });
+      } catch (e: any) {
+        failed++;
+        results.push({ recipient: to, status: "error", error: e?.message });
+      }
+    }
+
+    return c.json({
+      success: true,
+      cohort_id: id,
+      cohort_name: cohort.name,
+      template_id: template.id || template.slug,
+      recipients_found: contacts.length,
+      dispatched,
+      failed,
+      skipped,
+      results,
+    });
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error lanzando campaña de email" }, 500);
+  }
+});
+
+superadminRouter.post("/cohorts/:id/launch-voice", async (c) => {
+  try {
+    const id = c.req.param("id");
+    if (!c.env.DB) return c.json({ error: "DB no disponible" }, 503);
+
+    const cohort: any = await c.env.DB.prepare("SELECT * FROM sales_cohorts WHERE cohort_id = ?").bind(id).first();
+    if (!cohort) return c.json({ error: "Cohorte no encontrada" }, 404);
+
+    const body = await c.req.json().catch(() => ({}));
+
+    const leads = await runCohortQuery(c.env.DB, cohort.query_sql, body?.limit ? parseInt(body.limit, 10) : 500);
+    const accountIds = leads.map((l: any) => l.id).filter(Boolean);
+
+    let contacts: any[] = [];
+    if (accountIds.length > 0) {
+      const placeholders = accountIds.map(() => "?").join(",");
+      const res = await c.env.DB
+        .prepare(
+          `SELECT c.*, a.name as account_name FROM sales_contacts c LEFT JOIN sales_accounts a ON a.id = c.account_id WHERE c.phone IS NOT NULL AND c.phone != '' AND c.account_id IN (${placeholders})`
+        )
+        .bind(...accountIds)
+        .all();
+      contacts = res?.results || [];
+    }
+
+    // Crear campaña si no se proporciona campaign_id
+    let campaignId = body?.campaign_id;
+    if (!campaignId) {
+      campaignId = `vcamp_${crypto.randomUUID().slice(0, 8)}`;
+      const userId = c.get("user")?.sub || null;
+      await c.env.DB.prepare(
+        `INSERT INTO voice_campaigns (id, tenant_id, name, description, dolor_principal, assistant_id, status, created_by_user_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+      )
+        .bind(
+          campaignId,
+          body?.tenant_id || null,
+          body?.name || `Cohorte: ${cohort.name}`,
+          cohort.description || null,
+          body?.dolor_principal || "sat_fiscal_calculo",
+          body?.assistant_id || c.env.TELNYX_AI_ASSISTANT_ID || null,
+          userId
+        )
+        .run();
+    }
+
+    const normalizar = (await import("../voice/telnyx")).normalizarTelefonoE164;
+    let addedCount = 0;
+    for (const ct of contacts) {
+      const norm = normalizar(ct.phone);
+      if (!norm.valid || !norm.e164) continue;
+      const targetId = `vtar_${crypto.randomUUID().slice(0, 8)}`;
+      try {
+        await c.env.DB.prepare(
+          `INSERT INTO voice_campaign_targets (id, campaign_id, tenant_id, account_id, contact_id, despacho_nombre, to_phone, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+        )
+          .bind(
+            targetId,
+            campaignId,
+            ct.account_id || null,
+            ct.account_id || null,
+            ct.id || null,
+            ct.account_name || ct.name || "Despacho Prospecto",
+            norm.e164
+          )
+          .run();
+        addedCount++;
+      } catch {}
+    }
+
+    await c.env.DB.prepare(
+      `UPDATE voice_campaigns SET total_targets = (SELECT COUNT(*) FROM voice_campaign_targets WHERE campaign_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+    )
+      .bind(campaignId, campaignId)
+      .run();
+
+    // Despachar (simulado si no hay API key)
+    const fromNumber = c.env.TELNYX_PHONE_NUMBER || "+525500000000";
+    const campaign: any = await c.env.DB.prepare("SELECT * FROM voice_campaigns WHERE id = ?").bind(campaignId).first();
+    const { results } = await c.env.DB
+      .prepare("SELECT * FROM voice_campaign_targets WHERE campaign_id = ? AND status IN ('pending','failed')")
+      .bind(campaignId)
+      .all();
+    const targets = results || [];
+
+    if (targets.length > 0) {
+      await c.env.DB.prepare("UPDATE voice_campaigns SET status = 'running', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(campaignId).run();
+    }
+
+    let completedCount = 0;
+    let failedCount = 0;
+    const executionLogs: any[] = [];
+
+    for (const target of targets) {
+      let callControlId: string | null = null;
+      let status: "initiated" | "failed" = "initiated";
+      let errorMsg: string | null = null;
+
+      if (!c.env.TELNYX_API_KEY) {
+        callControlId = `sim_call_${crypto.randomUUID().slice(0, 8)}`;
+        status = "initiated";
+        completedCount++;
+      } else {
+        try {
+          const payload: any = {
+            to: target.to_phone,
+            from: fromNumber,
+            dynamic_variables: {
+              lead_id: target.id,
+              despacho_nombre: target.despacho_nombre || "Despacho Colega",
+              dolor_principal: campaign?.dolor_principal || "sat_fiscal_calculo",
+            },
+            metadata: { campaign_id: campaignId, target_id: target.id, source: "ark-sales-cohort" },
+          };
+          if (campaign?.assistant_id || c.env.TELNYX_AI_ASSISTANT_ID) {
+            payload.assistant_id = campaign?.assistant_id || c.env.TELNYX_AI_ASSISTANT_ID;
+          }
+          if (c.env.TELNYX_CONNECTION_ID) payload.connection_id = c.env.TELNYX_CONNECTION_ID;
+
+          const resp = await fetch("https://api.telnyx.com/v2/ai/conversations", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${c.env.TELNYX_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+          if (resp.ok) {
+            const data: any = await resp.json();
+            callControlId = data?.call_control_id || data?.id || `telnyx_${crypto.randomUUID().slice(0, 8)}`;
+            status = "initiated";
+            completedCount++;
+          } else {
+            status = "failed";
+            errorMsg = await resp.text();
+            failedCount++;
+          }
+        } catch (callErr: any) {
+          status = "failed";
+          errorMsg = callErr?.message || "TELNYX_DISPATCH_EXCEPTION";
+          failedCount++;
+        }
+      }
+
+      try {
+        await c.env.DB.prepare(
+          `UPDATE voice_campaign_targets SET status = ?, call_control_id = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        )
+          .bind(status, callControlId, errorMsg, target.id)
+          .run();
+      } catch {}
+
+      executionLogs.push({ target_id: target.id, phone: target.to_phone, despacho: target.despacho_nombre, status, call_control_id: callControlId, error: errorMsg });
+    }
+
+    if (targets.length > 0) {
+      await c.env.DB.prepare(
+        `UPDATE voice_campaigns SET completed_calls = completed_calls + ?, failed_calls = failed_calls + ?, status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      )
+        .bind(completedCount, failedCount, campaignId)
+        .run();
+    }
+
+    return c.json({
+      success: true,
+      cohort_id: id,
+      campaign_id: campaignId,
+      targets_added: addedCount,
+      total_dispatched: targets.length,
+      initiated: completedCount,
+      failed: failedCount,
+      execution_logs: executionLogs,
+    });
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error lanzando campaña de voz" }, 500);
+  }
+});
+
+// -------------------------------------------------------------
+// 9. Métricas de Lead Harvesting
+// -------------------------------------------------------------
+superadminRouter.get("/harvest/metrics", async (c) => {
+  if (!c.env.DB) return c.json({ error: "DB no disponible" }, 503);
+  try {
+    const totalAccounts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM sales_accounts").first<any>();
+    const byScian = await c.env.DB.prepare("SELECT scian_code, COUNT(*) as cnt FROM sales_accounts WHERE scian_code IS NOT NULL GROUP BY scian_code").all();
+    const bySource = await c.env.DB.prepare("SELECT harvest_source, COUNT(*) as cnt FROM sales_accounts WHERE harvest_source IS NOT NULL GROUP BY harvest_source").all();
+    const obsCount = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM sales_observations").first<any>();
+    const topSignals = await c.env.DB.prepare("SELECT signal_code, COUNT(*) as cnt FROM sales_observations GROUP BY signal_code ORDER BY cnt DESC LIMIT 10").all();
+    const cohorts = await c.env.DB.prepare("SELECT cohort_id, name, vertical FROM sales_cohorts").all();
+    const cohortSizes: any[] = [];
+    for (const ch of (cohorts?.results || [])) {
+      try {
+        const r = await c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM (${(await c.env.DB.prepare("SELECT query_sql FROM sales_cohorts WHERE cohort_id = ?").bind(ch.cohort_id).first<any>())?.query_sql})`).first<any>();
+        cohortSizes.push({ cohort_id: ch.cohort_id, name: ch.name, vertical: ch.vertical, size: r?.cnt || 0 });
+      } catch {
+        cohortSizes.push({ cohort_id: ch.cohort_id, name: ch.name, vertical: ch.vertical, size: 0 });
+      }
+    }
+    const lastRun = await c.env.DB.prepare("SELECT * FROM harvest_runs ORDER BY started_at DESC LIMIT 1").first<any>();
+
+    return c.json({
+      success: true,
+      total_accounts: totalAccounts?.cnt || 0,
+      accounts_by_scian: byScian?.results || [],
+      accounts_by_source: bySource?.results || [],
+      observations_count: obsCount?.cnt || 0,
+      top_signals: topSignals?.results || [],
+      cohorts_summary: cohortSizes,
+      last_harvest_run: lastRun || null,
+    });
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error obteniendo métricas" }, 500);
+  }
 });
 
 export default superadminRouter;

@@ -23,3 +23,9 @@ Thumbs.db
 # Environment
 .env
 .env.*
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+harvest_report.json

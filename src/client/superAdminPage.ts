@@ -60,6 +60,9 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
       <button data-tab="status" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
         <i data-lucide="activity" class="w-4 h-4"></i> Estado del Ecosistema
       </button>
+      <button data-tab="cohorts" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+        <i data-lucide="users" class="w-4 h-4"></i> Cohortes y Campañas
+      </button>
     </div>
   </div>
 
@@ -553,6 +556,72 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
 
   </div>
 
+  <!-- TAB: COHORTES Y CAMPAÑAS -->
+  <div id="tab-cohorts" class="tab-content hidden space-y-6">
+    <div class="glass-panel rounded-xl p-4">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-white">Cohortes y Campañas</h2>
+        <button onclick="loadCohorts()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700">Actualizar</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="text-slate-400 border-b border-slate-800">
+            <tr><th class="py-2 px-3">Cohorte</th><th class="py-2 px-3">Vertical</th><th class="py-2 px-3">Leads</th><th class="py-2 px-3">Acciones</th></tr>
+          </thead>
+          <tbody id="cohortsTableBody" class="divide-y divide-slate-800/60"></tbody>
+        </table>
+      </div>
+      <div class="mt-6 glass-panel rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-bold text-white">Métricas de Cosecha</h3>
+          <button onclick="loadHarvestMetrics()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700">Actualizar</button>
+        </div>
+        <div id="harvestMetricsContent" class="text-xs text-slate-300">Cargando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Preview Cohorte -->
+  <div id="cohortPreviewModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl w-full max-w-4xl p-6 space-y-4 border border-slate-700 shadow-2xl max-h-[80vh] overflow-auto">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <h3 class="text-lg font-bold text-white">Previsualización de Cohorte</h3>
+        <button onclick="document.getElementById('cohortPreviewModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div id="cohortPreviewContent" class="text-xs text-slate-300"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: Lanzar Email Cohorte -->
+  <div id="cohortEmailModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl w-full max-w-lg p-6 space-y-4 border border-slate-700 shadow-2xl">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <h3 class="text-lg font-bold text-white">Lanzar Email a Cohorte</h3>
+        <button onclick="document.getElementById('cohortEmailModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-3">
+        <input id="cohortEmailTemplate" placeholder="Template id o slug" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-white" />
+        <button id="cohortEmailLaunchBtn" class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-xs font-bold text-white">Lanzar</button>
+        <div id="cohortEmailResult" class="text-xs text-slate-300"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Lanzar Voz Cohorte -->
+  <div id="cohortVoiceModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl w-full max-w-lg p-6 space-y-4 border border-slate-700 shadow-2xl">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <h3 class="text-lg font-bold text-white">Lanzar Voz AI a Cohorte</h3>
+        <button onclick="document.getElementById('cohortVoiceModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-3">
+        <input id="cohortVoiceName" placeholder="Nombre campaña (opcional)" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-white" />
+        <button id="cohortVoiceLaunchBtn" class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-md text-xs font-bold text-white">Lanzar</button>
+        <div id="cohortVoiceResult" class="text-xs text-slate-300"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Despachar Correo con Plantilla -->
   <div id="sendEmailModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="glass-panel rounded-2xl w-full max-w-lg p-6 space-y-4 border border-slate-700 shadow-2xl">
@@ -667,6 +736,7 @@ document.querySelectorAll('.tab-btn').forEach(b => {
     if (tab === 'voice') loadVoiceCampaigns();
     if (tab === 'tenants') loadTenantsOverview();
     if (tab === 'billing') { loadBillingStatus(); loadBillingOrders(); }
+    if (tab === 'cohorts') { loadCohorts(); loadHarvestMetrics(); }
   });
 });
 
@@ -1269,6 +1339,128 @@ document.getElementById('simulatePaidBtn')?.addEventListener('click', () => {
 document.getElementById('refreshOrdersBtn')?.addEventListener('click', () => {
   loadBillingStatus();
   loadBillingOrders();
+});
+
+async function loadHarvestMetrics() {
+  const el = document.getElementById('harvestMetricsContent');
+  if (!el) return;
+  el.innerHTML = 'Cargando...';
+  try {
+    const res = await API('/api/superadmin/harvest/metrics');
+    const byScian = (res.accounts_by_scian || []).map(x => x.scian_code + ': ' + x.cnt).join(', ');
+    const bySource = (res.accounts_by_source || []).map(x => (x.harvest_source || 'unknown') + ': ' + x.cnt).join(', ');
+    const top = (res.top_signals || []).map(x => x.signal_code + ' (' + x.cnt + ')').join(', ');
+    const cohorts = (res.cohorts_summary || []).map(x => x.name + ': ' + x.size).join(', ');
+    el.innerHTML = '<div class="space-y-1">' +
+      '<div>Total cuentas cosechadas: <span class="text-white font-bold">' + (res.total_accounts || 0) + '</span></div>' +
+      '<div>Observaciones: <span class="text-white font-bold">' + (res.observations_count || 0) + '</span></div>' +
+      '<div>Por SCIAN: ' + (byScian || '-') + '</div>' +
+      '<div>Por fuente: ' + (bySource || '-') + '</div>' +
+      '<div>Top señales: ' + (top || '-') + '</div>' +
+      '<div>Cohortes: ' + (cohorts || '-') + '</div>' +
+      '<div>Último run: ' + (res.last_harvest_run ? (res.last_harvest_run.status + ' ' + res.last_harvest_run.started_at) : '-') + '</div>' +
+      '</div>';
+  } catch (e) {
+    el.innerHTML = '<span class="text-rose-400">Error: ' + (e.message || e) + '</span>';
+  }
+}
+// Cohortes
+let currentCohortId = null;
+async function loadCohorts() {
+  const tbody = document.getElementById('cohortsTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-slate-500">Cargando...</td></tr>';
+  try {
+    const res = await API('/api/superadmin/cohorts');
+    const cohorts = res.cohorts || [];
+    if (cohorts.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-slate-500">Sin cohortes</td></tr>';
+      return;
+    }
+    tbody.innerHTML = cohorts.map(ch => \`
+      <tr class="hover:bg-slate-900/40">
+        <td class="py-2 px-3 font-semibold text-white">\${ch.name}<div class="text-[10px] text-slate-500 font-mono">\${ch.cohort_id}</div></td>
+        <td class="py-2 px-3">\${ch.vertical || '-'}</td>
+        <td class="py-2 px-3">\${ch.lead_count ?? 0}</td>
+        <td class="py-2 px-3 flex gap-2">
+          <button onclick="previewCohort('\${ch.cohort_id}')" class="px-2 py-1 text-[10px] bg-slate-800 hover:bg-slate-700 rounded border border-slate-700">Previsualizar</button>
+          <button onclick="openCohortEmail('\${ch.cohort_id}')" class="px-2 py-1 text-[10px] bg-blue-600 hover:bg-blue-500 rounded text-white">Email</button>
+          <button onclick="openCohortVoice('\${ch.cohort_id}')" class="px-2 py-1 text-[10px] bg-indigo-600 hover:bg-indigo-500 rounded text-white">Voz AI</button>
+        </td>
+      </tr>
+    \`).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-rose-400">Error cargando cohortes</td></tr>';
+  }
+}
+
+async function previewCohort(id) {
+  currentCohortId = id;
+  const modal = document.getElementById('cohortPreviewModal');
+  const content = document.getElementById('cohortPreviewContent');
+  content.innerHTML = 'Cargando...';
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  try {
+    const res = await API('/api/superadmin/cohorts/' + id + '/preview', { method: 'POST', body: JSON.stringify({ limit: 50 }) });
+    const leads = res.leads || [];
+    if (leads.length === 0) { content.innerHTML = '<div class="text-slate-500">Sin leads</div>'; return; }
+    const cols = Object.keys(leads[0]);
+    content.innerHTML = \`<div class="mb-2 text-slate-400">Total: \${res.total || leads.length} · Mostrando: \${leads.length}</div>
+      <table class="w-full text-left text-[11px] font-mono">
+        <thead><tr>\${cols.map(c=>\`<th class="py-1 px-2 border-b border-slate-800">\${c}</th>\`).join('')}</tr></thead>
+        <tbody>\${leads.map(l=>\`<tr>\${cols.map(c=>\`<td class="py-1 px-2 border-b border-slate-800/60">\${l[c] ?? ''}</td>\`).join('')}</tr>\`).join('')}</tbody>
+      </table>\`;
+  } catch (e) {
+    content.innerHTML = '<div class="text-rose-400">Error: ' + (e.message || e) + '</div>';
+  }
+}
+
+function openCohortEmail(id) {
+  currentCohortId = id;
+  const modal = document.getElementById('cohortEmailModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  document.getElementById('cohortEmailResult').innerHTML = '';
+}
+
+document.getElementById('cohortEmailLaunchBtn')?.addEventListener('click', async () => {
+  const template = document.getElementById('cohortEmailTemplate').value.trim();
+  const result = document.getElementById('cohortEmailResult');
+  if (!template) { result.innerHTML = '<span class="text-rose-400">Template requerido</span>'; return; }
+  result.innerHTML = 'Lanzando...';
+  try {
+    const res = await API('/api/superadmin/cohorts/' + currentCohortId + '/launch-email', {
+      method: 'POST',
+      body: JSON.stringify({ template_id: template })
+    });
+    result.innerHTML = \`<span class="text-emerald-400">OK · Enviados: \${res.dispatched} · Fallidos: \${res.failed} · Omitidos: \${res.skipped}</span>\`;
+  } catch (e) {
+    result.innerHTML = '<span class="text-rose-400">Error: ' + (e.message || e) + '</span>';
+  }
+});
+
+function openCohortVoice(id) {
+  currentCohortId = id;
+  const modal = document.getElementById('cohortVoiceModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  document.getElementById('cohortVoiceResult').innerHTML = '';
+}
+
+document.getElementById('cohortVoiceLaunchBtn')?.addEventListener('click', async () => {
+  const name = document.getElementById('cohortVoiceName').value.trim();
+  const result = document.getElementById('cohortVoiceResult');
+  result.innerHTML = 'Lanzando...';
+  try {
+    const res = await API('/api/superadmin/cohorts/' + currentCohortId + '/launch-voice', {
+      method: 'POST',
+      body: JSON.stringify({ name: name || undefined })
+    });
+    result.innerHTML = \`<span class="text-emerald-400">OK · Campaña: \${res.campaign_id} · Targets: \${res.targets_added} · Iniciadas: \${res.initiated}</span>\`;
+  } catch (e) {
+    result.innerHTML = '<span class="text-rose-400">Error: ' + (e.message || e) + '</span>';
+  }
 });
 
 // Boot

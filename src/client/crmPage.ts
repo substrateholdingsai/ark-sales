@@ -1,17 +1,12 @@
 import { Env } from "../types";
 import { verifyJwt } from "../auth/jwt";
 import { normalizeRole } from "../auth/roles";
-
-function getSecret(env: Env): string {
-  if (env.CRM_JWT_SECRET && env.CRM_JWT_SECRET.trim()) return env.CRM_JWT_SECRET.trim();
-  return "ark-sales-jwt-production-sovereign-2026-substrate";
-}
+import { getJwtSecret } from "../auth/middleware";
 
 export function hasValidToken(cookieOrToken: string | null, env: Env): boolean {
   if (!cookieOrToken) return false;
-  const secret = getSecret(env);
+  const secret = getJwtSecret(env);
   if (!secret) return false;
-  // sync not possible; this is sync wrapper not used. We'll handle async in route.
   return true;
 }
 
@@ -25,11 +20,30 @@ export async function isAuthenticated(request: Request, env: Env): Promise<boole
     if (m) token = decodeURIComponent(m[1]);
   }
   if (!token) return false;
-  const secret = getSecret(env);
+  const secret = getJwtSecret(env);
   if (!secret) return false;
   const payload = await verifyJwt(token, secret);
   if (!payload) return false;
   return !!normalizeRole(payload.role);
+}
+
+export async function isAdminAuthenticated(request: Request, env: Env): Promise<{ authenticated: boolean; isAdmin: boolean }> {
+  let token: string | null = null;
+  const auth = request.headers.get("authorization");
+  if (auth && /^Bearer\s+/i.test(auth)) token = auth.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    const cookie = request.headers.get("cookie") || "";
+    const m = cookie.match(/(?:^|;\s*)ark_sales_token=([^;]+)/);
+    if (m) token = decodeURIComponent(m[1]);
+  }
+  if (!token) return { authenticated: false, isAdmin: false };
+  const secret = getJwtSecret(env);
+  if (!secret) return { authenticated: false, isAdmin: false };
+  const payload = await verifyJwt(token, secret);
+  if (!payload) return { authenticated: false, isAdmin: false };
+  const role = normalizeRole(payload.role);
+  if (!role) return { authenticated: false, isAdmin: false };
+  return { authenticated: true, isAdmin: role === "admin" };
 }
 
 export function renderCrmLoginHtml(): string {
@@ -60,7 +74,7 @@ body{font-family:'Inter',sans-serif;background-color:#020617;color:#f8fafc}
     <form id="loginForm" class="space-y-4">
       <div>
         <label class="text-xs text-slate-400 mb-1 block">Correo</label>
-        <input name="email" type="email" required class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="substrateholdingsai@gmail.com">
+        <input name="email" type="email" required class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="usuario@arksystems.site">
       </div>
       <div>
         <label class="text-xs text-slate-400 mb-1 block">Contraseña</label>
@@ -69,10 +83,6 @@ body{font-family:'Inter',sans-serif;background-color:#020617;color:#f8fafc}
       <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 rounded-md text-sm transition-colors">Entrar</button>
       <div class="flex items-center justify-between text-xs">
         <button type="button" id="forgotBtn" class="text-blue-400 hover:text-blue-300">Olvidé mi contraseña</button>
-      </div>
-      <div class="p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-md text-center">
-        <div class="text-[10px] uppercase font-mono tracking-wider text-slate-500">Super Admin & Cuenta Demo</div>
-        <div class="text-xs font-mono text-blue-400 font-medium mt-0.5">substrateholdingsai@gmail.com</div>
       </div>
       <p id="err" class="text-rose-400 text-xs hidden"></p>
       <div id="forgotBox" class="hidden space-y-2">

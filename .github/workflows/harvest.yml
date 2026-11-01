@@ -1,0 +1,81 @@
+name: Lead Harvesting
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Cada 6 horas
+  workflow_dispatch:        # Manual trigger (switch)
+    inputs:
+      enabled:
+        description: 'Enable harvest run'
+        required: false
+        default: 'true'
+        type: boolean
+      source:
+        description: 'Harvest source'
+        required: false
+        default: 'denue'
+        type: choice
+        options:
+          - denue
+      profile:
+        description: 'Target tenant profile (ark or futura_capital)'
+        required: false
+        default: 'futura_capital'
+        type: choice
+        options:
+          - futura_capital
+          - ark
+      limit:
+        description: 'Max leads to process'
+        required: false
+        default: '1000'
+        type: string
+      skip_enrich:
+        description: 'Skip HTTP profiling + hybrid scoring (debug only)'
+        required: false
+        default: 'false'
+        type: boolean
+      dry_run:
+        description: 'Dry run (no ingest)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  harvest:
+    if: github.event_name != 'workflow_dispatch' || inputs.enabled == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd scripts/python
+          pip install -r requirements.txt
+
+      - name: Run harvester
+        env:
+          INEGI_TOKEN: ${{ secrets.INEGI_TOKEN }}
+          INTERNAL_API_TOKEN: ${{ secrets.INTERNAL_API_TOKEN }}
+          ARK_SALES_BASE_URL: https://sales.arksystems.site
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          cd scripts/python
+          ARGS="--source ${{ inputs.source || 'denue' }} --profile ${{ inputs.profile || 'futura_capital' }} --limit ${{ inputs.limit || '1000' }}"
+          if [ "${{ inputs.skip_enrich }}" = "true" ]; then ARGS="$ARGS --skip-enrich"; fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          python -m lead_harvester.main $ARGS
+
+      - name: Upload harvest report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harvest-report-${{ github.run_id }}
+          path: scripts/python/harvest_report.json

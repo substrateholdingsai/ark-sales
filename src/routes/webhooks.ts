@@ -2,26 +2,56 @@ import { Hono } from "hono";
 import { Env, LeadIngestPayload } from "../types";
 import { ToolExecutor } from "../tools";
 import { ensureAccountContactForLead } from "../crm/automation";
+import { normalizarTelefonoE164 } from "../voice/telnyx";
 
 export const webhookRouter = new Hono<{ Bindings: Env }>();
 
 webhookRouter.post("/", async (c) => {
   try {
-    const expectedSecret = c.env.WEBHOOK_SECRET || c.env.ARK_WEBHOOK_SECRET;
-    if (expectedSecret) {
-      const provided = c.req.header("X-Ark-Webhook-Secret") || "";
-      if (provided !== expectedSecret) {
+    const validSecrets = [
+      c.env.WEBHOOK_SECRET,
+      c.env.ARK_WEBHOOK_SECRET,
+      c.env.INTERNAL_API_TOKEN,
+      c.env.INTERNAL_SERVICE_KEY,
+    ].filter((s) => typeof s === "string" && s.trim().length > 0);
+
+    const authHeader = c.req.header("Authorization") || "";
+    const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+    const provided =
+      c.req.header("X-Ark-Webhook-Secret") ||
+      c.req.header("X-Ark-Internal-Key") ||
+      c.req.header("X-Internal-Token") ||
+      bearer ||
+      "";
+
+    if (validSecrets.length > 0) {
+      if (!provided || !validSecrets.includes(provided)) {
         return c.json({ error: "Unauthorized: invalid webhook secret." }, 401);
       }
+    } else if ((c.env.ENVIRONMENT || "development") === "production") {
+      return c.json({ error: "Unauthorized: webhook secret not configured in production." }, 401);
     }
     const body = await c.req.json();
-    const { email, despacho_nombre, tamano, dolor_principal, productos_interes, origen } = body;
+    const ctx = body.account_context || {};
+    const email = body.email;
+    const despacho_nombre = body.despacho_nombre ?? ctx.despacho_nombre;
+    const tamano = body.tamano ?? ctx.tamano;
+    const dolor_principal = body.dolor_principal ?? ctx.dolor_principal;
+    const productos_interes = body.productos_interes ?? ctx.productos_interes;
+    const { origen, scian_code, harvest_source, sitio_web, contact_email, contact_name } = body;
+    const rawPhone = body.contact_phone || body.telefono || body.phone || ctx.telefono || null;
+    const normalizedPhone = rawPhone ? (normalizarTelefonoE164(String(rawPhone)) || String(rawPhone).trim()) : null;
 
     if (!email || typeof email !== "string") {
       return c.json({ error: "El campo 'email' es obligatorio." }, 400);
     }
 
-    const leadId = crypto.randomUUID();
+    const leadId = (typeof body.lead_id === "string" && body.lead_id.trim())
+      ? body.lead_id.trim()
+      : (c.req.header("X-Idempotency-Key")?.trim() || crypto.randomUUID());
+    const initialScore = typeof body.score === "number" && body.score >= 0 && body.score <= 100
+      ? Math.round(body.score)
+      : 20;
     const toolExecutor = new ToolExecutor(c.env);
 
     // 1. Diagnosticar despacho para enrutamiento por dolor
@@ -34,17 +64,45 @@ webhookRouter.post("/", async (c) => {
     // 2. Persistir en sales_leads
     if (c.env.DB) {
       await c.env.DB.prepare(`
-        INSERT INTO sales_leads (id, email, despacho_nombre, tamano, dolor_detectado, especialista_asignado, estado, score, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'nuevo', 20, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT OR REPLACE INTO sales_leads (id, email, despacho_nombre, tamano, dolor_detectado, especialista_asignado, estado, score, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'nuevo', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `).bind(
         leadId,
         email,
         despacho_nombre || null,
         tamano || "1-5",
         diag.dolor_detectado,
-        diag.especialista_asignado
+        diag.especialista_asignado,
+        initialScore
       ).run();
       await ensureAccountContactForLead(c.env.DB, { id: leadId, email, despacho_nombre, tamano: tamano || "1-5" });
+      if (normalizedPhone) {
+        try {
+          await c.env.DB.prepare(`UPDATE sales_leads SET telefono = COALESCE(?, telefono) WHERE id = ?`)
+            .bind(normalizedPhone, leadId).run();
+        } catch {}
+        try {
+          await c.env.DB.prepare(`UPDATE sales_contacts SET phone = COALESCE(?, phone), name = COALESCE(?, name) WHERE account_id = ?`)
+            .bind(normalizedPhone, contact_name || "Contacto Corporativo", `acc_${leadId}`).run();
+        } catch {}
+      }
+      try {
+        await c.env.DB.prepare(`
+          UPDATE sales_accounts
+          SET scian_code = COALESCE(?, scian_code),
+              harvest_source = COALESCE(?, harvest_source),
+              last_enriched_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(scian_code || null, harvest_source || "denue", `acc_${leadId}`).run();
+      } catch {}
+      if (contact_email) {
+        try {
+          await c.env.DB.prepare(`
+            INSERT OR IGNORE INTO sales_contacts (id, account_id, name, email, phone, title, consent_status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `).bind(`ctc_${leadId}`, `acc_${leadId}`, contact_name || "Contacto Corporativo", contact_email, normalizedPhone, "Dirección General").run();
+        } catch {}
+      }
     }
 
     // 3. Inicializar el Durable Object para tener el contexto listo para cuando el usuario chatee

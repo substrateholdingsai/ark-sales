@@ -1,8 +1,30 @@
 import { Hono } from "hono";
 import { Env } from "../types";
 import { procesarEventoTelnyx, dispararLlamadaCortesia, verificarFirmaTelnyx } from "../voice/telnyx";
+import { isAuthenticated } from "../client/crmPage";
 
 export const telnyxRouter = new Hono<{ Bindings: Env }>();
+
+function hasValidInternalOrWebhookSecret(c: any): boolean {
+  const expectedSecrets = [
+    c.env.INTERNAL_SERVICE_KEY,
+    c.env.INTERNAL_API_TOKEN,
+    c.env.WEBHOOK_SECRET,
+    c.env.ARK_WEBHOOK_SECRET,
+  ].filter((s) => typeof s === "string" && s.trim().length > 0);
+
+  if (expectedSecrets.length === 0) return false;
+
+  const authHeader = c.req.header("Authorization") || "";
+  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+  const provided =
+    c.req.header("X-Ark-Internal-Key") ||
+    c.req.header("X-Internal-Token") ||
+    c.req.header("X-Ark-Webhook-Secret") ||
+    bearer;
+
+  return Boolean(provided && expectedSecrets.includes(provided));
+}
 
 /**
  * Webhook oficial de Telnyx Call Control
@@ -29,10 +51,16 @@ telnyxRouter.post("/", async (c) => {
 });
 
 /**
- * Endpoint para disparar llamadas de cortesía desde el CRM o integraciones
+ * Endpoint para disparar llamadas de cortesía desde el CRM o integraciones (Protegido contra Toll Fraud)
  */
 telnyxRouter.post("/call", async (c) => {
   try {
+    const isInternal = hasValidInternalOrWebhookSecret(c);
+    const isCrmUser = await isAuthenticated(c.req.raw, c.env);
+    if (!isInternal && !isCrmUser) {
+      return c.json({ error: "No autorizado: Se requiere sesión activa en CRM o llave interna para disparar llamadas." }, 401);
+    }
+
     const body = await c.req.json();
     const { to, despacho_nombre, lead_id, contact_id, account_id, industry, custom_message } = body;
 

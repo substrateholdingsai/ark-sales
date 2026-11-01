@@ -19,7 +19,15 @@ conektaWebhookRouter.post("/", async (c) => {
       return c.json({ error: "Cuerpo de solicitud vacío o JSON inválido" }, 400);
     }
 
-    const signature = c.req.header("Conekta-Signature") || c.req.header("X-Conekta-Signature") || "";
+    const signature = c.req.header("Conekta-Signature") || c.req.header("X-Conekta-Signature") || c.req.header("X-Ark-Webhook-Secret") || "";
+    const expectedSecret = (c.env as any).CONEKTA_WEBHOOK_SECRET || c.env.WEBHOOK_SECRET;
+    if (expectedSecret) {
+      if (!signature || signature !== expectedSecret) {
+        return c.json({ error: "Firma de webhook Conekta inválida o ausente." }, 401);
+      }
+    } else if ((c.env.ENVIRONMENT || "development") === "production" && c.env.CONEKTA_API_KEY) {
+      return c.json({ error: "CONEKTA_WEBHOOK_SECRET es requerido en producción cuando CONEKTA_API_KEY está activo." }, 401);
+    }
     const conektaService = new ConektaService(c.env);
     const result = await conektaService.processWebhookEvent(rawBody, signature);
 

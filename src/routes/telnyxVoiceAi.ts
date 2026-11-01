@@ -1,4 +1,4 @@
-﻿import { Hono } from "hono";
+import { Hono } from "hono";
 import { Env } from "../types";
 import { AuthVariables, requireAuth } from "../auth/middleware";
 import { ToolExecutor } from "../tools";
@@ -77,6 +77,15 @@ function extractCallControlId(body: any, c: any): string {
 telnyxVoiceAiRouter.post("/tools", async (c) => {
   try {
     const bodyText = await c.req.text();
+    if (c.env.TELNYX_PUBLIC_KEY) {
+      const signature = c.req.header("telnyx-signature-ed25519") || "";
+      const timestamp = c.req.header("telnyx-timestamp") || "";
+      const { verificarFirmaTelnyx } = await import("../voice/telnyx");
+      const ok = await verificarFirmaTelnyx(c.env.TELNYX_PUBLIC_KEY, signature, timestamp, bodyText);
+      if (!ok) {
+        return c.json({ error: "Firma de Telnyx inválida en /tools." }, 403);
+      }
+    }
     const body = safeJson(bodyText);
     const toolName = extractToolName(body);
     const args = extractArgs(body);

@@ -9,7 +9,7 @@ import httpx
 import os
 
 from .models import RawLead
-from .scoring import rule_score, calcular_score_con_observaciones
+from .scoring import rule_score, calcular_score_con_observaciones, recomendar_desarrollos_futura
 from .scoring_llm import scoring_hibrido
 from .profile import HTTPProfiler
 
@@ -47,25 +47,53 @@ class BaseHarvester(ABC):
 
     async def harvest_and_enrich(self) -> AsyncIterator[RawLead]:
         profiler = HTTPProfiler()
-        async for raw_lead in self.harvest():
-            score_reglas = rule_score(raw_lead)
-            dolor_reglas = "cobranza"
-            observaciones = []
-            if raw_lead.sitio_web:
-                profile_result = await profiler.profile_company(raw_lead.sitio_web.replace("https://", "").replace("http://", "").split("/")[0])
-                observaciones = profile_result.observaciones
+        try:
+            async for raw_lead in self.harvest():
+                observaciones = []
+                if raw_lead.scian_code:
+                    observaciones.append({
+                        "signal_code": "SCIAN_CODE",
+                        "value_text": raw_lead.scian_code,
+                        "confidence": 1.0,
+                        "evidence_url": None,
+                    })
+                if raw_lead.telefono:
+                    observaciones.append({
+                        "signal_code": "WHATSAPP_CORPORATIVO",
+                        "value_text": raw_lead.telefono,
+                        "confidence": 0.9,
+                        "evidence_url": None,
+                    })
+                if raw_lead.email:
+                    observaciones.append({
+                        "signal_code": "EMAIL_CORPORATIVO",
+                        "value_text": raw_lead.email,
+                        "confidence": 0.9,
+                        "evidence_url": None,
+                    })
+                if raw_lead.sitio_web:
+                    dominio = raw_lead.sitio_web.replace("https://", "").replace("http://", "").split("/")[0]
+                    profile_result = await profiler.profile_company(dominio)
+                    observaciones.extend(profile_result.observaciones)
+                    if not raw_lead.telefono and profile_result.telefonos_detectados:
+                        raw_lead.telefono = profile_result.telefonos_detectados[0]
+                    if not raw_lead.email and profile_result.emails_detectados:
+                        raw_lead.email = profile_result.emails_detectados[0]
                 if observaciones:
-                    await self._guardar_observaciones(account_id=raw_lead.lead_id, observaciones=observaciones)
-            score_con_obs, dolor_con_obs = calcular_score_con_observaciones(raw_lead, observaciones)
-            score_final, dolor_principal, vertical = await scoring_hibrido(
-                lead_id=raw_lead.lead_id,
-                raw_lead=raw_lead.model_dump(),
-                observaciones=observaciones,
-                score_reglas=score_con_obs,
-                dolor_reglas=dolor_con_obs,
-            )
-            raw_lead.score = score_final
-            raw_lead.dolor_principal = dolor_principal
-            raw_lead.vertical = vertical
-            yield raw_lead
-        await profiler.close()
+                    await self._guardar_observaciones(account_id=f"acc_{raw_lead.lead_id}", observaciones=observaciones)
+                score_con_obs, dolor_con_obs = calcular_score_con_observaciones(raw_lead, observaciones)
+                score_final, dolor_principal, vertical = await scoring_hibrido(
+                    lead_id=raw_lead.lead_id,
+                    raw_lead=raw_lead.model_dump(),
+                    observaciones=observaciones,
+                    score_reglas=score_con_obs,
+                    dolor_reglas=dolor_con_obs,
+                )
+                raw_lead.score = score_final
+                raw_lead.dolor_principal = dolor_principal
+                raw_lead.vertical = vertical
+                if raw_lead.tenant_id == "acc_futura_capital":
+                    raw_lead.productos_interes = recomendar_desarrollos_futura(raw_lead, observaciones)
+                yield raw_lead
+        finally:
+            await profiler.close()

@@ -257,6 +257,11 @@ export class ConektaService {
     const eventType: string = payload.type;
     console.log(`[ConektaWebhook] Procesando evento '${eventType}'...`);
 
+    const expectedSecret = (this.env as any).CONEKTA_WEBHOOK_SECRET;
+    if (expectedSecret && signatureHeader !== "__INTERNAL_SIMULATE__" && signatureHeader !== expectedSecret) {
+      return { success: false, error: "Firma de webhook Conekta inválida" };
+    }
+
     // Manejar eventos de pago exitoso
     if (eventType === "order.paid" || eventType === "charge.paid") {
       const orderData = eventType === "order.paid" ? payload.data?.object : payload.data?.object?.order;

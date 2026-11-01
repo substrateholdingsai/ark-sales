@@ -4,18 +4,39 @@ import { z } from "zod";
 import { ensureAccountContactForLead } from "../crm/automation";
 
 const chatSchema = z.object({
-  message: z.string().min(1),
-  lead_id: z.string().optional(),
+  message: z.string().min(1).max(2000),
+  lead_id: z.string().max(128).optional(),
   email: z.string().email().optional().or(z.literal("")),
-  despacho_nombre: z.string().optional(),
-  tamano: z.string().optional(),
+  despacho_nombre: z.string().max(200).optional(),
+  tamano: z.string().max(32).optional(),
   stream: z.boolean().optional(),
 });
 
 export const chatRouter = new Hono<{ Bindings: Env }>();
 
+// Rate limit por IP/lead para proteger Neuronas de Workers AI y Durable Objects
+const chatRateMap = new Map<string, number[]>();
+const CHAT_WINDOW_MS = 60 * 1000;
+const CHAT_MAX_REQ_PER_MIN = 25;
+
+function isChatRateLimited(key: string): boolean {
+  const now = Date.now();
+  const arr = (chatRateMap.get(key) || []).filter((ts) => now - ts < CHAT_WINDOW_MS);
+  if (arr.length >= CHAT_MAX_REQ_PER_MIN) {
+    chatRateMap.set(key, arr);
+    return true;
+  }
+  arr.push(now);
+  chatRateMap.set(key, arr);
+  return false;
+}
+
 chatRouter.post("/", async (c) => {
   try {
+    const ip = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "";
+    if (ip && isChatRateLimited(`ip:${ip}`)) {
+      return c.json({ error: "Demasiados mensajes por minuto. Por favor espera unos segundos." }, 429);
+    }
     const body = await c.req.json();
     const parsed = chatSchema.safeParse(body);
     if (!parsed.success) {

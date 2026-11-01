@@ -1,6 +1,5 @@
--- 0012_admin_user_substrate.sql: Alta y sincronización del usuario Super Admin y Demo
--- Username: substrateholdingsai@gmail.com
--- Password: 150ft550LB (PBKDF2 100,000 iteraciones SHA-256)
+-- 0012_admin_user_substrate.sql: Alta y sincronización del usuario Super Admin
+-- Hash generado con PBKDF2 100,000 iteraciones SHA-256 (rotar contraseña desde /crm tras despliegue)
 
 INSERT INTO crm_users (id, email, password_hash, name, role, is_active, created_at, updated_at)
 VALUES (

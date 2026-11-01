@@ -13,8 +13,6 @@ CLASSIFY_ENDPOINT = f"{ARK_SALES_BASE_URL}/api/internal/leads/{{lead_id}}/classi
 
 
 async def clasificar_con_llm(lead_id: str, raw_lead: dict, observaciones: list[dict]) -> Optional[dict]:
-    if not INTERNAL_API_TOKEN:
-        return None
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
@@ -23,7 +21,10 @@ async def clasificar_con_llm(lead_id: str, raw_lead: dict, observaciones: list[d
                 json={"observaciones": observaciones, "raw_lead": raw_lead},
             )
             if resp.status_code == 200:
-                return resp.json()
+                data = resp.json()
+                if hasattr(data, "__await__"):
+                    data = await data
+                return data
             return None
     except Exception:
         return None

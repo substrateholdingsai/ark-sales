@@ -1,0 +1,44 @@
+[
+  {
+    "Nombre": "Clínica de Especialidades Quirúrgicas del Sureste",
+    "RFC": "CEQ180510AB1",
+    "Actividad": "Consultorios de medicina especializada del sector privado",
+    "Codigo_Actividad": "621111",
+    "Estrato": "11 a 30 personas",
+    "Municipio": "Mérida",
+    "Entidad": "Yucatán",
+    "Latitud": 21.0185,
+    "Longitud": -89.6123,
+    "Sitio_Web": "https://clinicasureste.mx",
+    "Telefono": "9999441122",
+    "Correo_e": "direccion@clinicasureste.mx"
+  },
+  {
+    "Nombre": "Transportes y Logística Peninsular Progreso SA de CV",
+    "RFC": "TLP140922CD3",
+    "Actividad": "Almacenes generales de depósito y logística portuaria CEDIS",
+    "Codigo_Actividad": "493111",
+    "Estrato": "31 a 50 personas",
+    "Municipio": "Progreso",
+    "Entidad": "Yucatán",
+    "Latitud": 21.2812,
+    "Longitud": -89.6650,
+    "Sitio_Web": "https://logisticaprogreso.com.mx",
+    "Telefono": "9999358899",
+    "Correo_e": "operaciones@logisticaprogreso.com.mx"
+  },
+  {
+    "Nombre": "Patrimonio y Brokers Inmobiliarios Mérida AMPI",
+    "RFC": "PBI200115EF5",
+    "Actividad": "Inmobiliarias y corredores de bienes raíces y preventa en Yucatán",
+    "Codigo_Actividad": "531210",
+    "Estrato": "6 a 10 personas",
+    "Municipio": "Mérida",
+    "Entidad": "Yucatán",
+    "Latitud": 21.0340,
+    "Longitud": -89.5980,
+    "Sitio_Web": "https://brokersmerida.mx",
+    "Telefono": "9991234567",
+    "Correo_e": "alianzas@brokersmerida.mx"
+  }
+]
