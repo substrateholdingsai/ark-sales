@@ -111,7 +111,7 @@ describe("Tenant Onboarding: Futura Capital Partners (0014_tenant_futura_capital
     const diag = executor.diagnosticarDespacho("inversion_consultorio_medico", "11-30", ["futura_mb_medical_tower"]);
     expect(diag.especialista_asignado).toBe("closer");
     expect(diag.productos_recomendados).toContain("futura_mb_medical_tower");
-    expect(diag.dolor_detectado).toBe("inversion_consultorio_medico");
+    expect(diag.dolor_detectado).toBe("otro");
   });
 
   it("debe permitir CORS para https://futuracapital.mx y https://partners.futuracapital.mx", async () => {

@@ -272,13 +272,7 @@ export class ToolExecutor {
       especialistaSugerido = "closer";
       vertical = "bundle";
       productosRecomendados = futuraProds.length > 0 ? futuraProds : ["futura_soletta_sisal", "futura_mb_medical_tower", "futura_logistic_park"];
-      dolorDetectadoKey = dLower.includes("medico") || dLower.includes("consultorio")
-        ? "inversion_consultorio_medico"
-        : dLower.includes("logistica") || dLower.includes("cedis") || dLower.includes("bodega")
-          ? "expansion_logistica_cedis"
-          : dLower.includes("broker") || dLower.includes("alianza")
-            ? "alianza_broker_inmobiliario"
-            : "inversion_patrimonial_yucatan";
+      dolorDetectadoKey = "otro";
     } else if (esGeneral || (esFiscal && esCobranza)) {
       especialistaSugerido = "closer";
       vertical = "bundle";

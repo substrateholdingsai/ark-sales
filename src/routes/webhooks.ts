@@ -40,7 +40,11 @@ webhookRouter.post("/", async (c) => {
     const productos_interes = body.productos_interes ?? ctx.productos_interes;
     const { origen, scian_code, harvest_source, sitio_web, contact_email, contact_name } = body;
     const rawPhone = body.contact_phone || body.telefono || body.phone || ctx.telefono || null;
-    const normalizedPhone = rawPhone ? (normalizarTelefonoE164(String(rawPhone)) || String(rawPhone).trim()) : null;
+    let normalizedPhone: string | null = null;
+    if (rawPhone) {
+      const normRes = normalizarTelefonoE164(String(rawPhone));
+      normalizedPhone = normRes.valid && normRes.e164 ? normRes.e164 : String(rawPhone).trim();
+    }
 
     if (!email || typeof email !== "string") {
       return c.json({ error: "El campo 'email' es obligatorio." }, 400);
@@ -49,6 +53,8 @@ webhookRouter.post("/", async (c) => {
     const leadId = (typeof body.lead_id === "string" && body.lead_id.trim())
       ? body.lead_id.trim()
       : (c.req.header("X-Idempotency-Key")?.trim() || crypto.randomUUID());
+    const validTamanos = ["1-5", "6-20", "21-50", "50+"];
+    const effectiveTamano = validTamanos.includes(tamano) ? tamano : "1-5";
     const initialScore = typeof body.score === "number" && body.score >= 0 && body.score <= 100
       ? Math.round(body.score)
       : 20;
@@ -57,7 +63,7 @@ webhookRouter.post("/", async (c) => {
     // 1. Diagnosticar despacho para enrutamiento por dolor
     const diag = toolExecutor.diagnosticarDespacho(
       dolor_principal || "Consulta general de despacho",
-      tamano,
+      effectiveTamano,
       productos_interes
     );
 
@@ -70,15 +76,15 @@ webhookRouter.post("/", async (c) => {
         leadId,
         email,
         despacho_nombre || null,
-        tamano || "1-5",
+        effectiveTamano,
         diag.dolor_detectado,
         diag.especialista_asignado,
         initialScore
       ).run();
-      await ensureAccountContactForLead(c.env.DB, { id: leadId, email, despacho_nombre, tamano: tamano || "1-5" });
+      await ensureAccountContactForLead(c.env.DB, { id: leadId, email, despacho_nombre, tamano: effectiveTamano });
       if (normalizedPhone) {
         try {
-          await c.env.DB.prepare(`UPDATE sales_leads SET telefono = COALESCE(?, telefono) WHERE id = ?`)
+          await c.env.DB.prepare(`UPDATE sales_leads SET phone = COALESCE(?, phone) WHERE id = ?`)
             .bind(normalizedPhone, leadId).run();
         } catch {}
         try {
