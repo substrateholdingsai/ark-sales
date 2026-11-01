@@ -135,6 +135,26 @@ crmRouter.get("/inbox", async (c) => {
   return c.json({ inbox, global_overdue_tasks: globalOverdue || [] });
 });
 
+// Búsqueda global
+crmRouter.get("/search", async (c) => {
+  const q = (c.req.query("q") || "").trim();
+  if (!q) return c.json({ accounts: [], contacts: [], opportunities: [], activities: [] });
+  const like = `%${q}%`;
+  const { results: accounts } = await c.env.DB.prepare(
+    "SELECT id, name, size, city FROM sales_accounts WHERE name LIKE ? OR city LIKE ? LIMIT 20"
+  ).bind(like, like).all<any>();
+  const { results: contacts } = await c.env.DB.prepare(
+    "SELECT id, account_id, name, email, phone, title FROM sales_contacts WHERE name LIKE ? OR email LIKE ? OR phone LIKE ? LIMIT 20"
+  ).bind(like, like, like).all<any>();
+  const { results: opportunities } = await c.env.DB.prepare(
+    "SELECT id, account_id, stage, estimated_value, currency FROM sales_opportunities WHERE id LIKE ? OR account_id LIKE ? LIMIT 20"
+  ).bind(like, like).all<any>();
+  const { results: activities } = await c.env.DB.prepare(
+    "SELECT id, type, content, account_id, opportunity_id, created_at FROM sales_activities WHERE content LIKE ? LIMIT 20"
+  ).bind(like).all<any>();
+  return c.json({ accounts: accounts || [], contacts: contacts || [], opportunities: opportunities || [], activities: activities || [] });
+});
+
 // Métricas básicas del pipeline
 crmRouter.get("/metrics", async (c) => {
   const db = c.env.DB;

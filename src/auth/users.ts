@@ -63,6 +63,12 @@ export class UserService {
     return created;
   }
 
+  async updatePassword(id: string, password: string): Promise<void> {
+    if (!this.db) throw new Error("DB no disponible");
+    const password_hash = await hashPassword(password);
+    await this.db.prepare("UPDATE crm_users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(password_hash, id).run();
+  }
+
   async authenticate(email: string, password: string): Promise<CrmUser | null> {
     const user = await this.findByEmail(email);
     if (!user) return null;

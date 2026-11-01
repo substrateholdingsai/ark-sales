@@ -335,3 +335,62 @@ internalRouter.post("/leads/:lead_id/enrich", async (c) => {
     return c.json({ error: err.message }, 500);
   }
 });
+/**
+ * Endpoint de clasificación de dolor/vertical vía Workers AI.
+ */
+internalRouter.post("/leads/:lead_id/classify", async (c) => {
+  const leadId = c.req.param("lead_id");
+  if (!leadId) return c.json({ error: "lead_id es obligatorio en la ruta." }, 400);
+
+  let body: any = {};
+  try { body = await c.req.json(); } catch { body = {}; }
+  const { observaciones, raw_lead } = body;
+
+  const prompt = construir_prompt_clasificacion(raw_lead || {}, observaciones || []);
+
+  try {
+    const response: any = await (c.env as any).AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT_CLASIFICADOR },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 500,
+    });
+
+    let text = "";
+    if (typeof response === "string") text = response;
+    else if (response?.response) text = response.response;
+    else text = JSON.stringify(response);
+
+    let parsed: any = {};
+    try {
+      const m = text.match(/\{[\s\S]*\}/);
+      parsed = m ? JSON.parse(m[0]) : {};
+    } catch { parsed = {}; }
+
+    return c.json({
+      lead_id: leadId,
+      dolor_principal: parsed.dolor_principal || "sin datos",
+      vertical: parsed.vertical || "cobranza",
+      confianza: parsed.confianza ?? 0.5,
+      razonamiento: parsed.razonamiento || "",
+    });
+  } catch (err: any) {
+    console.error("[leads/classify] Error:", err);
+    return c.json({ error: err.message || "Error clasificando" }, 500);
+  }
+});
+export const SYSTEM_PROMPT_CLASIFICADOR = `Eres un clasificador de leads para Ark Sales.`;
+
+export function construir_prompt_clasificacion(raw_lead: any, observaciones: any[]): string {
+  const obs_text = (observaciones || []).map((o: any) => `- ${o.signal_code}: ${o.value_text} (confianza: ${o.confidence})`).join("\n");
+  return `Empresa: ${raw_lead?.razon_social || ""}
+Sector: ${raw_lead?.scian_code || ""}
+Dominio: ${raw_lead?.dominio_web || ""}
+
+Observaciones detectadas:
+${obs_text}
+
+Clasifica el dolor principal y la vertical de esta empresa.`;
+}

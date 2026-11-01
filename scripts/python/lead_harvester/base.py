@@ -1,0 +1,71 @@
+"""Base harvester abstraction."""
+from __future__ import annotations
+
+import asyncio
+from abc import ABC, abstractmethod
+from typing import AsyncIterator
+
+import httpx
+import os
+
+from .models import RawLead
+from .scoring import rule_score, calcular_score_con_observaciones
+from .scoring_llm import scoring_hibrido
+from .profile import HTTPProfiler
+
+
+class BaseHarvester(ABC):
+    source_name: str = "base"
+    rate_limit: float = 1.0
+
+    def __init__(self) -> None:
+        self._sem = asyncio.Semaphore(max(1, int(self.rate_limit)))
+
+    @abstractmethod
+    async def harvest(self) -> AsyncIterator[RawLead]:
+        ...
+
+    @abstractmethod
+    async def health_check(self) -> bool:
+        ...
+
+    async def _throttle(self) -> None:
+        async with self._sem:
+            await asyncio.sleep(1.0 / max(self.rate_limit, 0.1))
+
+    async def _guardar_observaciones(self, account_id: str, observaciones: list[dict]) -> None:
+        base = os.getenv("ARK_SALES_BASE_URL", "http://localhost:8787")
+        token = os.getenv("INTERNAL_API_TOKEN")
+        if not token:
+            return
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await client.post(
+                f"{base}/api/internal/observations/batch",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                json={"account_id": account_id, "observaciones": observaciones},
+            )
+
+    async def harvest_and_enrich(self) -> AsyncIterator[RawLead]:
+        profiler = HTTPProfiler()
+        async for raw_lead in self.harvest():
+            score_reglas = rule_score(raw_lead)
+            dolor_reglas = "cobranza"
+            observaciones = []
+            if raw_lead.sitio_web:
+                profile_result = await profiler.profile_company(raw_lead.sitio_web.replace("https://", "").replace("http://", "").split("/")[0])
+                observaciones = profile_result.observaciones
+                if observaciones:
+                    await self._guardar_observaciones(account_id=raw_lead.lead_id, observaciones=observaciones)
+            score_con_obs, dolor_con_obs = calcular_score_con_observaciones(raw_lead, observaciones)
+            score_final, dolor_principal, vertical = await scoring_hibrido(
+                lead_id=raw_lead.lead_id,
+                raw_lead=raw_lead.model_dump(),
+                observaciones=observaciones,
+                score_reglas=score_con_obs,
+                dolor_reglas=dolor_con_obs,
+            )
+            raw_lead.score = score_final
+            raw_lead.dolor_principal = dolor_principal
+            raw_lead.vertical = vertical
+            yield raw_lead
+        await profiler.close()

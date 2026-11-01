@@ -120,7 +120,44 @@ crmAccountsRouter.post("/", requireRole("write"), async (c) => {
   }
 });
 
-// Update account
+// Bulk import accounts (CSV/JSON)
+crmAccountsRouter.post("/bulk", requireRole("write"), async (c) => {
+  try {
+    const body = await c.req.json();
+    const items = Array.isArray(body?.items) ? body.items : [];
+    if (!items.length) return c.json({ error: "items es obligatorio y no puede estar vacío." }, 400);
+    const created: string[] = [];
+    const errors: { index: number; error: string }[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i] || {};
+      const name = String(it.name || "").trim();
+      if (!name) { errors.push({ index: i, error: "name obligatorio" }); continue; }
+      try {
+        const id = `acc_${crypto.randomUUID()}`;
+        const normalized = name.toLowerCase().trim();
+        await c.env.DB.prepare(`
+          INSERT INTO sales_accounts (id, name, normalized_name, size, city, origin, duplicate_review_status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `).bind(id, name, normalized, it.size ?? null, it.city ?? null, it.origin ?? null).run();
+        created.push(id);
+      } catch (e: any) {
+        errors.push({ index: i, error: e.message || "error insertando" });
+      }
+    }
+    const audit = new AuditService(c.env.DB);
+    await audit.record({
+      actor_user_id: c.get("user")!.sub,
+      actor_email: c.get("user")!.email,
+      action: "crm.accounts_bulk_imported",
+      entity_type: "account",
+      metadata: { created: created.length, errors: errors.length },
+      ip: clientIp(c),
+    });
+    return c.json({ created: created.length, errors, ids: created });
+  } catch (err: any) {
+    return c.json({ error: err.message || "Error en importación masiva" }, 400);
+  }
+});
 crmAccountsRouter.patch("/:id", requireRole("write"), async (c) => {
   try {
     const id = c.req.param("id");

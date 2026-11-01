@@ -1,0 +1,4 @@
+[
+  {"Nombre": "Despacho Contable ABC", "Actividad": "Servicios de contabilidad y auditoría", "Codigo_Actividad": "541210", "Estrato": "6 a 10 personas", "Municipio": "Monterrey", "Entidad": "Nuevo León", "Latitud": 25.68, "Longitud": -100.32, "Sitio_Web": "https://abc.com.mx"},
+  {"Nombre": "Inmobiliaria XYZ", "Actividad": "Corretaje inmobiliario", "Codigo_Actividad": "531210", "Estrato": "11 a 30 personas", "Municipio": "Guadalajara", "Entidad": "Jalisco", "Latitud": 20.67, "Longitud": -103.35, "Sitio_Web": "https://xyz.mx"}
+]
