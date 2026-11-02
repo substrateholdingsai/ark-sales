@@ -1158,7 +1158,7 @@ superadminRouter.post("/cohorts/:id/preview", async (c) => {
     if (!cohort) return c.json({ error: "Cohorte no encontrada" }, 404);
 
     const body = await c.req.json().catch(() => ({}));
-    const limit = Math.min(parseInt(body?.limit ?? "50", 10) || 50, 200);
+    const limit = Math.min(parseInt(body?.limit ?? "100", 10) || 100, 1000);
 
     let leads: any[] = [];
     try {

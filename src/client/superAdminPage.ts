@@ -285,9 +285,14 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
             </h3>
             <p class="text-xs text-slate-400">Control unificado de contactos, oportunidades, campañas de correo y voz por tenant.</p>
           </div>
-          <button id="refreshTenantsBtn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-md flex items-center gap-1.5">
-            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Actualizar
-          </button>
+          <div class="flex items-center gap-2">
+            <button id="exportTenantsCsvBtn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-blue-400"></i> Exportar Tenants CSV
+            </button>
+            <button id="refreshTenantsBtn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-md flex items-center gap-1.5">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Actualizar
+            </button>
+          </div>
         </div>
 
         <div class="overflow-x-auto">
@@ -583,10 +588,23 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
 
   <!-- MODAL: Preview Cohorte -->
   <div id="cohortPreviewModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-    <div class="glass-panel rounded-2xl w-full max-w-4xl p-6 space-y-4 border border-slate-700 shadow-2xl max-h-[80vh] overflow-auto">
-      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-        <h3 class="text-lg font-bold text-white">Previsualización de Cohorte</h3>
-        <button onclick="document.getElementById('cohortPreviewModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+    <div class="glass-panel rounded-2xl w-full max-w-5xl p-6 space-y-4 border border-slate-700 shadow-2xl max-h-[85vh] overflow-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+        <div>
+          <h3 id="cohortPreviewModalTitle" class="text-lg font-bold text-white flex items-center gap-2">
+            <i data-lucide="users" class="w-5 h-5 text-blue-400"></i> Previsualización de Cohorte
+          </h3>
+          <p id="cohortPreviewSubtitle" class="text-xs text-slate-400 font-mono mt-0.5">Cargando...</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="downloadCohortCsvBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Descargar CSV
+          </button>
+          <button id="printCohortPdfBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all">
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i> Imprimir / PDF
+          </button>
+          <button onclick="document.getElementById('cohortPreviewModal').classList.add('hidden')" class="text-slate-400 hover:text-white ml-2 text-lg leading-none">✕</button>
+        </div>
       </div>
       <div id="cohortPreviewContent" class="text-xs text-slate-300"></div>
     </div>
@@ -1109,6 +1127,34 @@ window.openTenantCampaign = function(tenantId, tenantName) {
 };
 
 document.getElementById('refreshTenantsBtn').addEventListener('click', loadTenantsOverview);
+document.getElementById('exportTenantsCsvBtn')?.addEventListener('click', () => {
+  if (!allTenants || !allTenants.length) {
+    alert('No hay tenants cargados para exportar');
+    return;
+  }
+  const headers = ['id', 'name', 'size', 'city', 'origin', 'total_contacts', 'total_opportunities', 'total_emails_sent', 'total_voice_sessions'];
+  const rows = allTenants.map(t => [
+    t.id || '',
+    t.name || '',
+    t.size || '',
+    t.city || '',
+    t.origin || '',
+    t.total_contacts || 0,
+    t.total_opportunities || 0,
+    t.total_emails_sent || 0,
+    t.total_voice_sessions || 0
+  ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ark_tenants_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
 document.getElementById('tenantFilterSelect').addEventListener('change', (e) => {
   loadTemplates(e.target.value);
 });
@@ -1394,27 +1440,120 @@ async function loadCohorts() {
   }
 }
 
+let currentCohortLeads = [];
+let currentCohortMeta = null;
+
 async function previewCohort(id) {
   currentCohortId = id;
+  currentCohortLeads = [];
   const modal = document.getElementById('cohortPreviewModal');
   const content = document.getElementById('cohortPreviewContent');
-  content.innerHTML = 'Cargando...';
+  const subtitle = document.getElementById('cohortPreviewSubtitle');
+  if (subtitle) subtitle.textContent = 'Cargando datos del cohorte: ' + id;
+  content.innerHTML = '<div class="py-8 text-center text-slate-400">Cargando prospectos del cohorte...</div>';
   modal.classList.remove('hidden');
   modal.classList.add('flex');
   try {
-    const res = await API('/api/superadmin/cohorts/' + id + '/preview', { method: 'POST', body: JSON.stringify({ limit: 50 }) });
+    const res = await API('/api/superadmin/cohorts/' + id + '/preview', { method: 'POST', body: JSON.stringify({ limit: 500 }) });
     const leads = res.leads || [];
-    if (leads.length === 0) { content.innerHTML = '<div class="text-slate-500">Sin leads</div>'; return; }
+    currentCohortLeads = leads;
+    currentCohortMeta = res.cohort || {};
+    if (subtitle) {
+      subtitle.textContent = (res.cohort?.name || id) + ' · Total registrados: ' + (res.total || leads.length) + ' · Mostrando: ' + leads.length;
+    }
+    if (leads.length === 0) {
+      content.innerHTML = '<div class="py-6 text-center text-slate-500">Sin leads registrados en este cohorte.</div>';
+      return;
+    }
     const cols = Object.keys(leads[0]);
-    content.innerHTML = \`<div class="mb-2 text-slate-400">Total: \${res.total || leads.length} · Mostrando: \${leads.length}</div>
-      <table class="w-full text-left text-[11px] font-mono">
-        <thead><tr>\${cols.map(c=>\`<th class="py-1 px-2 border-b border-slate-800">\${c}</th>\`).join('')}</tr></thead>
-        <tbody>\${leads.map(l=>\`<tr>\${cols.map(c=>\`<td class="py-1 px-2 border-b border-slate-800/60">\${l[c] ?? ''}</td>\`).join('')}</tr>\`).join('')}</tbody>
-      </table>\`;
+    const headerHtml = cols.map(c => '<th class="py-2 px-2.5 border-b border-slate-800">' + c + '</th>').join('');
+    const rowsHtml = leads.map(l => {
+      const tds = cols.map(c => '<td class="py-1.5 px-2.5 whitespace-nowrap text-slate-300">' + (l[c] === null || l[c] === undefined ? '' : String(l[c])) + '</td>').join('');
+      return '<tr class="hover:bg-slate-900/40">' + tds + '</tr>';
+    }).join('');
+    content.innerHTML = '<div class="overflow-x-auto max-h-[60vh] overflow-y-auto border border-slate-800 rounded-lg">' +
+      '<table class="w-full text-left text-[11px] font-mono">' +
+      '<thead class="bg-slate-900/90 text-slate-400 uppercase text-[10px] sticky top-0">' +
+      '<tr>' + headerHtml + '</tr>' +
+      '</thead>' +
+      '<tbody class="divide-y divide-slate-800/60">' + rowsHtml + '</tbody>' +
+      '</table></div>';
+    if (window.lucide) window.lucide.createIcons();
   } catch (e) {
-    content.innerHTML = '<div class="text-rose-400">Error: ' + (e.message || e) + '</div>';
+    content.innerHTML = '<div class="text-rose-400 py-4">Error cargando vista previa: ' + (e.message || e) + '</div>';
   }
 }
+
+function downloadCohortCsv() {
+  if (!currentCohortLeads || !currentCohortLeads.length) {
+    alert('No hay leads para exportar en este cohorte.');
+    return;
+  }
+  const leads = currentCohortLeads;
+  const cols = Object.keys(leads[0]);
+  const header = cols.join(',');
+  const rows = leads.map(l => cols.map(c => {
+    let val = l[c] === null || l[c] === undefined ? '' : String(l[c]);
+    val = val.replace(/"/g, '""');
+    return '"' + val + '"';
+  }).join(','));
+  const csvContent = "\uFEFF" + [header, ...rows].join("\r\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const safeId = (currentCohortId || 'cohorte').replace(/[^a-zA-Z0-9_-]/g, '_');
+  a.download = 'cohorte_' + safeId + '_leads_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function printCohortPdf() {
+  if (!currentCohortLeads || !currentCohortLeads.length) {
+    alert('No hay leads para generar reporte PDF.');
+    return;
+  }
+  const leads = currentCohortLeads;
+  const cols = Object.keys(leads[0]);
+  const cohortName = currentCohortMeta?.name || currentCohortId || 'Cohorte';
+  const now = new Date().toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
+  
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Por favor permita ventanas emergentes para generar el PDF.');
+    return;
+  }
+  
+  const tableRows = leads.map(l => {
+    const tds = cols.map(c => '<td>' + (l[c] === null || l[c] === undefined ? '' : String(l[c])) + '</td>').join('');
+    return '<tr>' + tds + '</tr>';
+  }).join('');
+
+  const tableHeaders = cols.map(c => '<th>' + c + '</th>').join('');
+
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte de Leads - ' + cohortName + '</title>' +
+    '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#0f172a;margin:24px;font-size:11px}' +
+    '.header{border-bottom:2px solid #2563eb;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-end}' +
+    'h1{margin:0;font-size:18px;color:#0f172a;font-weight:700}.sub{color:#475569;font-size:12px;margin-top:4px}' +
+    '.meta{text-align:right;font-size:10px;color:#64748b;line-height:1.4}' +
+    'table{width:100%;border-collapse:collapse;margin-top:10px;font-size:10px}' +
+    'th{background:#f1f5f9;color:#334155;font-weight:600;text-align:left;padding:6px;border:1px solid #cbd5e1;font-size:9px;text-transform:uppercase}' +
+    'td{padding:4px 6px;border:1px solid #e2e8f0;word-break:break-word}tr:nth-child(even){background:#f8fafc}' +
+    '@media print{@page{size:landscape;margin:10mm}body{margin:0}}</style></head><body>' +
+    '<div class="header"><div><h1>Reporte de Prospección Comercial · ARK Systems</h1>' +
+    '<div class="sub">Cohorte: <strong>' + cohortName + '</strong> (' + (currentCohortId||'') + ') · Total Leads: <strong>' + leads.length + '</strong></div></div>' +
+    '<div class="meta"><div><strong>Emisión:</strong> ' + now + '</div><div><strong>Tenant:</strong> Futura Capital Partners / Red ARK</div></div></div>' +
+    '<table><thead><tr>' + tableHeaders + '</tr></thead><tbody>' + tableRows + '</tbody></table>' +
+    '<script>window.onload=function(){window.print();};<\/script></body></html>';
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+document.getElementById('downloadCohortCsvBtn')?.addEventListener('click', downloadCohortCsv);
+document.getElementById('printCohortPdfBtn')?.addEventListener('click', printCohortPdf);
 
 function openCohortEmail(id) {
   currentCohortId = id;
