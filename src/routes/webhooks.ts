@@ -32,14 +32,20 @@ webhookRouter.post("/", async (c) => {
       return c.json({ error: "Unauthorized: webhook secret not configured in production." }, 401);
     }
     const body = await c.req.json();
+    const hLead = body.lead || {};
     const ctx = body.account_context || {};
-    const email = body.email;
-    const despacho_nombre = body.despacho_nombre ?? ctx.despacho_nombre;
-    const tamano = body.tamano ?? ctx.tamano;
-    const dolor_principal = body.dolor_principal ?? ctx.dolor_principal;
-    const productos_interes = body.productos_interes ?? ctx.productos_interes;
-    const { origen, scian_code, harvest_source, sitio_web, contact_email, contact_name } = body;
-    const rawPhone = body.contact_phone || body.telefono || body.phone || ctx.telefono || null;
+    const email = body.email || hLead.email;
+    const despacho_nombre = body.despacho_nombre ?? ctx.despacho_nombre ?? hLead.uboName ?? hLead.fullName;
+    const tamano = body.tamano ?? ctx.tamano ?? (hLead.marketValueDollars && hLead.marketValueDollars > 1000000 ? "50+" : "6-20");
+    const dolor_principal = body.dolor_principal ?? ctx.dolor_principal ?? (hLead.investorType === "accredited" ? "inversion_patrimonial" : "otro");
+    const productos_interes = body.productos_interes ?? ctx.productos_interes ?? (hLead.investorType ? ["lote_residencial_playa", "parque_industrial_progreso"] : undefined);
+    const origen = body.origen || (hLead.source ? "hermes_us_proptech" : "web");
+    const harvest_source = body.harvest_source || (hLead.source ? "hermes_us_proptech" : "denue");
+    const scian_code = body.scian_code || (hLead.investorType ? "531110" : null);
+    const sitio_web = body.sitio_web;
+    const contact_email = body.contact_email || hLead.email;
+    const contact_name = body.contact_name || hLead.fullName || hLead.uboName;
+    const rawPhone = body.contact_phone || body.telefono || body.phone || ctx.telefono || hLead.phone || null;
     let normalizedPhone: string | null = null;
     if (rawPhone) {
       const normRes = normalizarTelefonoE164(String(rawPhone));
@@ -107,6 +113,20 @@ webhookRouter.post("/", async (c) => {
             INSERT OR IGNORE INTO sales_contacts (id, account_id, name, email, phone, title, consent_status, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           `).bind(`ctc_${leadId}`, `acc_${leadId}`, contact_name || "Contacto Corporativo", contact_email, normalizedPhone, "Dirección General").run();
+        } catch {}
+      }
+      if (hLead.source || origen === "hermes_us_proptech") {
+        try {
+          const signalCode = hLead.investorType === "accredited" ? "SENAL_INVERSION_PATRIMONIAL_US" : "SENAL_NEARSHORING_LOGISTICO_US";
+          await c.env.DB.prepare(`
+            INSERT OR REPLACE INTO sales_observations (id, account_id, signal_code, observation_value, observed_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+          `).bind(
+            `obs_hermes_${leadId}`,
+            `acc_${leadId}`,
+            signalCode,
+            JSON.stringify({ state: hLead.state, equityDollars: hLead.equityDollars, marketValueDollars: hLead.marketValueDollars })
+          ).run();
         } catch {}
       }
     }
