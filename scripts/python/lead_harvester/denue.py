@@ -53,6 +53,30 @@ FUTURA_GEO_CLUSTERS = [
     {"query": "aduana", "coords": "21.2812,-89.6650", "radio": 5000, "scian_default": "488511"},
 ]
 
+# Palabras clave y coordenadas estratégicas para Ark Ledger (Despachos Contables y Fiscalistas)
+ARK_LEDGER_GEO_CLUSTERS = [
+    # CDMX — Benito Juárez / Insurgentes Sur / Del Valle
+    {"query": "despacho contable", "coords": "19.3850,-99.1650", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores", "coords": "19.3732,-99.1793", "radio": 5000, "scian_default": "541211"},
+    # CDMX — Cuauhtémoc / Reforma / Polanco
+    {"query": "auditoria fiscal", "coords": "19.4326,-99.1550", "radio": 5000, "scian_default": "541212"},
+    {"query": "asesoria fiscal", "coords": "19.4335,-99.1950", "radio": 5000, "scian_default": "541110"},
+    # Guadalajara & Zapopan — Puerta de Hierro / Providencia
+    {"query": "despacho contable", "coords": "20.6950,-103.3850", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores", "coords": "20.7100,-103.4120", "radio": 5000, "scian_default": "541211"},
+    # Monterrey & San Pedro Garza García — Valle Oriente / Obispado
+    {"query": "despacho contable", "coords": "25.6570,-100.3650", "radio": 5000, "scian_default": "541211"},
+    {"query": "contabilidad", "coords": "25.6710,-100.3400", "radio": 5000, "scian_default": "541211"},
+    {"query": "asesoria fiscal", "coords": "25.6420,-100.3250", "radio": 5000, "scian_default": "541110"},
+    # Mérida — Paseo Montejo / Altabrisa
+    {"query": "despacho contable", "coords": "20.9850,-89.6180", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores", "coords": "21.0185,-89.5850", "radio": 5000, "scian_default": "541211"},
+    # Querétaro — Centro Sur / Bernardo Quintana
+    {"query": "despacho contable", "coords": "20.5930,-100.3920", "radio": 5000, "scian_default": "541211"},
+    # Puebla — Angelópolis / Juárez
+    {"query": "despacho contable", "coords": "19.0300,-98.2350", "radio": 5000, "scian_default": "541211"},
+]
+
 
 class DenueHarvester(BaseHarvester):
     source_name = "denue"
@@ -96,10 +120,11 @@ class DenueHarvester(BaseHarvester):
             raise RuntimeError("INEGI_TOKEN not set")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
-            if self.profile == "futura_capital":
-                # Consulta geográfica sobre los corredores estratégicos de Yucatán
+            if self.profile in ("futura_capital", "ark_ledger"):
+                # Consulta geográfica con endpoints probados y optimizados
+                clusters = FUTURA_GEO_CLUSTERS if self.profile == "futura_capital" else ARK_LEDGER_GEO_CLUSTERS
                 seen_ids: set[str] = set()
-                for cluster in FUTURA_GEO_CLUSTERS:
+                for cluster in clusters:
                     await self._throttle()
                     q = cluster["query"]
                     coords = cluster["coords"]
