@@ -286,6 +286,11 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
             <p class="text-xs text-slate-400">Control unificado de contactos, oportunidades, campañas de correo y voz por tenant.</p>
           </div>
           <div class="flex items-center gap-2">
+            <select id="overviewTenantFilter" class="text-xs bg-slate-900 border border-slate-700 text-slate-200 px-2.5 py-1.5 rounded-md focus:outline-none focus:border-blue-500">
+              <option value="">Todos los Tenants</option>
+              <option value="acc_ark_ledger">Ark Ledger</option>
+              <option value="acc_futura_capital">Futura Capital</option>
+            </select>
             <button id="exportTenantsCsvBtn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all">
               <i data-lucide="download" class="w-3.5 h-3.5 text-blue-400"></i> Exportar Tenants CSV
             </button>
@@ -299,7 +304,8 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
           <table class="w-full text-left text-xs">
             <thead class="bg-slate-900/80 text-slate-400 font-mono text-[10px] uppercase">
               <tr>
-                <th class="py-3 px-3">Despacho (Tenant)</th>
+                <th class="py-3 px-3">Cuenta / Razón Social</th>
+                <th class="py-3 px-3">Ecosistema (Tenant)</th>
                 <th class="py-3 px-3">Tamaño</th>
                 <th class="py-3 px-3">Ciudad / Origen</th>
                 <th class="py-3 px-3 text-center">Contactos</th>
@@ -310,7 +316,7 @@ body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fa
               </tr>
             </thead>
             <tbody id="tenantsOverviewBody" class="divide-y divide-slate-800/60">
-              <tr><td colspan="8" class="py-6 text-center text-slate-500">Cargando métricas de tenants...</td></tr>
+              <tr><td colspan="9" class="py-6 text-center text-slate-500">Cargando métricas de tenants...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1095,19 +1101,36 @@ async function loadTenantsOverview() {
     orderTenantSelect.innerHTML = '<option value="">Seleccionar despacho registrado o manual...</option>' + allTenants.map(t => '<option value="' + t.id + '">' + t.name + '</option>').join('');
   }
 
+  renderTenantsTable();
+}
+
+function renderTenantsTable() {
   const tbody = document.getElementById('tenantsOverviewBody');
-  if (!allTenants.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-slate-500">Sin tenants registrados en D1.</td></tr>';
+  if (!tbody) return;
+  const selectedTenant = document.getElementById('overviewTenantFilter')?.value || '';
+  const list = selectedTenant ? allTenants.filter(t => t.tenant_id === selectedTenant) : allTenants;
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="py-6 text-center text-slate-500">Sin cuentas registradas para el filtro seleccionado.</td></tr>';
     return;
   }
-  tbody.innerHTML = allTenants.map(t => \`
+  tbody.innerHTML = list.map(t => {
+    const isFutura = t.tenant_id === 'acc_futura_capital';
+    const tenantBadge = isFutura
+      ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-700/50"><span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>Futura Capital</span>'
+      : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-950/80 text-blue-300 border border-blue-700/50"><span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>Ark Ledger</span>';
+
+    return \`
     <tr class="hover:bg-slate-900/40">
       <td class="py-3 px-3">
         <div class="font-bold text-white">\${t.name}</div>
         <div class="text-[10px] font-mono text-slate-500">ID: \${t.id}</div>
       </td>
+      <td class="py-3 px-3">
+        \${tenantBadge}
+      </td>
       <td class="py-3 px-3 text-slate-300">\${t.size || '1-5'}</td>
-      <td class="py-3 px-3 text-slate-400">\${t.city || '—'} &middot; \${t.origin || 'lead'}</td>
+      <td class="py-3 px-3 text-slate-400">\${t.city || '—'} &middot; <span class="font-mono text-[10px] text-slate-500">\${t.harvest_source || t.origin || 'lead'}</span></td>
       <td class="py-3 px-3 text-center font-mono text-blue-400 font-semibold">\${t.total_contacts || 0}</td>
       <td class="py-3 px-3 text-center font-mono text-amber-400 font-semibold">\${t.total_opportunities || 0}</td>
       <td class="py-3 px-3 text-center font-mono text-emerald-400 font-semibold">\${t.total_emails_sent || 0}</td>
@@ -1116,7 +1139,8 @@ async function loadTenantsOverview() {
         <button class="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 px-2.5 py-1 rounded text-[11px]" onclick="openTenantCampaign('\${t.id}', '\${t.name}')">Llamar con IA</button>
       </td>
     </tr>
-  \`).join('');
+  \`;
+  }).join('');
 }
 
 window.openTenantCampaign = function(tenantId, tenantName) {
@@ -1127,18 +1151,21 @@ window.openTenantCampaign = function(tenantId, tenantName) {
 };
 
 document.getElementById('refreshTenantsBtn').addEventListener('click', loadTenantsOverview);
+document.getElementById('overviewTenantFilter')?.addEventListener('change', renderTenantsTable);
 document.getElementById('exportTenantsCsvBtn')?.addEventListener('click', () => {
   if (!allTenants || !allTenants.length) {
     alert('No hay tenants cargados para exportar');
     return;
   }
-  const headers = ['id', 'name', 'size', 'city', 'origin', 'total_contacts', 'total_opportunities', 'total_emails_sent', 'total_voice_sessions'];
+  const headers = ['id', 'name', 'tenant_id', 'size', 'city', 'origin', 'harvest_source', 'total_contacts', 'total_opportunities', 'total_emails_sent', 'total_voice_sessions'];
   const rows = allTenants.map(t => [
     t.id || '',
     t.name || '',
+    t.tenant_id || 'acc_ark_ledger',
     t.size || '',
     t.city || '',
     t.origin || '',
+    t.harvest_source || '',
     t.total_contacts || 0,
     t.total_opportunities || 0,
     t.total_emails_sent || 0,

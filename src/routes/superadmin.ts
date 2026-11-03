@@ -7,6 +7,7 @@ import { ConektaService } from "../services/conekta";
 import { PreSendGate } from "../services/gate";
 import { DncService } from "../services/dnc";
 import { AtsHarvester } from "../services/atsHarvester";
+import { resolveTenantId } from "./crmAccounts";
 import { IntentHandler } from "../services/intentHandler";
 
 export const superadminRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
@@ -833,7 +834,7 @@ superadminRouter.get("/tenants/overview", async (c) => {
     try {
       const res = await c.env.DB.prepare(`
         SELECT 
-          a.id, a.name, a.size, a.city, a.origin, a.created_at,
+          a.id, a.name, a.size, a.city, a.origin, a.scian_code, a.harvest_source, a.created_at,
           COUNT(DISTINCT c.id) as total_contacts,
           COUNT(DISTINCT o.id) as total_opportunities,
           COUNT(DISTINCT d.id) as total_emails_sent,
@@ -846,7 +847,10 @@ superadminRouter.get("/tenants/overview", async (c) => {
         GROUP BY a.id
         ORDER BY a.name ASC
       `).all();
-      accounts = res.results || [];
+      accounts = (res.results || []).map((row: any) => ({
+        ...row,
+        tenant_id: resolveTenantId(row),
+      }));
     } catch (e) {
       console.warn("[superadmin:tenants] Error aggregating tenants:", e);
     }

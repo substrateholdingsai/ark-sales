@@ -1039,8 +1039,18 @@ async function loadMetrics() {
 
 async function loadAccounts() {
   try {
-    const data = await apiCall('/api/crm/accounts?limit=200');
-    if (data && data.items) state.accounts = data.items;
+    const all: any[] = [];
+    let offset = 0;
+    const pageSize = 500;
+    while (true) {
+      const data = await apiCall(\`/api/crm/accounts?limit=\${pageSize}&offset=\${offset}\`);
+      const items = (data && data.items) || [];
+      all.push(...items);
+      if (items.length < pageSize) break;
+      offset += pageSize;
+      if (offset > 10000) break;
+    }
+    state.accounts = all;
   } catch (e) { console.error('loadAccounts error:', e); }
 }
 
