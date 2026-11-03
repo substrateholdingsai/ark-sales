@@ -653,7 +653,7 @@ internalRouter.patch("/harvest/runs/:run_id", async (c) => {
     ).run();
     if (body?.status === "failed" && c.env.RESEND_API_KEY) {
       try {
-        const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@arksystems.site";
+        const fromEmail = c.env.RESEND_FROM_EMAIL || "ARK Systems <ventas@mail.arksystems.site>";
         await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${c.env.RESEND_API_KEY}`, "Content-Type": "application/json" },

@@ -481,7 +481,7 @@ export class ToolExecutor {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: this.env.RESEND_FROM_EMAIL || "ventas@arksystems.site",
+            from: this.env.RESEND_FROM_EMAIL || "ARK Systems <ventas@mail.arksystems.site>",
             to: [email],
             subject: isBundle 
               ? `Propuesta Formal ARK: Paquete Enterprise para ${despachoNombre}`

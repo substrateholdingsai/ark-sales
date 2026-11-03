@@ -542,7 +542,7 @@ tailwind.config = {
                 <i data-lucide="mail" class="w-4 h-4 text-ark-blue_hi"></i> Consola de Disparo de Correo (Resend)
               </h3>
             </div>
-            <span class="text-[10px] font-mono text-slate-400">ventas@arksystems.site</span>
+            <span class="text-[10px] font-mono text-slate-400">ventas@mail.arksystems.site</span>
           </div>
 
           <div class="p-5 space-y-4 flex-1 flex flex-col">

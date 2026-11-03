@@ -27,7 +27,7 @@ export function interpolateTemplate(text: string, variables: Record<string, any>
 // -------------------------------------------------------------
 superadminRouter.get("/resend/status", async (c) => {
   const hasKey = Boolean(c.env.RESEND_API_KEY && c.env.RESEND_API_KEY.trim());
-  const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@arksystems.site";
+  const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@mail.arksystems.site";
   const maskedKey = hasKey
     ? `${c.env.RESEND_API_KEY!.slice(0, 5)}...${c.env.RESEND_API_KEY!.slice(-4)}`
     : null;
@@ -73,7 +73,7 @@ superadminRouter.post("/resend/test", async (c) => {
     const body = await c.req.json();
     const toEmail = body.to || c.get("user")?.email || "admin@arksystems.site";
     const subject = body.subject || "Prueba de Conexión Resend · ARK Systems Super Admin";
-    const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@arksystems.site";
+    const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@mail.arksystems.site";
 
     if (!c.env.RESEND_API_KEY) {
       // Modo simulado
@@ -110,7 +110,7 @@ superadminRouter.post("/resend/test", async (c) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: fromEmail,
+        from: fromEmail.includes("<") ? fromEmail : `ARK Systems <${fromEmail}>`,
         to: [toEmail],
         subject,
         html: htmlContent,
@@ -349,7 +349,7 @@ superadminRouter.post("/templates/:id/send", async (c) => {
 
     const renderedSubject = gate.sanitizedSubject;
     const renderedHtml = gate.sanitizedBody;
-    const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@arksystems.site";
+    const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@mail.arksystems.site";
 
     const dispatchId = `disp_${crypto.randomUUID().slice(0, 8)}`;
     let resendId: string | null = null;
@@ -365,7 +365,7 @@ superadminRouter.post("/templates/:id/send", async (c) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: fromEmail,
+            from: fromEmail.includes("<") ? fromEmail : `ARK Systems <${fromEmail}>`,
             to: [to],
             subject: renderedSubject,
             html: renderedHtml,
@@ -1235,7 +1235,7 @@ superadminRouter.post("/cohorts/:id/launch-email", async (c) => {
       contacts = res?.results || [];
     }
 
-    const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@arksystems.site";
+    const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@mail.arksystems.site";
     const customVars = body?.variables || {};
     const dncService = new DncService(c.env.DB);
 
@@ -1283,7 +1283,12 @@ superadminRouter.post("/cohorts/:id/launch-email", async (c) => {
                 Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ from: fromEmail, to: [to], subject, html }),
+              body: JSON.stringify({
+                from: fromEmail.includes("<") ? fromEmail : `ARK Systems <${fromEmail}>`,
+                to: [to],
+                subject,
+                html
+              }),
             });
             if (resp.ok) {
               const data: any = await resp.json();

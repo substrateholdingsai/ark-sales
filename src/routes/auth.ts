@@ -156,7 +156,7 @@ authRouter.post("/forgot-password", async (c) => {
 
     if (c.env.RESEND_API_KEY) {
       try {
-        const from = c.env.RESEND_FROM_EMAIL || "ventas@arksystems.site";
+        const from = c.env.RESEND_FROM_EMAIL || "ARK Systems <ventas@mail.arksystems.site>";
         await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${c.env.RESEND_API_KEY}` },
@@ -235,7 +235,7 @@ authRouter.post("/invite", requireAuth(), requireRole("admin"), async (c) => {
 
     if (c.env.RESEND_API_KEY) {
       try {
-        const from = c.env.RESEND_FROM_EMAIL || "ventas@arksystems.site";
+        const from = c.env.RESEND_FROM_EMAIL || "ARK Systems <ventas@mail.arksystems.site>";
         await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${c.env.RESEND_API_KEY}` },
