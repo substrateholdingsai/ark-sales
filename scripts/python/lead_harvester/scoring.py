@@ -79,6 +79,8 @@ def recomendar_desarrollos_futura(raw_lead: RawLead, observaciones: Optional[lis
 
     if not productos and raw_lead.tenant_id == "acc_futura_capital":
         productos = ["futura_soletta_sisal", "futura_azureno", "futura_paseos_temozon"]
+    elif not productos and raw_lead.tenant_id == "acc_ark_ledger":
+        productos = ["ledger_pro", "ledger_freemium"]
     return productos
 
 
@@ -142,6 +144,8 @@ def calcular_score_con_observaciones(raw_lead: RawLead, observaciones: list[dict
             dolor_principal = "alianza_broker_inmobiliario"
         else:
             dolor_principal = "inversion_patrimonial_yucatan"
+    elif raw_lead.tenant_id == "acc_ark_ledger":
+        dolor_principal = "cierre_fiscal_y_cfdi"
     else:
         dolor_principal = "cobranza"
     return min(score, 100), dolor_principal

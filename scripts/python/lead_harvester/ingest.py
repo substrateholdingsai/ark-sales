@@ -13,6 +13,10 @@ BASE_URL = os.getenv("ARK_SALES_BASE_URL", "http://localhost:8787")
 
 VERTICAL_MAP = {
     "541210": (Vertical.FISCAL, Destination.LEDGER),
+    "541211": (Vertical.FISCAL, Destination.LEDGER),
+    "541212": (Vertical.FISCAL, Destination.LEDGER),
+    "541219": (Vertical.FISCAL, Destination.LEDGER),
+    "541110": (Vertical.FISCAL, Destination.LEDGER),
     "531110": (Vertical.COBRANZA, Destination.ANGEL),
     "531210": (Vertical.COBRANZA, Destination.ANGEL),
     "522250": (Vertical.COBRANZA, Destination.ANGEL),
@@ -72,6 +76,8 @@ VERTICAL_TO_DEST = {
 def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
     if lead.tenant_id == "acc_futura_capital":
         vertical, destination = (Vertical.BUNDLE, Destination.BUNDLE)
+    elif lead.tenant_id == "acc_ark_ledger":
+        vertical, destination = (Vertical.FISCAL, Destination.LEDGER)
     elif lead.vertical in ("fiscal", "cobranza", "ecommerce") or (
         lead.vertical == "bundle" and (lead.scian_code or "") not in VERTICAL_MAP
     ):
@@ -94,6 +100,8 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
         productos_interes = lead.productos_interes
     elif lead.tenant_id == "acc_futura_capital":
         productos_interes = recomendar_desarrollos_futura(lead)
+    elif lead.tenant_id == "acc_ark_ledger":
+        productos_interes = ["ledger_pro", "ledger_freemium"]
     else:
         productos_interes = [destination.value]
 

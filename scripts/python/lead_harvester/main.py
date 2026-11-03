@@ -45,7 +45,7 @@ async def _finish_run(run_id: str, status: str, metrics: dict, error: str | None
 async def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="lead_harvester")
     parser.add_argument("--source", default="denue", choices=["denue"])
-    parser.add_argument("--profile", default="ark", choices=["ark", "futura_capital"])
+    parser.add_argument("--profile", default="ark", choices=["ark", "futura_capital", "ark_ledger"])
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--fixture", default=None)
     parser.add_argument("--base-url", default=None)

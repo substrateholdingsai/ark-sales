@@ -1,0 +1,44 @@
+[
+  {
+    "Nombre": "Despacho Contable & Fiscal Díaz & Asociados SC",
+    "RFC": "DFA150312XX1",
+    "Actividad": "Servicios de contabilidad, teneduría de libros y auditoría fiscal",
+    "Codigo_Actividad": "541211",
+    "Estrato": "11 a 30 personas",
+    "Municipio": "Mérida",
+    "Entidad": "Yucatán",
+    "Latitud": 20.9674,
+    "Longitud": -89.5926,
+    "Sitio_Web": "https://diazcontadores.mx",
+    "Telefono": "9999201020",
+    "Correo_e": "contacto@diazcontadores.mx"
+  },
+  {
+    "Nombre": "Auditores Fiscales y Asesoría Tributaria Integral",
+    "RFC": "AFA190820YY2",
+    "Actividad": "Bufetes jurídicos y defensa fiscal ante el SAT",
+    "Codigo_Actividad": "541110",
+    "Estrato": "6 a 10 personas",
+    "Municipio": "Cuauhtémoc",
+    "Entidad": "Ciudad de México",
+    "Latitud": 19.4326,
+    "Longitud": -99.1332,
+    "Sitio_Web": "https://asesoriatributaria.com.mx",
+    "Telefono": "5551239876",
+    "Correo_e": "atencion@asesoriatributaria.com.mx"
+  },
+  {
+    "Nombre": "Servicios Integrales de Nómina y Capital Humano del Norte",
+    "RFC": "SIN180605ZZ3",
+    "Actividad": "Servicios de cobranza, nómina y procesamiento de pagos",
+    "Codigo_Actividad": "561490",
+    "Estrato": "31 a 50 personas",
+    "Municipio": "San Pedro Garza García",
+    "Entidad": "Nuevo León",
+    "Latitud": 25.6572,
+    "Longitud": -100.4022,
+    "Sitio_Web": "https://nominasdelnorte.mx",
+    "Telefono": "8183456789",
+    "Correo_e": "director@nominasdelnorte.mx"
+  }
+]

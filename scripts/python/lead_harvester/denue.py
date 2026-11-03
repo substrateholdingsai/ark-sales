@@ -21,11 +21,19 @@ PROFILES_SCIAN: dict[str, list[str]] = {
         "484111", "484121", "493111", "488511",
         "721111", "721190", "531110", "551110",
     ],
+    "ark_ledger": [
+        "541211",  # Despachos de contabilidad y auditoría
+        "541212",  # Auditoría para efectos fiscales
+        "541219",  # Otros servicios de contabilidad y teneduría de libros
+        "541110",  # Bufetes jurídicos y asesoría fiscal
+        "561490",  # Agencias de cobranza y servicios de nómina/maquila
+    ],
 }
 
 PROFILES_ENTIDADES: dict[str, list[str]] = {
     "ark": ["0"],
     "futura_capital": ["31", "09", "19", "14", "23"],
+    "ark_ledger": ["0"],
 }
 
 # Palabras clave y coordenadas estratégicas para Futura Capital en Yucatán
@@ -114,7 +122,8 @@ class DenueHarvester(BaseHarvester):
                     except Exception:
                         continue
             else:
-                for scian in PROFILES_SCIAN["ark"]:
+                target_scians = PROFILES_SCIAN.get(self.profile, PROFILES_SCIAN["ark"])
+                for scian in target_scians:
                     await self._throttle()
                     url = f"{BASE_URL}BuscarAreaAct/{scian}/0/0/1/{self.page_size}/{self.token}"
                     try:
@@ -133,7 +142,12 @@ class DenueHarvester(BaseHarvester):
         code = scian or item.get("Codigo_Actividad") or item.get("scian") or item.get("Clase_actividad")
         raw_tel = (item.get("Telefono") or item.get("telefono") or "").strip() or None
         raw_email = (item.get("Correo_e") or item.get("email") or "").strip() or None
-        tenant_id = "acc_futura_capital" if self.profile == "futura_capital" else item.get("tenant_id")
+        if self.profile == "futura_capital":
+            tenant_id = "acc_futura_capital"
+        elif self.profile == "ark_ledger":
+            tenant_id = "acc_ark_ledger"
+        else:
+            tenant_id = item.get("tenant_id")
         return RawLead(
             razon_social=item.get("Nombre") or item.get("razon_social", ""),
             rfc=item.get("RFC"),

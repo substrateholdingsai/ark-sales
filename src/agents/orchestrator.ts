@@ -193,7 +193,7 @@ export class AgentOrchestrator {
       } else {
         const ledger = cat.catalogo?.["ledger"];
         const bundle = cat.catalogo?.["bundle"];
-        responseText = `En ARK blindamos su despacho con ${ledger?.name || "Ark Ledger"} (desde $${ledger?.price_mxn || 6000} MXN/mes) con timbrado CFDI 4.0 y sellado SHA-256 inmutable. Como add-on se complementa con Ark Angel (cobranza IA por uso real: Voz $0.25 USD/min y WhatsApp $0.20 USD/msg) o en el Paquete Enterprise integral.`;
+        responseText = `En ARK blindamos su despacho con ${ledger?.name || "Ark Ledger"} (desde $${ledger?.price_mxn || 399} MXN/mes) con timbrado CFDI 4.0 y sellado SHA-256 inmutable. Como add-on se complementa con Ark Angel (cobranza IA por uso real: Voz $0.25 USD/min y WhatsApp $0.20 USD/msg) o en el Paquete Enterprise integral.`;
       }
     } else if (currentAgent === "flujo") {
       const cat = await this.toolExecutor.execute("consultar_catalogo_completo", {}, context);

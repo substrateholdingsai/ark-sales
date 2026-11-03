@@ -18,13 +18,14 @@ on:
         options:
           - denue
       profile:
-        description: 'Target tenant profile (ark or futura_capital)'
+        description: 'Target tenant profile (ark, futura_capital, ark_ledger)'
         required: false
         default: 'futura_capital'
         type: choice
         options:
           - futura_capital
           - ark
+          - ark_ledger
       limit:
         description: 'Max leads to process'
         required: false
@@ -79,3 +80,4 @@ jobs:
         with:
           name: harvest-report-${{ github.run_id }}
           path: scripts/python/harvest_report.json
+          if-no-files-found: ignore

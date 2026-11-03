@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { Env, AgentSkill, LeadExecutiveContext } from "../types";
+import { ensureAccountContactForLead, ensureTask } from "../crm/automation";
 
 export const internalRouter = new Hono<{ Bindings: Env }>();
 
@@ -21,6 +22,178 @@ internalRouter.use("*", async (c, next) => {
     return c.json({ error: "Unauthorized: internal key not configured." }, 401);
   }
   await next();
+});
+
+/**
+ * Ingesta Federada de Leads y Altas de SIEM CANACO (/api/internal/leads/ingest)
+ * Recibe leads desde las Landings white-label de CANACO, formularios SIEM o hermanos ARK,
+ * persiste la información en D1, crea registros CRM y despierta automáticamente al SalesAgent (Durable Object).
+ */
+internalRouter.post("/leads/ingest", async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+
+    // Soporta estructura plana (landing CANACO/SIEM) y anidada (LEAD_INGEST_V3 de hermanos ARK)
+    const rawEmail = body.email || body.account_context?.email;
+    if (!rawEmail || typeof rawEmail !== "string" || !rawEmail.includes("@")) {
+      return c.json({ error: "El campo 'email' es obligatorio y debe ser un correo válido." }, 400);
+    }
+    const email = rawEmail.trim().toLowerCase();
+
+    const despachoNombre = (
+      body.despacho_nombre ||
+      body.empresa ||
+      body.razon_social ||
+      body.comercio ||
+      body.account_context?.despacho_nombre ||
+      "Comercio Agremiado"
+    ).trim();
+
+    const tamano = body.tamano || body.account_context?.tamano || "1-5";
+    const origin = body.origin || body.origen || body.source_worker || "canaco_siem";
+    const siemId = body.siem_id || body.registro_siem || null;
+    const landingUrl = body.landing_url || null;
+    const phone = body.phone || body.telefono || null;
+    const vertical = body.vertical || "fiscal";
+    const destination = body.destination || "ledger";
+    const score = typeof body.score === "number" ? body.score : 75;
+
+    const leadId = body.lead_id || `lead_siem_${crypto.randomUUID().slice(0, 12)}`;
+
+    const conversationSummary = body.conversation_summary ||
+      `[ALTA SIEM CANACO]: Agremiado '${despachoNombre}' (${email}) registrado vía SIEM${siemId ? ` (#${siemId})` : ""}. ` +
+      `Landing page comercial Ark Commerce bonificada al 100% ($0 MXN vs $299/mes regular). SalesAgent activado para onboarding de Ark Ledger Freemium ($0) y Plan PRO Despacho ($399).`;
+
+    let accountId = `acc_${leadId}`;
+    let contactId = `ct_${leadId}`;
+    const oppId = `opp_${leadId}`;
+
+    if (c.env.DB) {
+      // 1. Persistir o actualizar en sales_leads
+      await c.env.DB.prepare(`
+        INSERT INTO sales_leads (
+          id, email, despacho_nombre, tamano, dolor_detectado, especialista_asignado, estado, score, conversation_summary, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'sat_fiscal_calculo', 'intake', 'calificado', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+          email = excluded.email,
+          despacho_nombre = COALESCE(excluded.despacho_nombre, sales_leads.despacho_nombre),
+          tamano = COALESCE(excluded.tamano, sales_leads.tamano),
+          score = MAX(sales_leads.score, excluded.score),
+          conversation_summary = COALESCE(excluded.conversation_summary, sales_leads.conversation_summary),
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(leadId, email, despachoNombre, tamano, score, conversationSummary).run();
+
+      // 2. Garantizar Cuenta y Contacto en CRM
+      const res = await ensureAccountContactForLead(c.env.DB, {
+        id: leadId,
+        email,
+        despacho_nombre: despachoNombre,
+        tamano,
+      });
+      accountId = res.accountId;
+      contactId = res.contactId;
+
+      // Actualizar datos adicionales en cuenta y contacto
+      if (landingUrl || phone) {
+        await c.env.DB.prepare(`
+          UPDATE sales_accounts
+          SET website = COALESCE(?, website),
+              phone = COALESCE(?, phone),
+              origin = ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(landingUrl, phone, origin, accountId).run().catch(() => {});
+
+        if (phone) {
+          await c.env.DB.prepare(`
+            UPDATE sales_contacts
+            SET phone = COALESCE(?, phone),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).bind(phone, contactId).run().catch(() => {});
+        }
+      }
+
+      // 3. Crear Oportunidad en CRM para Plan PRO Despacho
+      await c.env.DB.prepare(`
+        INSERT OR IGNORE INTO sales_opportunities (
+          id, account_id, contact_id, lead_id, stage, products_interest_json, estimated_value, currency, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'calificado', '["ledger_pro", "commerce_canaco"]', 399.00, 'MXN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `).bind(oppId, accountId, contactId, leadId).run().catch(() => {});
+
+      // 4. Crear Tarea de Onboarding
+      await ensureTask(c.env.DB, {
+        title: `Onboarding SIEM CANACO: Activar Landing Ark-Commerce y presentar Ark Ledger PRO ($399)`,
+        description: `Agremiado CANACO (${despachoNombre}) registrado vía SIEM. Landing page activa sin costo ($0 vs $299). Onboarding a 20 herramientas fiscales gratuitas y resguardo CFF Art. 30.`,
+        leadId,
+        accountId,
+        contactId,
+        opportunityId: oppId,
+        dueInDays: 2,
+      });
+    }
+
+    // 5. Disparar automáticamente al SalesAgent (Durable Object)
+    let salesAgentTriggered = false;
+    let agentWelcomeMessage: string | null = null;
+    let specialistAssigned = "intake";
+    let toolsCalled: any[] = [];
+
+    if (c.env.SALES_AGENT && typeof c.env.SALES_AGENT.idFromName === "function") {
+      try {
+        const doId = c.env.SALES_AGENT.idFromName(leadId);
+        const stub = c.env.SALES_AGENT.get(doId);
+
+        const syntheticPrompt = body.initial_message ||
+          `[ALTA SIEM CANACO]: Se ha registrado el comercio '${despachoNombre}' (${email}, ${tamano} colaboradores). ` +
+          `Su Landing Page de Ark Commerce ($299/mes regular) ha sido asignada al 100% sin costo como beneficio gremial SIEM. ` +
+          `Dale la bienvenida a la CANACO, confirma la activación de su landing/tienda, y explícale que tiene a su disposición las 20 herramientas fiscales y financieras de Ark Ledger sin costo con Noah AI, y preséntale el Plan PRO Despacho ($399 MXN/mes) para emitir papeles oficiales Carta y sellar con SHA-256 ante el SAT.`;
+
+        const doRes = await stub.fetch("https://sales-agent/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lead_id: leadId,
+            message: syntheticPrompt,
+            email,
+            despacho_nombre: despachoNombre,
+            tamano,
+          }),
+        });
+
+        if (doRes.ok) {
+          const doData: any = await doRes.json();
+          salesAgentTriggered = true;
+          agentWelcomeMessage = doData.response || null;
+          specialistAssigned = doData.agente_id || "intake";
+          toolsCalled = doData.tools_called || [];
+        } else {
+          console.warn("[leads/ingest] SalesAgent respondió con status:", doRes.status);
+        }
+      } catch (doErr) {
+        console.warn("[leads/ingest] Error despertando SalesAgent DO:", doErr);
+      }
+    }
+
+    return c.json({
+      success: true,
+      lead_id: leadId,
+      account_id: accountId,
+      contact_id: contactId,
+      opportunity_id: oppId,
+      origin,
+      vertical,
+      destination,
+      sales_agent_triggered: salesAgentTriggered,
+      specialist_assigned: specialistAssigned,
+      agent_welcome_message: agentWelcomeMessage,
+      tools_called: toolsCalled,
+      message: "Alta de SIEM CANACO recibida exitosamente y SalesAgent activado.",
+    }, 200);
+  } catch (err: any) {
+    console.error("[leads/ingest] Error general:", err);
+    return c.json({ error: err.message || "Error procesando ingesta de lead" }, 500);
+  }
 });
 
 /**
