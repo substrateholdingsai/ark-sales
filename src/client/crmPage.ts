@@ -1816,11 +1816,6 @@ function toast(msg) {
 // ── INIT ──
 window.addEventListener('hashchange', router);
 initUser().then(() => refreshData());
-</script>
-</body>
-</html>`;
-}
-
 
 // ── CENTRAL DE COMUNICACIONES (SOFTPHONE TELNYX & MAILING RESEND) ──
 let cachedTemplates = [];
@@ -1955,7 +1950,7 @@ async function loadTemplatesForConsole() {
       cachedTemplates = res.templates;
       const select = document.getElementById('emailConsoleTemplateSelect');
       if (select && cachedTemplates.length) {
-        select.innerHTML = cachedTemplates.map(t => `<option value="${t.slug}">${t.name}</option>`).join('');
+        select.innerHTML = cachedTemplates.map(t => \`<option value="\${t.slug}">\${t.name}</option>\`).join('');
       }
     }
   } catch(e) {
@@ -2004,7 +1999,7 @@ async function dispararCorreoIndividual() {
   const templateId = tmpl ? tmpl.id : slug;
 
   try {
-    const res = await apiCall(`/api/superadmin/templates/${templateId}/send`, 'POST', {
+    const res = await apiCall(\`/api/superadmin/templates/\${templateId}/send\`, 'POST', {
       to,
       recipient_name: nombre,
       variables: {
@@ -2036,7 +2031,7 @@ async function dispararCampañaCohorte() {
   if (!confirm('¿Deseas disparar la campaña masiva a la cohorte ' + cohortId + '?')) return;
 
   try {
-    const res = await apiCall(`/api/superadmin/cohorts/${cohortId}/launch-email`, 'POST', {
+    const res = await apiCall(\`/api/superadmin/cohorts/\${cohortId}/launch-email\`, 'POST', {
       template_id: templateId
     });
 
@@ -2049,4 +2044,8 @@ async function dispararCampañaCohorte() {
   } catch(e) {
     toast('Error al disparar campaña por cohorte');
   }
+}
+</script>
+</body>
+</html>`;
 }
