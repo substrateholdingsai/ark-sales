@@ -25,7 +25,7 @@ crmContactsRouter.get("/", async (c) => {
   `;
   const params: any[] = [];
   if (accountId) { sql += " AND c.account_id = ?"; params.push(accountId); }
-  if (q) { sql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ?)"; params.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  if (q) { sql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.whatsapp LIKE ?)"; params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`); }
   sql += " ORDER BY c.created_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
   const stmt = c.env.DB.prepare(sql);
@@ -35,7 +35,7 @@ crmContactsRouter.get("/", async (c) => {
   let countSql = "SELECT COUNT(*) as n FROM sales_contacts c WHERE 1=1";
   const cparams: any[] = [];
   if (accountId) { countSql += " AND c.account_id = ?"; cparams.push(accountId); }
-  if (q) { countSql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ?)"; cparams.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  if (q) { countSql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.whatsapp LIKE ?)"; cparams.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`); }
   const countStmt = c.env.DB.prepare(countSql);
   const countBound = cparams.length ? countStmt.bind(...cparams) : countStmt;
   const countRow: any = await countBound.first();
@@ -62,14 +62,15 @@ crmContactsRouter.post("/", requireRole("write"), async (c) => {
     const name = body?.name ?? null;
     const email = body?.email ?? null;
     const phone = body?.phone ?? null;
+    const whatsapp = body?.whatsapp ?? null;
     const title = body?.title ?? null;
     const consent = body?.consent_status ?? null;
     const prefs = body?.contact_preferences ? JSON.stringify(body.contact_preferences) : null;
 
     await c.env.DB.prepare(`
-      INSERT INTO sales_contacts (id, account_id, name, email, phone, title, consent_status, contact_preferences_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(id, accountId, name, email, phone, title, consent, prefs).run();
+      INSERT INTO sales_contacts (id, account_id, name, email, phone, whatsapp, title, consent_status, contact_preferences_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).bind(id, accountId, name, email, phone, whatsapp, title, consent, prefs).run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -100,6 +101,7 @@ crmContactsRouter.patch("/:id", requireRole("write"), async (c) => {
     const name = body?.name !== undefined ? body.name : existing.name;
     const email = body?.email !== undefined ? body.email : existing.email;
     const phone = body?.phone !== undefined ? body.phone : existing.phone;
+    const whatsapp = body?.whatsapp !== undefined ? body.whatsapp : existing.whatsapp;
     const title = body?.title !== undefined ? body.title : existing.title;
     const consent = body?.consent_status !== undefined ? body.consent_status : existing.consent_status;
     const prefs = body?.contact_preferences !== undefined
@@ -108,9 +110,9 @@ crmContactsRouter.patch("/:id", requireRole("write"), async (c) => {
 
     await c.env.DB.prepare(`
       UPDATE sales_contacts
-      SET account_id = ?, name = ?, email = ?, phone = ?, title = ?, consent_status = ?, contact_preferences_json = ?, updated_at = CURRENT_TIMESTAMP
+      SET account_id = ?, name = ?, email = ?, phone = ?, whatsapp = ?, title = ?, consent_status = ?, contact_preferences_json = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(accountId, name, email, phone, title, consent, prefs, id).run();
+    `).bind(accountId, name, email, phone, whatsapp, title, consent, prefs, id).run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({

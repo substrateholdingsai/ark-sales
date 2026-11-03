@@ -65,7 +65,8 @@ function createMockDb() {
               c.name = args[1] !== undefined ? args[1] : c.name;
               c.email = args[2] !== undefined ? args[2] : c.email;
               c.phone = args[3] !== undefined ? args[3] : c.phone;
-              c.title = args[4] !== undefined ? args[4] : c.title;
+              c.whatsapp = args[4] !== undefined ? args[4] : c.whatsapp;
+              c.title = args[5] !== undefined ? args[5] : c.title;
             }
             return { success: true };
           }
@@ -172,6 +173,7 @@ describe("CRM Delete & Contact Export Endpoints", () => {
         name: "Dr. Yair Benjamín Baas Cabrera",
         email: "yair.baas@oncologia.com",
         phone: "+52 999 555 4321",
+        whatsapp: "+52 999 888 7766",
         title: "Cirujano Oncólogo"
       })
     }), env);
@@ -181,5 +183,6 @@ describe("CRM Delete & Contact Export Endpoints", () => {
     expect(body.contact.name).toBe("Dr. Yair Benjamín Baas Cabrera");
     expect(body.contact.email).toBe("yair.baas@oncologia.com");
     expect(body.contact.phone).toBe("+52 999 555 4321");
+    expect(body.contact.whatsapp).toBe("+52 999 888 7766");
   });
 });

@@ -396,6 +396,7 @@ tailwind.config = {
               <th class="px-4 py-3">Cuenta / Empresa</th>
               <th class="px-4 py-3">Email</th>
               <th class="px-4 py-3">Teléfono</th>
+              <th class="px-4 py-3">WhatsApp</th>
               <th class="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
@@ -771,9 +772,13 @@ tailwind.config = {
           <input type="email" id="ctEmailInput" placeholder="roberto@despacho.mx" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
         </div>
         <div>
-          <label class="block text-xs font-mono text-slate-400 mb-1">Teléfono</label>
+          <label class="block text-xs font-mono text-slate-400 mb-1">Teléfono Consultorio</label>
           <input type="text" id="ctTelInput" placeholder="+52 999 123 4567" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
         </div>
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-emerald-400 mb-1 flex items-center gap-1"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp / Móvil Directo</label>
+        <input type="text" id="ctWhatsAppInput" placeholder="+52 999 987 6543" class="w-full bg-slate-950 border border-emerald-500/40 focus:border-emerald-500 rounded-lg px-3 py-2 text-sm text-white">
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" onclick="cerrarModalNuevoContacto()" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700">Cancelar</button>
@@ -810,15 +815,19 @@ tailwind.config = {
         <label class="block text-xs font-mono text-slate-400 mb-1">Cargo / Especialidad</label>
         <input type="text" id="editCtCargoInput" placeholder="Ej. Director Médico / Titular" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
       </div>
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-mono text-slate-400 mb-1">Email Real</label>
           <input type="email" id="editCtEmailInput" placeholder="contacto@doctor.com" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
         </div>
         <div>
-          <label class="block text-xs font-mono text-slate-400 mb-1">Teléfono Directo</label>
+          <label class="block text-xs font-mono text-slate-400 mb-1">Teléfono Consultorio</label>
           <input type="text" id="editCtTelInput" placeholder="+52 999 123 4567" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
         </div>
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-emerald-400 mb-1 flex items-center gap-1"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp / Móvil Directo (Alto Valor)</label>
+        <input type="text" id="editCtWhatsAppInput" placeholder="+52 999 987 6543" class="w-full bg-slate-950 border border-emerald-500/40 focus:border-emerald-500 rounded-lg px-3 py-2 text-sm text-white">
       </div>
       <div>
         <label class="block text-xs font-mono text-slate-400 mb-1">Estatus Consentimiento (LFPDPPP)</label>
@@ -1467,10 +1476,14 @@ async function abrirModalCuenta(id) {
             <div class="flex items-center justify-between bg-slate-800/30 rounded-lg p-3 border border-slate-700/50 mb-2">
               <div>
                 <div class="text-sm text-white font-medium">\${c.name || 'Sin nombre'}</div>
-                <div class="font-mono text-xs text-slate-400">\${c.phone || 'Sin tel'}</div>
+                <div class="flex items-center gap-2 mt-0.5">
+                  <span class="font-mono text-xs text-slate-400">\${c.phone || 'Sin tel'}</span>
+                  \${c.whatsapp ? \`<span class="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded"><i data-lucide="message-circle" class="w-3 h-3"></i> \${c.whatsapp}</span>\` : ''}
+                </div>
               </div>
               <div class="flex items-center gap-2">
                 <span class="text-xs text-slate-400 font-mono">\${c.email || 'Sin email'}</span>
+                \${c.whatsapp ? \`<button onclick="accionWhatsApp('\${c.whatsapp}')" class="p-1 rounded text-emerald-400 hover:bg-emerald-500/10 transition-colors" title="WhatsApp"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i></button>\` : ''}
                 <button onclick="abrirModalEditarContacto('\${c.id}', '\${account.id}')" class="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-700/50 transition-colors" title="Editar contacto">
                   <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
                 </button>
@@ -1535,10 +1548,20 @@ async function renderContactos() {
           <td class="px-4 py-3 text-slate-400">\${cuentaNombre}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.email || '-'}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.phone || '-'}</td>
+          <td class="px-4 py-3">
+            \${c.whatsapp && c.whatsapp !== '-'
+              ? \`<button onclick="accionWhatsApp('\${c.whatsapp}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-mono transition-colors" title="Abrir chat de WhatsApp">
+                  <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> \${c.whatsapp}
+                </button>\`
+              : '<span class="text-xs text-slate-600 font-mono">-</span>'}
+          </td>
           <td class="px-4 py-3 text-right">
             <div class="flex items-center justify-end gap-1.5">
+              \${c.whatsapp && c.whatsapp !== '-'
+                ? \`<button onclick="accionWhatsApp('\${c.whatsapp}')" class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors" title="Abrir WhatsApp Web"><i data-lucide="message-circle" class="w-4 h-4"></i></button>\`
+                : ''}
               <button onclick="abrirModalEditarContacto('\${c.id}')" class="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors" title="Editar contacto"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-              <button onclick="accionLlamar('\${c.phone}')" class="p-1.5 rounded-lg bg-ark-emerald/10 text-ark-emerald_hi hover:bg-ark-emerald/20 transition-colors" title="Llamada IA"><i data-lucide="phone" class="w-4 h-4"></i></button>
+              <button onclick="accionLlamar('\${c.phone || c.whatsapp}')" class="p-1.5 rounded-lg bg-ark-emerald/10 text-ark-emerald_hi hover:bg-ark-emerald/20 transition-colors" title="Llamada IA"><i data-lucide="phone" class="w-4 h-4"></i></button>
               <button onclick="accionEmail('\${c.email}')" class="p-1.5 rounded-lg bg-ark-blue/10 text-ark-blue_hi hover:bg-ark-blue/20 transition-colors" title="Enviar correo"><i data-lucide="mail" class="w-4 h-4"></i></button>
               <button onclick="eliminarContactoRow(event, '\${c.id}')" class="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors" title="Eliminar contacto"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
             </div>
@@ -1547,6 +1570,13 @@ async function renderContactos() {
       }).join('');
 
   lucide.createIcons();
+}
+
+function accionWhatsApp(num) {
+  if (!num || num === '-') { toast('Contacto sin WhatsApp registrado'); return; }
+  let clean = String(num).replace(/\\D/g, '');
+  if (clean.length === 10) clean = '52' + clean;
+  window.open('https://wa.me/' + clean, '_blank');
 }
 
 function accionLlamar(tel) {
@@ -1773,13 +1803,15 @@ async function guardarNuevoContacto(e) {
   const nombre = document.getElementById('ctNombreInput').value.trim();
   const email = document.getElementById('ctEmailInput').value.trim();
   const tel = document.getElementById('ctTelInput').value.trim();
+  const whatsapp = (document.getElementById('ctWhatsAppInput')?.value || '').trim();
 
   try {
     const res = await apiCall('/api/crm/contacts', 'POST', {
       account_id: accountId,
       name: nombre,
       email: email || null,
-      phone: tel || null
+      phone: tel || null,
+      whatsapp: whatsapp || null
     });
     if (res && res.error) { toast('⚠️ ' + res.error); return; }
     cerrarModalNuevoContacto();
@@ -1874,11 +1906,11 @@ function exportarCuentasCSV() {
     }
   });
 
-  const encabezados = 'id,nombre,scian,tamano,fuente,tenant,ciudad,total_contactos,contacto_principal,telefono_principal,email_principal\\n';
+  const encabezados = 'id,nombre,scian,tamano,fuente,tenant,ciudad,total_contactos,contacto_principal,telefono_principal,whatsapp_principal,email_principal\\n';
   const filas = (state.accounts || []).map(a => {
     const cts = contactMap[a.id] || [];
     const p = cts[0] || {};
-    return \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||''}","\${a.size||'1-5'}","\${a.harvest_source||a.origin||'denue'}","\${getAccountTenant(a)}","\${a.city||'Mérida'}","\${cts.length}","\${(p.name||'').replace(/"/g, '""')}","\${(p.phone||'').replace(/"/g, '""')}","\${(p.email||'').replace(/"/g, '""')}"\`;
+    return \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||''}","\${a.size||'1-5'}","\${a.harvest_source||a.origin||'denue'}","\${getAccountTenant(a)}","\${a.city||'Mérida'}","\${cts.length}","\${(p.name||'').replace(/"/g, '""')}","\${(p.phone||'').replace(/"/g, '""')}","\${(p.whatsapp||'').replace(/"/g, '""')}","\${(p.email||'').replace(/"/g, '""')}"\`;
   }).join('\\n');
   descargarCSV('cuentas_ark_crm.csv', encabezados + filas);
 }
@@ -1905,13 +1937,13 @@ async function exportarContactosCSV() {
   const accMap = {};
   (state.accounts || []).forEach(a => { accMap[a.id] = a; });
 
-  const encabezados = 'id,nombre,puesto,email,telefono,cuenta_id,cuenta_nombre,ciudad,tenant,consentimiento,fecha_creacion\\n';
+  const encabezados = 'id,nombre,puesto,email,telefono_consultorio,whatsapp,cuenta_id,cuenta_nombre,ciudad,tenant,consentimiento,fecha_creacion\\n';
   const filas = contacts.map(c => {
     const acc = accMap[c.account_id] || {};
     const accName = c.account_name || acc.name || '';
     const accCity = c.account_city || acc.city || 'Mérida';
     const accTenant = acc.id ? getAccountTenant(acc) : '';
-    return \`"\${c.id}","\${(c.name||'').replace(/"/g, '""')}","\${(c.title||'').replace(/"/g, '""')}","\${(c.email||'').replace(/"/g, '""')}","\${(c.phone||'').replace(/"/g, '""')}","\${c.account_id||''}","\${accName.replace(/"/g, '""')}","\${accCity.replace(/"/g, '""')}","\${accTenant}","\${c.consent_status||'opt_in'}","\${c.created_at||''}"\`;
+    return \`"\${c.id}","\${(c.name||'').replace(/"/g, '""')}","\${(c.title||'').replace(/"/g, '""')}","\${(c.email||'').replace(/"/g, '""')}","\${(c.phone||'').replace(/"/g, '""')}","\${(c.whatsapp||'').replace(/"/g, '""')}","\${c.account_id||''}","\${accName.replace(/"/g, '""')}","\${accCity.replace(/"/g, '""')}","\${accTenant}","\${c.consent_status||'opt_in'}","\${c.created_at||''}"\`;
   }).join('\\n');
 
   descargarCSV('contactos_ark_crm.csv', encabezados + filas);
@@ -2029,6 +2061,7 @@ function abrirModalEditarContacto(id, modalAccountId = null) {
   }
 
   document.getElementById('editCtTelInput').value = (c.phone && c.phone !== '-') ? c.phone : '';
+  document.getElementById('editCtWhatsAppInput').value = (c.whatsapp && c.whatsapp !== '-') ? c.whatsapp : '';
   document.getElementById('editCtConsentSelect').value = c.consent_status || 'opt_in';
 
   document.getElementById('modalEditarContacto').classList.remove('hidden');
@@ -2048,6 +2081,7 @@ async function guardarEditarContacto(e) {
   const title = document.getElementById('editCtCargoInput').value.trim();
   const email = document.getElementById('editCtEmailInput').value.trim();
   const phone = document.getElementById('editCtTelInput').value.trim();
+  const whatsapp = (document.getElementById('editCtWhatsAppInput')?.value || '').trim();
   const consent_status = document.getElementById('editCtConsentSelect').value;
 
   try {
@@ -2056,6 +2090,7 @@ async function guardarEditarContacto(e) {
       title: title || null,
       email: email || null,
       phone: phone || null,
+      whatsapp: whatsapp || null,
       consent_status
     });
 
