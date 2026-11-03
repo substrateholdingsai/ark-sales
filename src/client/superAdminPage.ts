@@ -1171,7 +1171,7 @@ document.getElementById('exportTenantsCsvBtn')?.addEventListener('click', () => 
     t.total_emails_sent || 0,
     t.total_voice_sessions || 0
   ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
-  const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\\r\\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1232,11 +1232,11 @@ async function loadBillingOrders() {
         : '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-950 text-purple-300 border border-purple-800">Checkout</span>';
 
       const detail = o.payment_method_type === 'spei'
-        ? '<div class="font-mono text-emerald-400 text-[11px] select-all cursor-pointer" onclick="navigator.clipboard.writeText(\'' + (o.spei_clabe || '') + '\'); toast(\'CLABE copiada al portapapeles\')">' + (o.spei_clabe || 'N/A') + '</div>'
+        ? '<div class="font-mono text-emerald-400 text-[11px] select-all cursor-pointer" data-clabe="' + (o.spei_clabe || '') + '" onclick="copyClabe(this.dataset.clabe)">' + (o.spei_clabe || 'N/A') + '</div>'
         : (o.checkout_url ? '<a href="' + o.checkout_url + '" target="_blank" class="text-blue-400 hover:underline text-[11px]">Link Checkout &rarr;</a>' : 'N/A');
 
       const action = !isPaid
-        ? '<button onclick="simulateOrderPaid(\'' + o.conekta_order_id + '\')" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[10px] font-semibold">Simular Pago</button>'
+        ? '<button data-order-id="' + o.conekta_order_id + '" onclick="simulateOrderPaid(this.dataset.orderId)" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[10px] font-semibold">Simular Pago</button>'
         : '<span class="text-[10px] text-slate-500 font-mono">' + (o.paid_at ? o.paid_at.slice(0, 10) : 'Conciliado') + '</span>';
 
       const customer = o.account_name || o.lead_despacho || o.lead_email || 'Cliente ARK';
@@ -1263,6 +1263,13 @@ async function loadBillingOrders() {
     tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-rose-400">Error al cargar órdenes de cobro.</td></tr>';
   }
 }
+
+window.copyClabe = function(clabe) {
+  if (clabe && clabe !== 'N/A') {
+    navigator.clipboard.writeText(clabe);
+    toast('CLABE copiada al portapapeles');
+  }
+};
 
 window.simulateOrderPaid = async function(orderId) {
   if (!confirm('¿Simular webhook "order.paid" para la orden ' + orderId + '?')) return;
@@ -1384,17 +1391,17 @@ document.getElementById('copyWhatsappBtn')?.addEventListener('click', () => {
   const monto = '$' + (currentOrderResult.amountCents / 100).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + ' MXN';
   let msg = '';
   if (currentOrderResult.paymentMethodType === 'spei') {
-    msg = 'Hola! Te comparto los datos bancarios para la activación formal de tu infraestructura en ARK Systems:\n' +
-      '- Banco: STP (Sistema de Transferencias y Pagos)\n' +
-      '- Beneficiario: ARK Systems\n' +
-      '- CLABE: ' + currentOrderResult.speiClabe + '\n' +
-      '- Monto exacto: ' + monto + '\n' +
-      '- Concepto: ' + (document.getElementById('orderCustomerName').value.trim() || 'Servicio ARK') + '\n\n' +
+    msg = 'Hola! Te comparto los datos bancarios para la activación formal de tu infraestructura en ARK Systems:\\n' +
+      '- Banco: STP (Sistema de Transferencias y Pagos)\\n' +
+      '- Beneficiario: ARK Systems\\n' +
+      '- CLABE: ' + currentOrderResult.speiClabe + '\\n' +
+      '- Monto exacto: ' + monto + '\\n' +
+      '- Concepto: ' + (document.getElementById('orderCustomerName').value.trim() || 'Servicio ARK') + '\\n\\n' +
       'En cuanto transfieras desde tu app bancaria, el sistema valida la recepción en tiempo real vía SPEI Banxico y te activa de inmediato. Cualquier duda me dices!';
   } else {
-    msg = 'Hola! Aquí tienes el enlace seguro para formalizar tu acceso a ARK Systems:\n' +
-      currentOrderResult.checkoutUrl + '\n' +
-      'Monto: ' + monto + '\n' +
+    msg = 'Hola! Aquí tienes el enlace seguro para formalizar tu acceso a ARK Systems:\\n' +
+      currentOrderResult.checkoutUrl + '\\n' +
+      'Monto: ' + monto + '\\n' +
       'Quedo atento para acompañarte en tu onboarding!';
   }
   navigator.clipboard.writeText(msg);
@@ -1524,7 +1531,7 @@ function downloadCohortCsv() {
     val = val.replace(/"/g, '""');
     return '"' + val + '"';
   }).join(','));
-  const csvContent = "\uFEFF" + [header, ...rows].join("\r\n");
+  const csvContent = "\uFEFF" + [header, ...rows].join("\\r\\n");
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1573,7 +1580,7 @@ function printCohortPdf() {
     '<div class="sub">Cohorte: <strong>' + cohortName + '</strong> (' + (currentCohortId||'') + ') · Total Leads: <strong>' + leads.length + '</strong></div></div>' +
     '<div class="meta"><div><strong>Emisión:</strong> ' + now + '</div><div><strong>Tenant:</strong> Futura Capital Partners / Red ARK</div></div></div>' +
     '<table><thead><tr>' + tableHeaders + '</tr></thead><tbody>' + tableRows + '</tbody></table>' +
-    '<script>window.onload=function(){window.print();};<\/script></body></html>';
+    '<' + 'script>window.onload=function(){window.print();};<' + '/script></body></html>';
 
   printWindow.document.write(html);
   printWindow.document.close();

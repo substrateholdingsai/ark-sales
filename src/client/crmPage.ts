@@ -1039,7 +1039,7 @@ async function loadMetrics() {
 
 async function loadAccounts() {
   try {
-    const all: any[] = [];
+    const all = [];
     let offset = 0;
     const pageSize = 500;
     while (true) {
