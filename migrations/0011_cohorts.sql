@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS sales_cohorts (
 );
 
 -- Cohortes iniciales
-INSERT INTO sales_cohorts (cohort_id, name, description, query_sql, vertical) VALUES
+INSERT OR IGNORE INTO sales_cohorts (cohort_id, name, description, query_sql, vertical) VALUES
   ('despachos_sat', 'Despachos Contables con dolor SAT',
    'Empresas SCIAN 541210/541220 con señales de dolor fiscal',
    'SELECT DISTINCT a.* FROM sales_accounts a
