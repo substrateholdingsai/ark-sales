@@ -172,6 +172,13 @@ app.get("/superadmin", async (c) => {
   const { authenticated, isAdmin } = await isAdminAuthenticated(c.req.raw, c.env);
   if (!authenticated) return c.html(renderCrmLoginHtml());
   if (!isAdmin) return c.json({ error: "Acceso denegado: Se requiere rol de Super Administrador." }, 403);
+  
+  // Si la navegación es desde un navegador web (sin Bearer directo en cabecera), redirigir al CRM unificado
+  const authHeader = c.req.header("authorization");
+  const accept = c.req.header("accept") || "";
+  if (!authHeader && accept.includes("text/html")) {
+    return c.redirect("/crm#/superadmin");
+  }
   return c.html(renderSuperAdminHtml());
 });
 app.notFound((c) => {

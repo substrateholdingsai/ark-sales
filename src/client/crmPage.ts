@@ -143,7 +143,7 @@ export function renderCrmHtml(): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ARK CRM · Sales Operations</title>
+<title>ARK CRM · Sales Operations & Governance</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23020617'/%3E%3Cg transform='translate(32 30)'%3E%3Cpath d='M0,-14 L12,-7 L12,7 L0,14 L-12,7 L-12,-7 Z' fill='none' stroke='%2360a5fa' stroke-width='2.5'/%3E%3Ccircle r='3' fill='%23fbbf24'/%3E%3C/g%3E%3C/svg%3E">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -232,8 +232,8 @@ tailwind.config = {
       <i data-lucide="check-square" class="w-4 h-4"></i> Tareas
       <span id="tareasBadge" class="ml-auto badge badge-rojo">0</span>
     </a>
-    <div class="pt-4 mt-4 border-t border-slate-800">
-      <a href="#/superadmin" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300">
+    <div id="sidebarSuperAdminDiv" class="pt-4 mt-4 border-t border-slate-800 hidden">
+      <a id="sidebarSuperAdminNav" href="#/superadmin" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300">
         <i data-lucide="shield" class="w-4 h-4 text-ark-indigo_hi"></i> Super Admin
       </a>
     </div>
@@ -265,7 +265,7 @@ tailwind.config = {
 
     <div class="flex-1"></div>
 
-    <button onclick="location.hash='#/superadmin'" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-ark-indigo/15 text-ark-indigo_hi border border-ark-indigo/30 text-xs font-semibold hover:bg-ark-indigo/25 transition-colors">
+    <button id="topBarSuperAdminBtn" onclick="location.hash='#/superadmin'" class="hidden flex items-center gap-2 px-3 py-1.5 rounded-full bg-ark-indigo/15 text-ark-indigo_hi border border-ark-indigo/30 text-xs font-semibold hover:bg-ark-indigo/25 transition-colors">
       <i data-lucide="shield" class="w-3.5 h-3.5"></i> Super Admin
     </button>
 
@@ -281,7 +281,10 @@ tailwind.config = {
     <!-- ═══════ VISTA: DASHBOARD ═══════ -->
     <section id="vista-dashboard" class="p-6 space-y-6">
       <div class="flex items-center justify-between">
-        <h1 class="text-xl font-bold text-white">Dashboard General</h1>
+        <div>
+          <h1 class="text-xl font-bold text-white">Dashboard General</h1>
+          <p class="text-xs text-slate-400">Rendimiento comercial y acciones prioritarias</p>
+        </div>
         <button onclick="refreshData()" class="flex items-center gap-2 text-xs text-slate-400 hover:text-white px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg hover:border-slate-700 transition-colors">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Actualizar
         </button>
@@ -372,7 +375,10 @@ tailwind.config = {
     <!-- ═══════ VISTA: CONTACTOS ═══════ -->
     <section id="vista-contactos" class="p-6 space-y-4 hidden">
       <div class="flex items-center justify-between">
-        <h1 class="text-xl font-bold text-white">Contactos Clave</h1>
+        <div>
+          <h1 class="text-xl font-bold text-white">Contactos Clave</h1>
+          <p class="text-xs text-slate-400">Tomadores de decisión y contactos directos</p>
+        </div>
         <button onclick="abrirModalNuevoContacto()" class="flex items-center gap-2 bg-ark-emerald text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-ark-emerald/80 transition-colors">
           <i data-lucide="plus" class="w-4 h-4"></i> Nuevo contacto
         </button>
@@ -412,20 +418,51 @@ tailwind.config = {
       <div id="tareasList" class="space-y-2"></div>
     </section>
 
-    <!-- ═══════ VISTA: SUPER ADMIN ═══════ -->
+    <!-- ═══════ VISTA: SUPER ADMIN (EXCLUSIVA ADMIN) ═══════ -->
     <section id="vista-superadmin" class="p-6 space-y-6 hidden">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-ark-indigo/15 border border-ark-indigo/30 flex items-center justify-center">
-          <i data-lucide="shield" class="w-5 h-5 text-ark-indigo_hi"></i>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-ark-indigo/15 border border-ark-indigo/30 flex items-center justify-center">
+            <i data-lucide="shield" class="w-5 h-5 text-ark-indigo_hi"></i>
+          </div>
+          <div>
+            <h1 class="text-xl font-bold text-white">Consola de Gobernanza & Super Admin</h1>
+            <p class="text-xs text-slate-400">Control institucional exclusivo: Colaboradores, Multi-tenant, Correo Masivo & Voz AI</p>
+          </div>
         </div>
-        <div>
-          <h1 class="text-xl font-bold text-white">Super Admin</h1>
-          <p class="text-sm text-slate-400">Configuración institucional multi-tenant & cohortes SQL</p>
-        </div>
+        <button onclick="abrirModalInvitarUsuario()" class="flex items-center gap-2 bg-ark-indigo hover:bg-ark-indigo/80 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors shadow-lg shadow-ark-indigo/20">
+          <i data-lucide="user-plus" class="w-4 h-4"></i> + Invitar Colaborador Comercial
+        </button>
       </div>
 
+      <!-- Sección 1: Equipo y Colaboradores Comerciales -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="users" class="w-4 h-4 text-ark-blue_hi"></i>
+            <h3 class="font-semibold text-white text-sm">Equipo Comercial y Accesos</h3>
+          </div>
+          <span class="text-xs font-mono text-slate-500" id="usersCountBadge">Cargando…</span>
+        </div>
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider">
+              <th class="px-4 py-3">Nombre</th>
+              <th class="px-4 py-3">Correo</th>
+              <th class="px-4 py-3">Rol</th>
+              <th class="px-4 py-3">Estado</th>
+              <th class="px-4 py-3">Fecha Alta</th>
+            </tr>
+          </thead>
+          <tbody id="usuariosAdminBody" class="divide-y divide-slate-800/50">
+            <tr><td colspan="5" class="p-4 text-center text-xs text-slate-500">Cargando colaboradores…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Sección 2: Servicios y Conexiones Institucionales -->
       <div class="grid md:grid-cols-3 gap-4">
-        <!-- Selector Tenants -->
+        <!-- Multi-Tenant -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <h3 class="font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="layers" class="w-4 h-4 text-ark-amber_hi"></i> Tenants Activos</h3>
           <div class="space-y-2">
@@ -446,7 +483,7 @@ tailwind.config = {
           </div>
         </div>
 
-        <!-- Cohortes -->
+        <!-- Cohortes DENUE -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <h3 class="font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="database" class="w-4 h-4 text-ark-blue_hi"></i> Cohortes DENUE</h3>
           <p class="text-xs text-slate-400 mb-3">Cohorte <code class="text-ark-blue_hi font-mono">ark_ledger_despachos</code> con leads de despachos contables cosechados.</p>
@@ -460,10 +497,10 @@ tailwind.config = {
           </div>
         </div>
 
-        <!-- Plantillas -->
+        <!-- Motor Resend & Plantillas -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <h3 class="font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="mail" class="w-4 h-4 text-ark-emerald_hi"></i> Plantillas de Correo</h3>
-          <p class="text-xs text-slate-400 mb-2">Plantilla activa: <code class="font-mono text-xs bg-slate-800 px-1 rounded text-ark-emerald_hi">tmpl_ark_ledger_invitacion_despachos</code></p>
+          <p class="text-xs text-slate-400 mb-3">Plantilla activa: <code class="font-mono text-xs bg-slate-800 px-1 rounded text-ark-emerald_hi">tmpl_ark_ledger_invitacion_despachos</code></p>
           <button onclick="abrirModalPlantilla()" class="w-full bg-ark-indigo/15 border border-ark-indigo/30 text-ark-indigo_hi text-sm py-2 rounded-lg hover:bg-ark-indigo/25 transition-colors font-medium">
             Ver plantilla y variables
           </button>
@@ -629,6 +666,46 @@ tailwind.config = {
   </div>
 </div>
 
+<!-- ═══════════════ MODAL INVITAR COLABORADOR COMERCIAL (SUPER ADMIN) ═══════════════ -->
+<div id="modalInvitarUsuario" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalInvitarUsuario()"></div>
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl z-10">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <i data-lucide="user-plus" class="w-5 h-5 text-ark-indigo_hi"></i>
+        <h3 class="text-lg font-bold text-white">Alta de Colaborador Comercial</h3>
+      </div>
+      <button onclick="cerrarModalInvitarUsuario()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <form id="formInvitarUsuario" onsubmit="guardarNuevoUsuario(event)" class="space-y-4">
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Nombre Completo</label>
+        <input type="text" id="usrNombreInput" placeholder="Ej. Carlos Mendoza" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Correo de Acceso</label>
+        <input type="email" id="usrEmailInput" placeholder="carlos@arksystems.site" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Contraseña Inicial</label>
+        <input type="password" id="usrPasswordInput" minlength="8" placeholder="Mínimo 8 caracteres" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Rol de Permisos</label>
+        <select id="usrRolSelect" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+          <option value="vendedor">Vendedor (Pipeline, Cuentas, Contactos y Tareas)</option>
+          <option value="lector">Lector (Solo Consulta / Auditor)</option>
+          <option value="admin">Super Administrador (Acceso Total y Configuración)</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="cerrarModalInvitarUsuario()" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700">Cancelar</button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-ark-indigo text-white text-xs font-semibold hover:bg-ark-indigo/80">Crear Colaborador</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- ═══════════════ MODAL PLANTILLA EMAIL ═══════════════ -->
 <div id="modalPlantilla" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
   <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalPlantilla()"></div>
@@ -687,7 +764,7 @@ Equipo Comercial ARK Systems
 <div id="toast" class="fixed bottom-5 right-5 z-50 hidden bg-slate-800 border border-slate-700 text-slate-100 px-4 py-2.5 rounded-xl shadow-2xl text-xs font-medium toast-in flex items-center gap-2"></div>
 
 <script>
-/* ARK CRM SPA — Backend Connected */
+/* ARK CRM SPA — Unified Sales & Governance */
 const TOKEN = localStorage.getItem('ark_crm_token');
 if (!TOKEN) {
   window.location.href = '/crm/login';
@@ -728,7 +805,8 @@ let state = {
   opportunities: [],
   tasks: [],
   metrics: null,
-  inbox: []
+  inbox: [],
+  users: []
 };
 
 const ETAPAS = [
@@ -742,7 +820,7 @@ const ETAPAS = [
   { key: "perdido", label: "Perdido", color: "ark-rose_hi" }
 ];
 
-// ── INICIALIZAR SESIÓN DE USUARIO ──
+// ── INICIALIZAR SESIÓN DE USUARIO Y CONTROL DE ROLES (RBAC) ──
 async function initUser() {
   try {
     const data = await apiCall('/api/auth/me');
@@ -750,12 +828,25 @@ async function initUser() {
       state.user = data.user;
       const email = data.user.email || 'comercial@ark.mx';
       const initials = (email.split('@')[0] || 'OP').slice(0, 2).toUpperCase();
-      const role = data.user.role === 'admin' ? 'Super Admin' : (data.user.role || 'Ventas');
+      const isAdmin = data.user.role === 'admin';
+      const roleLabel = isAdmin ? 'Super Admin' : (data.user.role === 'vendedor' ? 'Ventas' : 'Lector');
       
       document.getElementById('userEmailSidebar').textContent = email;
-      document.getElementById('userRoleSidebar').textContent = role;
+      document.getElementById('userRoleSidebar').textContent = roleLabel;
       document.getElementById('userAvatarSidebar').textContent = initials;
       document.getElementById('userAvatarTop').textContent = initials;
+
+      // Control de visibilidad según rol
+      const superAdminDiv = document.getElementById('sidebarSuperAdminDiv');
+      const topBarBtn = document.getElementById('topBarSuperAdminBtn');
+
+      if (isAdmin) {
+        if (superAdminDiv) superAdminDiv.classList.remove('hidden');
+        if (topBarBtn) topBarBtn.classList.remove('hidden');
+      } else {
+        if (superAdminDiv) superAdminDiv.classList.add('hidden');
+        if (topBarBtn) topBarBtn.classList.add('hidden');
+      }
     }
   } catch(e) {
     console.warn('Error cargando usuario:', e);
@@ -766,6 +857,13 @@ async function initUser() {
 function router() {
   const hash = location.hash || '#/dashboard';
   const vista = hash.replace('#/', '') || 'dashboard';
+
+  // Si intenta entrar a Super Admin sin rol de admin, redirigir
+  if (vista === 'superadmin' && state.user && state.user.role !== 'admin') {
+    toast('Acceso restringido: Se requiere rol de Super Administrador');
+    location.hash = '#/dashboard';
+    return;
+  }
 
   document.querySelectorAll('#mainContent > section').forEach(s => s.classList.add('hidden'));
   const target = document.getElementById('vista-' + vista);
@@ -828,6 +926,13 @@ async function loadTasks() {
     const data = await apiCall('/api/crm/tasks?limit=200');
     if (data && data.items) state.tasks = data.items;
   } catch (e) { console.error('loadTasks error:', e); }
+}
+
+async function loadUsers() {
+  try {
+    const data = await apiCall('/api/crm/admin/users');
+    if (data && data.users) state.users = data.users;
+  } catch(e) { console.warn('loadUsers:', e); }
 }
 
 // ── DASHBOARD ──
@@ -1234,9 +1339,60 @@ document.querySelectorAll('.tf-btn').forEach(btn => {
   });
 });
 
-// ── SUPERADMIN VIEW ──
-function renderSuperadmin() {
+// ── SUPERADMIN VIEW (GOVERNANCE & TEAM) ──
+async function renderSuperadmin() {
+  await loadUsers();
+  const users = state.users || [];
+  document.getElementById('usersCountBadge').textContent = \`\${users.length} colaboradores activos\`;
+
+  const body = document.getElementById('usuariosAdminBody');
+  body.innerHTML = users.length === 0
+    ? '<tr><td colspan="5" class="p-4 text-center text-xs text-slate-500">Sin colaboradores registrados</td></tr>'
+    : users.map(u => {
+        const roleBadge = u.role === 'admin' ? 'badge-azul' : (u.role === 'vendedor' ? 'badge-esmeralda' : 'badge-ambar');
+        const roleLabel = u.role === 'admin' ? 'Super Admin' : (u.role === 'vendedor' ? 'Ventas' : 'Lector');
+        return \`
+        <tr class="hover:bg-slate-800/30 transition-colors">
+          <td class="px-4 py-3 font-medium text-white">\${u.name || '-'}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-300">\${u.email}</td>
+          <td class="px-4 py-3"><span class="badge \${roleBadge}">\${roleLabel}</span></td>
+          <td class="px-4 py-3"><span class="text-xs text-emerald-400">● Activo</span></td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-500">\${u.created_at ? u.created_at.slice(0,10) : '-'}</td>
+        </tr>\`;
+      }).join('');
+
   lucide.createIcons();
+}
+
+function abrirModalInvitarUsuario() {
+  document.getElementById('modalInvitarUsuario').classList.remove('hidden');
+  lucide.createIcons();
+}
+function cerrarModalInvitarUsuario() {
+  document.getElementById('modalInvitarUsuario').classList.add('hidden');
+}
+
+async function guardarNuevoUsuario(e) {
+  e.preventDefault();
+  const nombre = document.getElementById('usrNombreInput').value.trim();
+  const email = document.getElementById('usrEmailInput').value.trim();
+  const password = document.getElementById('usrPasswordInput').value;
+  const role = document.getElementById('usrRolSelect').value;
+
+  try {
+    const res = await apiCall('/api/crm/admin/users', 'POST', {
+      name: nombre,
+      email,
+      password,
+      role
+    });
+    if (res && res.error) { toast('⚠️ ' + res.error); return; }
+    cerrarModalInvitarUsuario();
+    toast(\`🎉 Colaborador \${nombre} dado de alta con rol \${role}\`);
+    await renderSuperadmin();
+  } catch(err) {
+    toast('Error registrando colaborador');
+  }
 }
 
 // ── CREACIÓN DE ENTIDADES (MODALES) ──
@@ -1486,8 +1642,7 @@ function toast(msg) {
 
 // ── INIT ──
 window.addEventListener('hashchange', router);
-initUser();
-refreshData();
+initUser().then(() => refreshData());
 </script>
 </body>
 </html>`;
