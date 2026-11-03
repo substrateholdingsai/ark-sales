@@ -7,8 +7,42 @@ import { AuditService, clientIp } from "../auth/audit";
 export const crmAccountsRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 crmAccountsRouter.use("*", requireAuth());
 
+const FUTURA_SCIANS = new Set([
+  "531210", "531311", "523920",
+  "621111", "621112", "621211", "621511", "622111",
+  "484111", "484121", "493111", "488511",
+  "721111", "721190", "531110", "551110"
+]);
+
+export function resolveTenantId(a: any): string {
+  if (a.tenant_id) return a.tenant_id;
+  const id = String(a.id || "").toLowerCase();
+  const name = String(a.name || "").toLowerCase();
+  const origin = String(a.origin || "").toLowerCase();
+  const source = String(a.harvest_source || "").toLowerCase();
+  const scian = String(a.scian_code || "").trim();
+
+  if (
+    id.includes("futura") ||
+    name.includes("futura capital") ||
+    origin.includes("futura") ||
+    origin.includes("proptech") ||
+    origin.includes("inmobiliaria") ||
+    source.includes("hermes") ||
+    source.includes("vektor")
+  ) {
+    return "acc_futura_capital";
+  }
+
+  if (scian && FUTURA_SCIANS.has(scian)) {
+    return "acc_futura_capital";
+  }
+
+  return "acc_ark_ledger";
+}
+
 function parsePagination(c: any) {
-  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "20", 10) || 20, 1), 100);
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "20", 10) || 20, 1), 500);
   const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
   return { limit, offset };
 }
@@ -48,7 +82,17 @@ crmAccountsRouter.get("/", async (c) => {
   const countBound = cparams.length ? countStmt.bind(...cparams) : countStmt;
   const countRow: any = await countBound.first();
 
-  return c.json({ items: results || [], total: countRow?.n ?? (results?.length ?? 0), limit, offset });
+  let items = (results || []).map((row: any) => ({
+    ...row,
+    tenant_id: resolveTenantId(row)
+  }));
+
+  const tenantFilter = c.req.query("tenant") || c.req.query("tenant_id");
+  if (tenantFilter) {
+    items = items.filter((row: any) => row.tenant_id === tenantFilter);
+  }
+
+  return c.json({ items, total: countRow?.n ?? (results?.length ?? 0), limit, offset });
 });
 
 // Duplicate detection groups
@@ -76,6 +120,7 @@ crmAccountsRouter.get("/:id", async (c) => {
   const id = c.req.param("id");
   const account: any = await c.env.DB.prepare("SELECT * FROM sales_accounts WHERE id = ?").bind(id).first();
   if (!account) return c.json({ error: "Cuenta no encontrada." }, 404);
+  account.tenant_id = resolveTenantId(account);
 
   const { results: contacts } = await c.env.DB.prepare("SELECT * FROM sales_contacts WHERE account_id = ? ORDER BY created_at DESC").bind(id).all();
   const { results: opportunities } = await c.env.DB.prepare("SELECT * FROM sales_opportunities WHERE account_id = ? ORDER BY created_at DESC").bind(id).all();

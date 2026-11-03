@@ -1110,29 +1110,64 @@ async function renderCuentas() {
   filtrarCuentas();
 }
 
+const FUTURA_SCIANS = new Set([
+  '531210', '531311', '523920',
+  '621111', '621112', '621211', '621511', '622111',
+  '484111', '484121', '493111', '488511',
+  '721111', '721190', '531110', '551110'
+]);
+
+function getAccountTenant(a) {
+  if (a && a.tenant_id) return a.tenant_id;
+  if (!a) return 'acc_ark_ledger';
+  const id = String(a.id || '').toLowerCase();
+  const name = String(a.name || '').toLowerCase();
+  const origin = String(a.origin || '').toLowerCase();
+  const source = String(a.harvest_source || '').toLowerCase();
+  const scian = String(a.scian_code || '').trim();
+
+  if (
+    id.includes('futura') ||
+    name.includes('futura capital') ||
+    origin.includes('futura') ||
+    origin.includes('proptech') ||
+    origin.includes('inmobiliaria') ||
+    source.includes('hermes') ||
+    source.includes('vektor') ||
+    FUTURA_SCIANS.has(scian)
+  ) {
+    return 'acc_futura_capital';
+  }
+  return 'acc_ark_ledger';
+}
+
 function filtrarCuentas() {
   const tamano = document.getElementById('filtroTamano').value;
   const tenant = document.getElementById('filtroTenant').value;
 
   let list = state.accounts || [];
   if (tamano) list = list.filter(a => (a.size || a.employee_count_range || '').includes(tamano));
-  if (tenant) list = list.filter(a => (a.tenant_id || '').includes(tenant));
+  if (tenant) list = list.filter(a => getAccountTenant(a) === tenant);
 
   document.getElementById('cuentasSub').textContent = \`\${list.length} de \${state.accounts.length} cuentas registradas en D1\`;
 
   const body = document.getElementById('cuentasBody');
   body.innerHTML = list.length === 0
     ? '<tr><td colspan="7" class="p-6 text-center text-slate-500 text-sm">No se encontraron cuentas con los filtros seleccionados</td></tr>'
-    : list.map(a => \`
+    : list.map(a => {
+        const tid = getAccountTenant(a);
+        const isFutura = tid === 'acc_futura_capital';
+        return \`
     <tr class="hover:bg-slate-800/30 cursor-pointer transition-colors" onclick="abrirModalCuenta('\${a.id}')">
       <td class="px-4 py-3 font-medium text-white">\${a.name || '-'}</td>
       <td class="px-4 py-3 font-mono text-xs text-slate-400">\${a.scian_code || '-'}</td>
       <td class="px-4 py-3"><span class="badge badge-ambar">\${a.size || a.employee_count_range || '1-5'}</span></td>
       <td class="px-4 py-3 font-mono text-xs text-slate-400">\${a.harvest_source || a.origin || 'denue'}</td>
-      <td class="px-4 py-3"><span class="badge \${(a.tenant_id || '').includes('ark') ? 'badge-azul' : 'badge-indigo'}">\${(a.tenant_id || 'acc_ark_ledger').replace('acc_','')}</span></td>
+      <td class="px-4 py-3"><span class="badge \${isFutura ? 'badge-indigo' : 'badge-azul'}">\${isFutura ? 'Futura Capital' : 'Ark Ledger'}</span></td>
       <td class="px-4 py-3 text-xs text-slate-400">\${a.city || 'Mérida'}</td>
       <td class="px-4 py-3 text-right"><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 inline"></i></td>
-    </tr>\`).join('');
+    </tr>\`;
+      }).join('');
 
   lucide.createIcons();
 }
@@ -1172,7 +1207,7 @@ async function abrirModalCuenta(id) {
           </div>
           <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
             <div class="text-xs text-slate-500 mb-1">Tenant Asignado</div>
-            <div class="font-mono text-sm text-ark-blue_hi">\${account.tenant_id || 'acc_ark_ledger'}</div>
+            <div class="font-mono text-sm text-ark-blue_hi">\${getAccountTenant(account) === 'acc_futura_capital' ? 'Futura Capital Partners' : 'Ark Ledger (Despachos)'}</div>
           </div>
           <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
             <div class="text-xs text-slate-500 mb-1">Ubicación</div>
@@ -1453,7 +1488,7 @@ async function guardarNuevaCuenta(e) {
       name: nombre,
       city: ciudad || 'Mérida',
       size: tamano,
-      origin: 'manual'
+      origin: tenant === 'acc_futura_capital' ? 'futura_manual' : 'manual'
     });
     if (res && res.error) { toast('⚠️ ' + res.error); return; }
     cerrarModalNuevaCuenta();
@@ -1576,13 +1611,13 @@ function descargarCSV(nombreArchivo, contenido) {
 function exportarCuentasCSV() {
   const encabezados = 'id,nombre,scian,tamano,fuente,tenant,ciudad\\n';
   const filas = (state.accounts || []).map(a => 
-    \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||''}","\${a.size||'1-5'}","\${a.harvest_source||a.origin||'denue'}","\${a.tenant_id||'acc_ark_ledger'}","\${a.city||'Mérida'}"\`
+    \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||''}","\${a.size||'1-5'}","\${a.harvest_source||a.origin||'denue'}","\${getAccountTenant(a)}","\${a.city||'Mérida'}"\`
   ).join('\\n');
   descargarCSV('cuentas_ark_crm.csv', encabezados + filas);
 }
 
 function exportarCohorteCSV() {
-  const leads = (state.accounts || []).filter(a => (a.tenant_id || '').includes('ark_ledger') || a.harvest_source === 'denue');
+  const leads = (state.accounts || []).filter(a => getAccountTenant(a) === 'acc_ark_ledger' || a.harvest_source === 'denue');
   const encabezados = 'id,nombre,scian,fuente,ciudad\\n';
   const filas = leads.map(a => \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||'541211'}","\${a.harvest_source||'denue'}","\${a.city||'Mérida'}"\`).join('\\n');
   descargarCSV('cohorte_ark_ledger_despachos.csv', encabezados + filas);
