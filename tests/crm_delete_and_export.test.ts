@@ -58,6 +58,17 @@ function createMockDb() {
             }
             return { success: true };
           }
+          if (s.startsWith("update sales_contacts")) {
+            const id = args[args.length - 1];
+            const c = contacts.find(x => x.id === id);
+            if (c) {
+              c.name = args[1] !== undefined ? args[1] : c.name;
+              c.email = args[2] !== undefined ? args[2] : c.email;
+              c.phone = args[3] !== undefined ? args[3] : c.phone;
+              c.title = args[4] !== undefined ? args[4] : c.title;
+            }
+            return { success: true };
+          }
           if (s.startsWith("insert into crm_audit_log")) {
             audit.push(args);
             return { success: true };
@@ -144,5 +155,31 @@ describe("CRM Delete & Contact Export Endpoints", () => {
     expect(body.items[0].name).toBe("Roberto Gómez");
     expect(body.items[0].account_name).toBe("Despacho Contable Test");
     expect(body.total).toBe(1);
+  });
+
+  it("updates contact details via PATCH /api/crm/contacts/:id", async () => {
+    const db = createMockDb();
+    const env = { DB: db, CRM_JWT_SECRET: secret } as any;
+    const token = await signJwt({ sub: "usr_1", email: "rep@ark.test", role: "vendedor", name: "Sales Rep" }, secret);
+
+    const res = await app.fetch(new Request("http://localhost/api/crm/contacts/ct_1", {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: "Dr. Yair Benjamín Baas Cabrera",
+        email: "yair.baas@oncologia.com",
+        phone: "+52 999 555 4321",
+        title: "Cirujano Oncólogo"
+      })
+    }), env);
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as any;
+    expect(body.contact.name).toBe("Dr. Yair Benjamín Baas Cabrera");
+    expect(body.contact.email).toBe("yair.baas@oncologia.com");
+    expect(body.contact.phone).toBe("+52 999 555 4321");
   });
 });

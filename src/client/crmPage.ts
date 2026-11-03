@@ -783,6 +783,61 @@ tailwind.config = {
   </div>
 </div>
 
+<!-- ═══════════════ MODAL EDITAR CONTACTO ═══════════════ -->
+<div id="modalEditarContacto" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalEditarContacto()"></div>
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl z-10">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-ark-blue/15 border border-ark-blue/30 flex items-center justify-center">
+          <i data-lucide="user-check" class="w-4 h-4 text-ark-blue_hi"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">Editar Contacto</h3>
+          <p id="editCtCuentaNombre" class="text-xs text-slate-400 font-medium"></p>
+        </div>
+      </div>
+      <button onclick="cerrarModalEditarContacto()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <form id="formEditarContacto" onsubmit="guardarEditarContacto(event)" class="space-y-4">
+      <input type="hidden" id="editCtId">
+      <input type="hidden" id="editCtModalAccountId">
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Nombre Completo / Decisor</label>
+        <input type="text" id="editCtNombreInput" placeholder="Ej. Dr. Yair Benjamín Baas Cabrera" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Cargo / Especialidad</label>
+        <input type="text" id="editCtCargoInput" placeholder="Ej. Director Médico / Titular" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">Email Real</label>
+          <input type="email" id="editCtEmailInput" placeholder="contacto@doctor.com" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+        </div>
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">Teléfono Directo</label>
+          <input type="text" id="editCtTelInput" placeholder="+52 999 123 4567" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Estatus Consentimiento (LFPDPPP)</label>
+        <select id="editCtConsentSelect" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+          <option value="opt_in">Opt-in (Verificado / Prospección permitida)</option>
+          <option value="pendiente">Pendiente de confirmación</option>
+          <option value="opt_out">Opt-out (No contactar)</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+        <button type="button" onclick="cerrarModalEditarContacto()" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">Cancelar</button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-ark-blue hover:bg-ark-blue/80 text-white text-xs font-semibold transition-colors flex items-center gap-1.5">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i> Guardar cambios
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- ═══════════════ MODAL NUEVA TAREA ═══════════════ -->
 <div id="modalNuevaTarea" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
   <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalNuevaTarea()"></div>
@@ -1414,8 +1469,11 @@ async function abrirModalCuenta(id) {
                 <div class="text-sm text-white font-medium">\${c.name || 'Sin nombre'}</div>
                 <div class="font-mono text-xs text-slate-400">\${c.phone || 'Sin tel'}</div>
               </div>
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-2">
                 <span class="text-xs text-slate-400 font-mono">\${c.email || 'Sin email'}</span>
+                <button onclick="abrirModalEditarContacto('\${c.id}', '\${account.id}')" class="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-700/50 transition-colors" title="Editar contacto">
+                  <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                </button>
                 <button onclick="eliminarContactoModal(event, '\${c.id}', '\${account.id}')" class="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" title="Eliminar contacto">
                   <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                 </button>
@@ -1478,7 +1536,8 @@ async function renderContactos() {
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.email || '-'}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.phone || '-'}</td>
           <td class="px-4 py-3 text-right">
-            <div class="flex items-center justify-end gap-2">
+            <div class="flex items-center justify-end gap-1.5">
+              <button onclick="abrirModalEditarContacto('\${c.id}')" class="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors" title="Editar contacto"><i data-lucide="pencil" class="w-4 h-4"></i></button>
               <button onclick="accionLlamar('\${c.phone}')" class="p-1.5 rounded-lg bg-ark-emerald/10 text-ark-emerald_hi hover:bg-ark-emerald/20 transition-colors" title="Llamada IA"><i data-lucide="phone" class="w-4 h-4"></i></button>
               <button onclick="accionEmail('\${c.email}')" class="p-1.5 rounded-lg bg-ark-blue/10 text-ark-blue_hi hover:bg-ark-blue/20 transition-colors" title="Enviar correo"><i data-lucide="mail" class="w-4 h-4"></i></button>
               <button onclick="eliminarContactoRow(event, '\${c.id}')" class="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors" title="Eliminar contacto"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
@@ -1939,6 +1998,84 @@ function eliminarContactoModal(e, id, accountId) {
   e.stopPropagation();
   const c = state.contacts.find(x => x.id === id);
   confirmarEliminarContacto(id, c ? c.name : 'este contacto', accountId);
+}
+
+// ── EDICIÓN DE CONTACTO ──
+function abrirModalEditarContacto(id, modalAccountId = null) {
+  const c = state.contacts.find(x => x.id === id);
+  if (!c) { toast('Contacto no encontrado'); return; }
+
+  const acc = state.accounts.find(a => a.id === c.account_id);
+  const cuentaNombre = c.account_name || (acc ? acc.name : (c.account_id || ''));
+
+  document.getElementById('editCtId').value = c.id;
+  document.getElementById('editCtModalAccountId').value = modalAccountId || '';
+  document.getElementById('editCtCuentaNombre').textContent = cuentaNombre ? ('Empresa: ' + cuentaNombre) : '';
+
+  const isGenericName = !c.name || c.name === 'Sin nombre' || c.name === 'Contacto Corporativo';
+  document.getElementById('editCtNombreInput').value = isGenericName ? '' : c.name;
+  if (isGenericName && cuentaNombre) {
+    document.getElementById('editCtNombreInput').placeholder = cuentaNombre.toLowerCase().includes('consultorio') || cuentaNombre.toLowerCase().includes('dr')
+      ? 'Ej. Dr. Titular / Especialista'
+      : 'Ej. Titular / Director General';
+  }
+
+  document.getElementById('editCtCargoInput').value = c.title || '';
+
+  const isSyntheticEmail = c.email && c.email.includes('@harvest.arksystems.local');
+  document.getElementById('editCtEmailInput').value = isSyntheticEmail ? '' : (c.email || '');
+  if (isSyntheticEmail) {
+    document.getElementById('editCtEmailInput').placeholder = 'Ingresa el correo real investigado';
+  }
+
+  document.getElementById('editCtTelInput').value = (c.phone && c.phone !== '-') ? c.phone : '';
+  document.getElementById('editCtConsentSelect').value = c.consent_status || 'opt_in';
+
+  document.getElementById('modalEditarContacto').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function cerrarModalEditarContacto() {
+  document.getElementById('modalEditarContacto').classList.add('hidden');
+}
+
+async function guardarEditarContacto(e) {
+  e.preventDefault();
+  const id = document.getElementById('editCtId').value;
+  const modalAccountId = document.getElementById('editCtModalAccountId').value;
+
+  const name = document.getElementById('editCtNombreInput').value.trim();
+  const title = document.getElementById('editCtCargoInput').value.trim();
+  const email = document.getElementById('editCtEmailInput').value.trim();
+  const phone = document.getElementById('editCtTelInput').value.trim();
+  const consent_status = document.getElementById('editCtConsentSelect').value;
+
+  try {
+    const res = await apiCall('/api/crm/contacts/' + id, 'PATCH', {
+      name: name || null,
+      title: title || null,
+      email: email || null,
+      phone: phone || null,
+      consent_status
+    });
+
+    if (res && res.contact) {
+      const idx = state.contacts.findIndex(c => c.id === id);
+      if (idx !== -1) {
+        state.contacts[idx] = { ...state.contacts[idx], ...res.contact };
+      }
+      cerrarModalEditarContacto();
+      renderContactos();
+      if (modalAccountId) {
+        abrirModalCuenta(modalAccountId);
+      }
+      toast('✅ Contacto actualizado correctamente');
+    } else {
+      toast('Error actualizando contacto');
+    }
+  } catch(err) {
+    toast('Error: ' + (err.message || 'Error del servidor'));
+  }
 }
 
 function exportarCohorteCSV() {
