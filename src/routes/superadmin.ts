@@ -495,6 +495,28 @@ superadminRouter.get("/voice/campaigns", async (c) => {
   return c.json({ count: campaigns.length, campaigns });
 });
 
+// Softphone / Marcación Directa Individual con Telnyx Voice AI
+superadminRouter.post("/voice/call", async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { to, despacho_nombre, message, industry, account_id } = body || {};
+    if (!to) {
+      return c.json({ error: "El teléfono destino ('to') es obligatorio." }, 400);
+    }
+    const { dispararLlamadaCortesia } = await import("../voice/telnyx");
+    const result = await dispararLlamadaCortesia(c.env, {
+      to,
+      despachoNombre: despacho_nombre || "Prospecto ARK",
+      customMessage: message,
+      industry: industry || "general",
+      accountId: account_id
+    });
+    return c.json(result);
+  } catch (err: any) {
+    return c.json({ error: err.message || "Error al iniciar llamada" }, 500);
+  }
+});
+
 superadminRouter.post("/voice/campaigns", async (c) => {
   try {
     const body = await c.req.json();

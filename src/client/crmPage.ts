@@ -460,8 +460,154 @@ tailwind.config = {
         </table>
       </div>
 
-      <!-- Sección 2: Servicios y Conexiones Institucionales -->
-      <div class="grid md:grid-cols-3 gap-4">
+      <!-- Sección 2: Central de Comunicaciones Unificada (Softphone Telnyx + Mailing Resend) -->
+      <div class="grid lg:grid-cols-12 gap-6">
+        
+        <!-- Panel Izquierdo: Softphone Telnyx Voice AI (5 Cols) -->
+        <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+          <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+            <div class="flex items-center gap-2">
+              <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+              <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                <i data-lucide="phone-call" class="w-4 h-4 text-ark-blue_hi"></i> Softphone Telnyx Voice AI
+              </h3>
+            </div>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+              Troncal +52 MX
+            </span>
+          </div>
+
+          <div class="p-5 space-y-4 flex-1 flex flex-col justify-between">
+            <!-- Pantalla Display -->
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-center relative">
+              <div id="softphoneStatusText" class="text-[11px] font-mono text-slate-400 mb-1 flex items-center justify-center gap-1.5">
+                <span id="softphoneDot" class="inline-block w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                <span id="softphoneStatusLabel">Listo para marcar</span>
+              </div>
+              <input id="softphonePhoneInput" type="text" placeholder="+52 55..." 
+                class="w-full bg-transparent text-center font-mono text-xl text-white font-bold tracking-wider focus:outline-none placeholder-slate-700">
+              <button onclick="softphoneClear()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1">
+                <i data-lucide="delete" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <!-- Selector de Script / Modo de Disparo -->
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono text-slate-400">Speech de IA (Voz Natural)</label>
+              <select id="softphoneSpeechMode" onchange="onSoftphoneSpeechChange()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-ark-blue">
+                <option value="demo_60s">📞 Demo en Vivo (Ark Angel · 60s pitch)</option>
+                <option value="gancho_30dias">🚀 Gancho 30 Días Gratis (Ark Commerce)</option>
+                <option value="fiscal_despachos">⚖️ Cierre Fiscal & SAT (Ark Ledger)</option>
+                <option value="custom">✍️ Guion Personalizado (Texto a Voz)</option>
+              </select>
+              <div id="softphoneCustomTextBox" class="hidden mt-2">
+                <textarea id="softphoneCustomText" rows="2" placeholder="Escribe el mensaje exacto que la voz de IA dirá en la llamada..." class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-ark-blue"></textarea>
+              </div>
+            </div>
+
+            <!-- Keypad Numérico -->
+            <div class="grid grid-cols-3 gap-2 max-w-[260px] mx-auto w-full my-2">
+              <button onclick="softphonePress('1')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">1</button>
+              <button onclick="softphonePress('2')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">2</button>
+              <button onclick="softphonePress('3')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">3</button>
+              <button onclick="softphonePress('4')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">4</button>
+              <button onclick="softphonePress('5')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">5</button>
+              <button onclick="softphonePress('6')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">6</button>
+              <button onclick="softphonePress('7')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">7</button>
+              <button onclick="softphonePress('8')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">8</button>
+              <button onclick="softphonePress('9')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">9</button>
+              <button onclick="softphonePress('*')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">*</button>
+              <button onclick="softphonePress('0')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">0</button>
+              <button onclick="softphonePress('#')" class="h-10 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-white font-mono font-bold text-base transition-colors">#</button>
+            </div>
+
+            <!-- Botones de Acción -->
+            <div class="flex gap-2 pt-2">
+              <button id="softphoneCallBtn" onclick="iniciarLlamadaSoftphone()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm shadow-lg shadow-emerald-600/20 transition-all">
+                <i data-lucide="phone" class="w-4 h-4"></i> Iniciar Llamada IA
+              </button>
+              <button id="softphoneHangupBtn" onclick="colgarSoftphone()" class="bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-1.5 text-sm transition-all border border-rose-600/30">
+                <i data-lucide="phone-off" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel Derecho: Consola de Disparo de Correos Resend (7 Cols) -->
+        <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+          <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+            <div class="flex items-center gap-2">
+              <div class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></div>
+              <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                <i data-lucide="mail" class="w-4 h-4 text-ark-blue_hi"></i> Consola de Disparo de Correo (Resend)
+              </h3>
+            </div>
+            <span class="text-[10px] font-mono text-slate-400">ventas@arksystems.site</span>
+          </div>
+
+          <div class="p-5 space-y-4 flex-1 flex flex-col">
+            <!-- Selector de Plantilla y Modo -->
+            <div class="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-mono text-slate-400 mb-1">Plantilla de Campaña</label>
+                <select id="emailConsoleTemplateSelect" onchange="onTemplateSelectChange()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-ark-blue">
+                  <option value="gancho_landing_30dias">🚀 Ark Commerce · Gancho 30 Días Gratis</option>
+                  <option value="tmpl_ark_ledger_invitacion_despachos">⚖️ Ark Ledger · Despachos Contables</option>
+                  <option value="canaco_siem_invitacion">🏛️ CANACO · Convenio SIEM</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-mono text-slate-400 mb-1">Modo de Disparo</label>
+                <div class="flex rounded-lg border border-slate-800 bg-slate-950 p-0.5">
+                  <button id="emailModeSingleBtn" onclick="setEmailDispatchMode('single')" class="flex-1 py-1.5 text-xs font-medium rounded-md bg-ark-blue text-white transition-all">Individual / Test</button>
+                  <button id="emailModeCohortBtn" onclick="setEmailDispatchMode('cohort')" class="flex-1 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white transition-all">Por Cohorte</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Formulario Individual -->
+            <div id="emailFormSingle" class="grid sm:grid-cols-3 gap-2">
+              <input id="emailTargetName" type="text" placeholder="Nombre contacto" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-ark-blue">
+              <input id="emailTargetCompany" type="text" placeholder="Empresa / Despacho" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-ark-blue">
+              <div class="flex gap-2">
+                <input id="emailTargetAddress" type="email" placeholder="correo@ejemplo.com" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-ark-blue">
+                <button onclick="dispararCorreoIndividual()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors shadow-lg shadow-blue-600/20">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i> Disparar
+                </button>
+              </div>
+            </div>
+
+            <!-- Formulario Cohorte (Oculto por defecto) -->
+            <div id="emailFormCohort" class="hidden flex gap-2 items-center">
+              <div class="flex-1">
+                <select id="emailCohortSelect" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-ark-blue">
+                  <option value="ark_ledger_despachos">ark_ledger_despachos (73 Cuentas D1)</option>
+                  <option value="canaco_siem_1200">canaco_siem_1200 (1,200 Agremiados CANACO)</option>
+                  <option value="futura_us_investors">futura_us_investors (Inversionistas Futura Capital)</option>
+                </select>
+              </div>
+              <button onclick="dispararCampañaCohorte()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors shadow-lg shadow-purple-600/20">
+                <i data-lucide="rocket" class="w-3.5 h-3.5"></i> Disparar Lote Masivo
+              </button>
+            </div>
+
+            <!-- Previsualizador HTML en Vivo -->
+            <div class="flex-1 flex flex-col border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
+              <div class="px-3 py-1.5 border-b border-slate-800 text-[11px] font-mono text-slate-500 flex items-center justify-between">
+                <span>PREVIEW EN VIVO DEL CORREO</span>
+                <span id="emailPreviewSubject" class="text-slate-400 truncate max-w-xs">Asunto cargando...</span>
+              </div>
+              <div class="flex-1 min-h-[220px] max-h-[280px] overflow-y-auto bg-slate-950 p-2">
+                <iframe id="emailPreviewFrame" class="w-full h-[360px] border-0 rounded bg-white"></iframe>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Sección 3: Multi-Tenant & Cohortes -->
+      <div class="grid md:grid-cols-2 gap-4">
         <!-- Multi-Tenant -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <h3 class="font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="layers" class="w-4 h-4 text-ark-amber_hi"></i> Tenants Activos</h3>
@@ -495,15 +641,6 @@ tailwind.config = {
               <i data-lucide="printer" class="w-3.5 h-3.5"></i> Imprimir
             </button>
           </div>
-        </div>
-
-        <!-- Motor Resend & Plantillas -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <h3 class="font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="mail" class="w-4 h-4 text-ark-emerald_hi"></i> Plantillas de Correo</h3>
-          <p class="text-xs text-slate-400 mb-3">Plantilla activa: <code class="font-mono text-xs bg-slate-800 px-1 rounded text-ark-emerald_hi">tmpl_ark_ledger_invitacion_despachos</code></p>
-          <button onclick="abrirModalPlantilla()" class="w-full bg-ark-indigo/15 border border-ark-indigo/30 text-ark-indigo_hi text-sm py-2 rounded-lg hover:bg-ark-indigo/25 transition-colors font-medium">
-            Ver plantilla y variables
-          </button>
         </div>
       </div>
     </section>
@@ -1376,6 +1513,7 @@ document.querySelectorAll('.tf-btn').forEach(btn => {
 
 // ── SUPERADMIN VIEW (GOVERNANCE & TEAM) ──
 async function renderSuperadmin() {
+  loadTemplatesForConsole();
   await loadUsers();
   const users = state.users || [];
   document.getElementById('usersCountBadge').textContent = \`\${users.length} colaboradores activos\`;
@@ -1681,4 +1819,234 @@ initUser().then(() => refreshData());
 </script>
 </body>
 </html>`;
+}
+
+
+// ── CENTRAL DE COMUNICACIONES (SOFTPHONE TELNYX & MAILING RESEND) ──
+let cachedTemplates = [];
+let softphoneCallTimer = null;
+let softphoneSeconds = 0;
+
+function softphonePress(digit) {
+  const input = document.getElementById('softphonePhoneInput');
+  if (input) input.value = (input.value || '') + digit;
+}
+
+function softphoneClear() {
+  const input = document.getElementById('softphonePhoneInput');
+  if (input) input.value = '';
+}
+
+function onSoftphoneSpeechChange() {
+  const mode = document.getElementById('softphoneSpeechMode').value;
+  const customBox = document.getElementById('softphoneCustomTextBox');
+  if (customBox) {
+    if (mode === 'custom') customBox.classList.remove('hidden');
+    else customBox.classList.add('hidden');
+  }
+}
+
+async function iniciarLlamadaSoftphone() {
+  const input = document.getElementById('softphonePhoneInput');
+  const phone = (input?.value || '').trim();
+  if (!phone || phone.length < 10) {
+    toast('⚠️ Ingresa un número telefónico válido (mínimo 10 dígitos)');
+    return;
+  }
+
+  const mode = document.getElementById('softphoneSpeechMode').value;
+  const customText = (document.getElementById('softphoneCustomText')?.value || '').trim();
+
+  let message = null;
+  let industry = 'general';
+  if (mode === 'demo_60s') {
+    industry = 'general';
+  } else if (mode === 'gancho_30dias') {
+    industry = 'ecommerce';
+    message = 'Hola, te contactamos de ARK Systems para notificarte que tu entorno comercial en la nube ya está preconfigurado con 30 días de cortesía total para tu negocio. Puedes activar tu catálogo en línea y recibir pedidos directos en WhatsApp sin costo ni tarjeta de crédito.';
+  } else if (mode === 'fiscal_despachos') {
+    industry = 'fiscal';
+    message = 'Hola, te saludamos del equipo fiscal de ARK Systems. Recibimos tu interés para el timbrado CFDI 4.0 y papeles de trabajo oficiales con sello criptográfico inmutable SHA-256 para tu despacho. Un asesor especializado te contactará en breve para habilitar tus 20 calculadoras fiscales sin costo.';
+  } else if (mode === 'custom' && customText) {
+    message = customText;
+  }
+
+  const statusLabel = document.getElementById('softphoneStatusLabel');
+  const dot = document.getElementById('softphoneDot');
+  const callBtn = document.getElementById('softphoneCallBtn');
+
+  statusLabel.textContent = 'Marcando vía Telnyx...';
+  dot.className = 'inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping';
+  callBtn.disabled = true;
+
+  try {
+    const res = await apiCall('/api/superadmin/voice/call', 'POST', {
+      to: phone,
+      despacho_nombre: 'Prospecto ARK',
+      message,
+      industry
+    });
+
+    if (res && res.error) {
+      toast('⚠️ ' + (res.message || res.error));
+      statusLabel.textContent = 'Error al conectar';
+      dot.className = 'inline-block w-1.5 h-1.5 rounded-full bg-rose-500';
+      callBtn.disabled = false;
+      return;
+    }
+
+    toast('📞 Llamada disparada exitosamente (' + (res.simulated ? 'Modo Simulado' : 'Telnyx PSTN') + ')');
+    statusLabel.textContent = 'En curso · ' + (res.call_control_id || 'ID activo');
+    dot.className = 'inline-block w-1.5 h-1.5 rounded-full bg-emerald-400';
+    
+    softphoneSeconds = 0;
+    if (softphoneCallTimer) clearInterval(softphoneCallTimer);
+    softphoneCallTimer = setInterval(() => {
+      softphoneSeconds++;
+      const m = String(Math.floor(softphoneSeconds / 60)).padStart(2, '0');
+      const s = String(softphoneSeconds % 60).padStart(2, '0');
+      statusLabel.textContent = 'En llamada · ' + m + ':' + s;
+    }, 1000);
+
+  } catch(e) {
+    toast('Error comunicando con Telnyx');
+    statusLabel.textContent = 'Falla de conexión';
+    dot.className = 'inline-block w-1.5 h-1.5 rounded-full bg-rose-500';
+  } finally {
+    callBtn.disabled = false;
+  }
+}
+
+function colgarSoftphone() {
+  if (softphoneCallTimer) {
+    clearInterval(softphoneCallTimer);
+    softphoneCallTimer = null;
+  }
+  const statusLabel = document.getElementById('softphoneStatusLabel');
+  const dot = document.getElementById('softphoneDot');
+  if (statusLabel) statusLabel.textContent = 'Llamada finalizada · Listo';
+  if (dot) dot.className = 'inline-block w-1.5 h-1.5 rounded-full bg-slate-500';
+  toast('Llamada finalizada');
+}
+
+function setEmailDispatchMode(mode) {
+  const singleBtn = document.getElementById('emailModeSingleBtn');
+  const cohortBtn = document.getElementById('emailModeCohortBtn');
+  const singleForm = document.getElementById('emailFormSingle');
+  const cohortForm = document.getElementById('emailFormCohort');
+
+  if (mode === 'single') {
+    singleBtn.className = 'flex-1 py-1.5 text-xs font-medium rounded-md bg-ark-blue text-white transition-all';
+    cohortBtn.className = 'flex-1 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white transition-all';
+    singleForm.classList.remove('hidden');
+    cohortForm.classList.add('hidden');
+  } else {
+    cohortBtn.className = 'flex-1 py-1.5 text-xs font-medium rounded-md bg-ark-blue text-white transition-all';
+    singleBtn.className = 'flex-1 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white transition-all';
+    cohortForm.classList.remove('hidden');
+    singleForm.classList.add('hidden');
+  }
+}
+
+async function loadTemplatesForConsole() {
+  try {
+    const res = await apiCall('/api/superadmin/templates');
+    if (res && res.templates) {
+      cachedTemplates = res.templates;
+      const select = document.getElementById('emailConsoleTemplateSelect');
+      if (select && cachedTemplates.length) {
+        select.innerHTML = cachedTemplates.map(t => `<option value="${t.slug}">${t.name}</option>`).join('');
+      }
+    }
+  } catch(e) {
+    console.warn('Error loading templates:', e);
+  }
+  onTemplateSelectChange();
+}
+
+function onTemplateSelectChange() {
+  const select = document.getElementById('emailConsoleTemplateSelect');
+  const slug = select ? select.value : 'gancho_landing_30dias';
+  const tmpl = cachedTemplates.find(t => t.slug === slug || t.id === slug);
+
+  const subjectLabel = document.getElementById('emailPreviewSubject');
+  const frame = document.getElementById('emailPreviewFrame');
+
+  const sampleName = document.getElementById('emailTargetName')?.value || 'Lic. Roberto Morales';
+  const sampleCompany = document.getElementById('emailTargetCompany')?.value || 'Despacho & Asociados';
+
+  if (tmpl) {
+    let html = tmpl.html_content || '';
+    let subject = tmpl.subject || '';
+    html = html.replace(/{{nombre}}/g, sampleName)
+               .replace(/{{empresa}}/g, sampleCompany)
+               .replace(/{{link_activacion}}/g, 'https://sales.arksystems.site/alta-comercio?ref=asesor')
+               .replace(/{{unsubscribe_url}}/g, 'https://sales.arksystems.site/dnc');
+    subject = subject.replace(/{{nombre}}/g, sampleName).replace(/{{empresa}}/g, sampleCompany);
+    if (subjectLabel) subjectLabel.textContent = subject;
+    if (frame) frame.srcdoc = html;
+  }
+}
+
+async function dispararCorreoIndividual() {
+  const select = document.getElementById('emailConsoleTemplateSelect');
+  const slug = select ? select.value : 'gancho_landing_30dias';
+  const to = (document.getElementById('emailTargetAddress')?.value || '').trim();
+  const nombre = (document.getElementById('emailTargetName')?.value || 'Prospecto').trim();
+  const empresa = (document.getElementById('emailTargetCompany')?.value || 'Empresa').trim();
+
+  if (!to || !to.includes('@')) {
+    toast('⚠️ Ingresa un correo electrónico válido');
+    return;
+  }
+
+  const tmpl = cachedTemplates.find(t => t.slug === slug || t.id === slug);
+  const templateId = tmpl ? tmpl.id : slug;
+
+  try {
+    const res = await apiCall(`/api/superadmin/templates/${templateId}/send`, 'POST', {
+      to,
+      recipient_name: nombre,
+      variables: {
+        nombre,
+        empresa,
+        link_activacion: 'https://sales.arksystems.site/alta-comercio?ref=superadmin',
+        unsubscribe_url: 'https://sales.arksystems.site/dnc'
+      }
+    });
+
+    if (res && res.error) {
+      toast('⚠️ ' + (res.details || res.error));
+      return;
+    }
+
+    toast('✉️ Correo disparado con éxito a ' + to);
+  } catch(e) {
+    toast('Error al disparar correo con Resend');
+  }
+}
+
+async function dispararCampañaCohorte() {
+  const cohortId = document.getElementById('emailCohortSelect').value;
+  const select = document.getElementById('emailConsoleTemplateSelect');
+  const slug = select ? select.value : 'gancho_landing_30dias';
+  const tmpl = cachedTemplates.find(t => t.slug === slug || t.id === slug);
+  const templateId = tmpl ? tmpl.id : slug;
+
+  if (!confirm('¿Deseas disparar la campaña masiva a la cohorte ' + cohortId + '?')) return;
+
+  try {
+    const res = await apiCall(`/api/superadmin/cohorts/${cohortId}/launch-email`, 'POST', {
+      template_id: templateId
+    });
+
+    if (res && res.error) {
+      toast('⚠️ ' + (res.details || res.error));
+      return;
+    }
+
+    toast('🚀 Campaña masiva encolada: ' + (res.total_targets || 0) + ' destinatarios procesados');
+  } catch(e) {
+    toast('Error al disparar campaña por cohorte');
+  }
 }
