@@ -65,7 +65,7 @@ INSERT OR REPLACE INTO email_templates (
   'acc_ark_ledger',
   'Ark Ledger · Invitación Oficial a Despacho Contable (20 Herramientas DOF)',
   'invitacion_despacho_ark_ledger',
-  'prospeccion',
+  'propuesta',
   'Herramientas DOF y Papeles de Trabajo 2026 para {{despacho_nombre}} — Acceso Despacho',
   '<!DOCTYPE html>
 <html lang="es">
