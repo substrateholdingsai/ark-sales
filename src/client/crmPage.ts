@@ -374,24 +374,29 @@ tailwind.config = {
 
     <!-- ═══════ VISTA: CONTACTOS ═══════ -->
     <section id="vista-contactos" class="p-6 space-y-4 hidden">
-      <div class="flex items-center justify-between">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 class="text-xl font-bold text-white">Contactos Clave</h1>
-          <p class="text-xs text-slate-400">Tomadores de decisión y contactos directos</p>
+          <p id="contactosSub" class="text-xs text-slate-400">Tomadores de decisión y contactos directos</p>
         </div>
-        <button onclick="abrirModalNuevoContacto()" class="flex items-center gap-2 bg-ark-emerald text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-ark-emerald/80 transition-colors">
-          <i data-lucide="plus" class="w-4 h-4"></i> Nuevo contacto
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="abrirModalNuevoContacto()" class="flex items-center gap-2 bg-ark-emerald text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-ark-emerald/80 transition-colors">
+            <i data-lucide="plus" class="w-4 h-4"></i> Nuevo contacto
+          </button>
+          <button onclick="exportarContactosCSV()" class="flex items-center gap-2 border border-slate-700 text-slate-300 text-sm px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">
+            <i data-lucide="download" class="w-4 h-4"></i> CSV
+          </button>
+        </div>
       </div>
       <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider">
               <th class="px-4 py-3">Nombre</th>
-              <th class="px-4 py-3">Cuenta</th>
+              <th class="px-4 py-3">Cuenta / Empresa</th>
               <th class="px-4 py-3">Email</th>
               <th class="px-4 py-3">Teléfono</th>
-              <th class="px-4 py-3">Acciones</th>
+              <th class="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody id="contactosBody" class="divide-y divide-slate-800/50"></tbody>
@@ -897,6 +902,28 @@ Equipo Comercial ARK Systems
   </div>
 </div>
 
+<!-- ═══════════════ MODAL CONFIRMAR ELIMINACIÓN ═══════════════ -->
+<div id="modalConfirmar" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalConfirmar()"></div>
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl z-10 space-y-4">
+    <div class="flex items-start gap-3">
+      <div class="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <i data-lucide="trash-2" class="w-5 h-5 text-rose-400"></i>
+      </div>
+      <div>
+        <h3 id="modalConfirmarTitulo" class="text-base font-bold text-white">¿Confirmar eliminación?</h3>
+        <p id="modalConfirmarMensaje" class="text-xs text-slate-400 mt-1">Esta acción es permanente y no se puede revertir.</p>
+      </div>
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/80">
+      <button type="button" onclick="cerrarModalConfirmar()" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">Cancelar</button>
+      <button type="button" id="btnConfirmarEliminar" class="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Eliminar definitivamente
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════ TOAST ═══════════════ -->
 <div id="toast" class="fixed bottom-5 right-5 z-50 hidden bg-slate-800 border border-slate-700 text-slate-100 px-4 py-2.5 rounded-xl shadow-2xl text-xs font-medium toast-in flex items-center gap-2"></div>
 
@@ -1063,7 +1090,7 @@ async function loadOpportunities() {
 
 async function loadContacts() {
   try {
-    const data = await apiCall('/api/crm/contacts?limit=200');
+    const data = await apiCall('/api/crm/contacts?limit=1000');
     if (data && data.items) state.contacts = data.items;
   } catch (e) { console.error('loadContacts error:', e); }
 }
@@ -1312,7 +1339,16 @@ function filtrarCuentas() {
       <td class="px-4 py-3 font-mono text-xs text-slate-400">\${a.harvest_source || a.origin || 'denue'}</td>
       <td class="px-4 py-3"><span class="badge \${isFutura ? 'badge-indigo' : 'badge-azul'}">\${isFutura ? 'Futura Capital' : 'Ark Ledger'}</span></td>
       <td class="px-4 py-3 text-xs text-slate-400">\${a.city || 'Mérida'}</td>
-      <td class="px-4 py-3 text-right"><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 inline"></i></td>
+      <td class="px-4 py-3 text-right" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-end gap-1">
+          <button onclick="eliminarCuentaRow(event, '\${a.id}')" class="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" title="Eliminar cuenta">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+          <button onclick="abrirModalCuenta('\${a.id}')" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-slate-300 transition-colors" title="Ver detalle">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </td>
     </tr>\`;
       }).join('');
 
@@ -1339,7 +1375,12 @@ async function abrirModalCuenta(id) {
           <h2 class="text-lg font-bold text-white">\${account.name}</h2>
           <span class="text-xs font-mono text-slate-500">\${account.id}</span>
         </div>
-        <button onclick="cerrarModalCuenta()" class="p-2 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div class="flex items-center gap-2">
+          <button onclick="confirmarEliminarCuenta('\${account.id}', '\${(account.name||'').replace(/'/g, '\\\\\\'')}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold transition-colors" title="Eliminar cuenta">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Eliminar
+          </button>
+          <button onclick="cerrarModalCuenta()" class="p-2 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
       </div>
 
       <div class="space-y-5">
@@ -1373,7 +1414,12 @@ async function abrirModalCuenta(id) {
                 <div class="text-sm text-white font-medium">\${c.name || 'Sin nombre'}</div>
                 <div class="font-mono text-xs text-slate-400">\${c.phone || 'Sin tel'}</div>
               </div>
-              <span class="text-xs text-slate-400 font-mono">\${c.email || 'Sin email'}</span>
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-slate-400 font-mono">\${c.email || 'Sin email'}</span>
+                <button onclick="eliminarContactoModal(event, '\${c.id}', '\${account.id}')" class="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" title="Eliminar contacto">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
             </div>\`).join('') : '<p class="text-xs text-slate-500 bg-slate-800/20 p-3 rounded-lg">Sin contactos directos todavía</p>'}
         </div>
 
@@ -1417,21 +1463,25 @@ async function renderContactos() {
   const body = document.getElementById('contactosBody');
   const contacts = state.contacts || [];
 
+  const sub = document.getElementById('contactosSub');
+  if (sub) sub.textContent = \`\${contacts.length} contactos registrados\`;
+
   body.innerHTML = contacts.length === 0
     ? '<tr><td colspan="5" class="p-6 text-center text-slate-500 text-sm">Sin contactos registrados. Haz clic en "+ Nuevo contacto" para dar de alta uno.</td></tr>'
     : contacts.map(c => {
         const acc = state.accounts.find(a => a.id === c.account_id);
-        const cuentaNombre = acc ? acc.name : (c.account_id ? 'Cuenta ' + c.account_id.slice(0,8) : '-');
+        const cuentaNombre = c.account_name || (acc ? acc.name : (c.account_id ? 'Cuenta ' + c.account_id.slice(0,8) : '-'));
         return \`
         <tr class="hover:bg-slate-800/30 transition-colors">
           <td class="px-4 py-3 font-medium text-white">\${c.name || 'Sin nombre'}</td>
           <td class="px-4 py-3 text-slate-400">\${cuentaNombre}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.email || '-'}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.phone || '-'}</td>
-          <td class="px-4 py-3">
-            <div class="flex gap-2">
+          <td class="px-4 py-3 text-right">
+            <div class="flex items-center justify-end gap-2">
               <button onclick="accionLlamar('\${c.phone}')" class="p-1.5 rounded-lg bg-ark-emerald/10 text-ark-emerald_hi hover:bg-ark-emerald/20 transition-colors" title="Llamada IA"><i data-lucide="phone" class="w-4 h-4"></i></button>
               <button onclick="accionEmail('\${c.email}')" class="p-1.5 rounded-lg bg-ark-blue/10 text-ark-blue_hi hover:bg-ark-blue/20 transition-colors" title="Enviar correo"><i data-lucide="mail" class="w-4 h-4"></i></button>
+              <button onclick="eliminarContactoRow(event, '\${c.id}')" class="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors" title="Eliminar contacto"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
             </div>
           </td>
         </tr>\`;
@@ -1757,11 +1807,138 @@ function descargarCSV(nombreArchivo, contenido) {
 }
 
 function exportarCuentasCSV() {
-  const encabezados = 'id,nombre,scian,tamano,fuente,tenant,ciudad\\n';
-  const filas = (state.accounts || []).map(a => 
-    \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||''}","\${a.size||'1-5'}","\${a.harvest_source||a.origin||'denue'}","\${getAccountTenant(a)}","\${a.city||'Mérida'}"\`
-  ).join('\\n');
+  const contactMap = {};
+  (state.contacts || []).forEach(c => {
+    if (c.account_id) {
+      if (!contactMap[c.account_id]) contactMap[c.account_id] = [];
+      contactMap[c.account_id].push(c);
+    }
+  });
+
+  const encabezados = 'id,nombre,scian,tamano,fuente,tenant,ciudad,total_contactos,contacto_principal,telefono_principal,email_principal\\n';
+  const filas = (state.accounts || []).map(a => {
+    const cts = contactMap[a.id] || [];
+    const p = cts[0] || {};
+    return \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||''}","\${a.size||'1-5'}","\${a.harvest_source||a.origin||'denue'}","\${getAccountTenant(a)}","\${a.city||'Mérida'}","\${cts.length}","\${(p.name||'').replace(/"/g, '""')}","\${(p.phone||'').replace(/"/g, '""')}","\${(p.email||'').replace(/"/g, '""')}"\`;
+  }).join('\\n');
   descargarCSV('cuentas_ark_crm.csv', encabezados + filas);
+}
+
+async function exportarContactosCSV() {
+  let contacts = state.contacts || [];
+  if (!contacts.length) {
+    try {
+      const data = await apiCall('/api/crm/contacts?limit=5000');
+      if (data && data.items) {
+        state.contacts = data.items;
+        contacts = data.items;
+      }
+    } catch(e) {
+      console.warn('Error cargando contactos para exportación:', e);
+    }
+  }
+
+  if (!contacts.length) {
+    toast('No hay contactos registrados para exportar');
+    return;
+  }
+
+  const accMap = {};
+  (state.accounts || []).forEach(a => { accMap[a.id] = a; });
+
+  const encabezados = 'id,nombre,puesto,email,telefono,cuenta_id,cuenta_nombre,ciudad,tenant,consentimiento,fecha_creacion\\n';
+  const filas = contacts.map(c => {
+    const acc = accMap[c.account_id] || {};
+    const accName = c.account_name || acc.name || '';
+    const accCity = c.account_city || acc.city || 'Mérida';
+    const accTenant = acc.id ? getAccountTenant(acc) : '';
+    return \`"\${c.id}","\${(c.name||'').replace(/"/g, '""')}","\${(c.title||'').replace(/"/g, '""')}","\${(c.email||'').replace(/"/g, '""')}","\${(c.phone||'').replace(/"/g, '""')}","\${c.account_id||''}","\${accName.replace(/"/g, '""')}","\${accCity.replace(/"/g, '""')}","\${accTenant}","\${c.consent_status||'opt_in'}","\${c.created_at||''}"\`;
+  }).join('\\n');
+
+  descargarCSV('contactos_ark_crm.csv', encabezados + filas);
+}
+
+// ── CONFIRMACIÓN Y ELIMINACIÓN ──
+let _accionConfirmar = null;
+
+function abrirConfirmacion(titulo, mensaje, onConfirm) {
+  document.getElementById('modalConfirmarTitulo').textContent = titulo;
+  document.getElementById('modalConfirmarMensaje').textContent = mensaje;
+  _accionConfirmar = onConfirm;
+  document.getElementById('modalConfirmar').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function cerrarModalConfirmar() {
+  document.getElementById('modalConfirmar').classList.add('hidden');
+  _accionConfirmar = null;
+}
+
+const btnConfElim = document.getElementById('btnConfirmarEliminar');
+if (btnConfElim) {
+  btnConfElim.onclick = async () => {
+    if (_accionConfirmar) {
+      const fn = _accionConfirmar;
+      cerrarModalConfirmar();
+      await fn();
+    }
+  };
+}
+
+function confirmarEliminarCuenta(id, nombre) {
+  abrirConfirmacion(
+    '¿Eliminar cuenta "' + nombre + '"?',
+    'Esta acción eliminará la cuenta y desvinculará sus contactos y actividades asociadas de forma permanente.',
+    async () => {
+      try {
+        await apiCall('/api/crm/accounts/' + id, 'DELETE');
+        state.accounts = state.accounts.filter(a => a.id !== id);
+        cerrarModalCuenta();
+        filtrarCuentas();
+        toast('Cuenta eliminada con éxito');
+      } catch(err) {
+        toast('Error al eliminar cuenta: ' + (err.message || 'Error'));
+      }
+    }
+  );
+}
+
+function eliminarCuentaRow(e, id) {
+  e.stopPropagation();
+  const a = state.accounts.find(x => x.id === id);
+  confirmarEliminarCuenta(id, a ? a.name : 'esta cuenta');
+}
+
+function confirmarEliminarContacto(id, nombre, modalAccountId) {
+  abrirConfirmacion(
+    '¿Eliminar contacto "' + (nombre || 'este contacto') + '"?',
+    'Esta acción eliminará al contacto de forma permanente.',
+    async () => {
+      try {
+        await apiCall('/api/crm/contacts/' + id, 'DELETE');
+        state.contacts = state.contacts.filter(c => c.id !== id);
+        renderContactos();
+        if (modalAccountId) {
+          abrirModalCuenta(modalAccountId);
+        }
+        toast('Contacto eliminado con éxito');
+      } catch(err) {
+        toast('Error al eliminar contacto: ' + (err.message || 'Error'));
+      }
+    }
+  );
+}
+
+function eliminarContactoRow(e, id) {
+  e.stopPropagation();
+  const c = state.contacts.find(x => x.id === id);
+  confirmarEliminarContacto(id, c ? c.name : 'este contacto');
+}
+
+function eliminarContactoModal(e, id, accountId) {
+  e.stopPropagation();
+  const c = state.contacts.find(x => x.id === id);
+  confirmarEliminarContacto(id, c ? c.name : 'este contacto', accountId);
 }
 
 function exportarCohorteCSV() {
@@ -2054,7 +2231,7 @@ async function dispararCampañaCohorte() {
   } catch(e) {
     toast('Error al disparar campaña por cohorte');
   }
-}
+}
 </script>
 </body>
 </html>`;

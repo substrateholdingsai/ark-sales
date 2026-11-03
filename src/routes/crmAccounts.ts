@@ -283,3 +283,35 @@ crmAccountsRouter.post("/:id/merge", requireRole("admin"), async (c) => {
     return c.json({ error: err.message || "Error fusionando cuentas" }, 400);
   }
 });
+
+// Delete account
+crmAccountsRouter.delete("/:id", requireRole("write"), async (c) => {
+  try {
+    const id = c.req.param("id");
+    const existing: any = await c.env.DB.prepare("SELECT * FROM sales_accounts WHERE id = ?").bind(id).first();
+    if (!existing) return c.json({ error: "Cuenta no encontrada." }, 404);
+
+    // Clean up dependent records to guarantee consistency
+    await c.env.DB.prepare("DELETE FROM sales_activities WHERE account_id = ?").bind(id).run();
+    await c.env.DB.prepare("DELETE FROM sales_tasks WHERE account_id = ?").bind(id).run();
+    await c.env.DB.prepare("DELETE FROM sales_opportunities WHERE account_id = ?").bind(id).run();
+    await c.env.DB.prepare("DELETE FROM sales_contacts WHERE account_id = ?").bind(id).run();
+    await c.env.DB.prepare("UPDATE sales_leads SET account_id = NULL WHERE account_id = ?").bind(id).run();
+    await c.env.DB.prepare("DELETE FROM sales_accounts WHERE id = ?").bind(id).run();
+
+    const audit = new AuditService(c.env.DB);
+    await audit.record({
+      actor_user_id: c.get("user")!.sub,
+      actor_email: c.get("user")!.email,
+      action: "crm.account_deleted",
+      entity_type: "account",
+      entity_id: id,
+      metadata: { name: existing.name },
+      ip: clientIp(c),
+    });
+
+    return c.json({ success: true, id, message: `Cuenta "${existing.name}" eliminada correctamente.` });
+  } catch (err: any) {
+    return c.json({ error: err.message || "Error eliminando cuenta" }, 400);
+  }
+});

@@ -8,7 +8,7 @@ export const crmContactsRouter = new Hono<{ Bindings: Env; Variables: AuthVariab
 crmContactsRouter.use("*", requireAuth());
 
 function parsePagination(c: any) {
-  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "20", 10) || 20, 1), 100);
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "20", 10) || 20, 1), 5000);
   const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
   return { limit, offset };
 }
@@ -17,16 +17,30 @@ crmContactsRouter.get("/", async (c) => {
   const { limit, offset } = parsePagination(c);
   const accountId = c.req.query("account_id");
   const q = (c.req.query("q") || "").trim();
-  let sql = "SELECT * FROM sales_contacts WHERE 1=1";
+  let sql = `
+    SELECT c.*, a.name AS account_name, a.city AS account_city, a.origin AS account_origin, a.scian_code AS account_scian
+    FROM sales_contacts c
+    LEFT JOIN sales_accounts a ON c.account_id = a.id
+    WHERE 1=1
+  `;
   const params: any[] = [];
-  if (accountId) { sql += " AND account_id = ?"; params.push(accountId); }
-  if (q) { sql += " AND (name LIKE ? OR email LIKE ?)"; params.push(`%${q}%`, `%${q}%`); }
-  sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+  if (accountId) { sql += " AND c.account_id = ?"; params.push(accountId); }
+  if (q) { sql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ?)"; params.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  sql += " ORDER BY c.created_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
   const stmt = c.env.DB.prepare(sql);
   const bound = params.length ? stmt.bind(...params) : stmt;
   const { results } = await bound.all();
-  return c.json({ items: results || [], limit, offset });
+
+  let countSql = "SELECT COUNT(*) as n FROM sales_contacts c WHERE 1=1";
+  const cparams: any[] = [];
+  if (accountId) { countSql += " AND c.account_id = ?"; cparams.push(accountId); }
+  if (q) { countSql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ?)"; cparams.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  const countStmt = c.env.DB.prepare(countSql);
+  const countBound = cparams.length ? countStmt.bind(...cparams) : countStmt;
+  const countRow: any = await countBound.first();
+
+  return c.json({ items: results || [], total: countRow?.n ?? (results?.length ?? 0), limit, offset });
 });
 
 crmContactsRouter.get("/:id", async (c) => {
@@ -113,5 +127,34 @@ crmContactsRouter.patch("/:id", requireRole("write"), async (c) => {
     return c.json({ contact });
   } catch (err: any) {
     return c.json({ error: err.message || "Error actualizando contacto" }, 400);
+  }
+});
+
+// Delete contact
+crmContactsRouter.delete("/:id", requireRole("write"), async (c) => {
+  try {
+    const id = c.req.param("id");
+    const existing: any = await c.env.DB.prepare("SELECT * FROM sales_contacts WHERE id = ?").bind(id).first();
+    if (!existing) return c.json({ error: "Contacto no encontrado." }, 404);
+
+    await c.env.DB.prepare("UPDATE sales_leads SET contact_id = NULL WHERE contact_id = ?").bind(id).run();
+    await c.env.DB.prepare("UPDATE sales_opportunities SET contact_id = NULL WHERE contact_id = ?").bind(id).run();
+    await c.env.DB.prepare("UPDATE sales_activities SET contact_id = NULL WHERE contact_id = ?").bind(id).run();
+    await c.env.DB.prepare("DELETE FROM sales_contacts WHERE id = ?").bind(id).run();
+
+    const audit = new AuditService(c.env.DB);
+    await audit.record({
+      actor_user_id: c.get("user")!.sub,
+      actor_email: c.get("user")!.email,
+      action: "crm.contact_deleted",
+      entity_type: "contact",
+      entity_id: id,
+      metadata: { name: existing.name, account_id: existing.account_id },
+      ip: clientIp(c),
+    });
+
+    return c.json({ success: true, id, message: `Contacto "${existing.name || id}" eliminado correctamente.` });
+  } catch (err: any) {
+    return c.json({ error: err.message || "Error eliminando contacto" }, 400);
   }
 });
