@@ -193,7 +193,7 @@ crmOpportunitiesRouter.patch("/:id", requireRole("write"), async (c) => {
 });
 
 // Convenience stage endpoint
-crmOpportunitiesRouter.post("/:id/stage", requireRole("write"), async (c) => {
+const handleStageUpdate = async (c: any) => {
   try {
     const id = c.req.param("id");
     const body = await c.req.json();
@@ -263,4 +263,6 @@ crmOpportunitiesRouter.post("/:id/stage", requireRole("write"), async (c) => {
   } catch (err: any) {
     return c.json({ error: err.message || "Error cambiando etapa" }, 400);
   }
-});
+};
+crmOpportunitiesRouter.post("/:id/stage", requireRole("write"), handleStageUpdate);
+crmOpportunitiesRouter.patch("/:id/stage", requireRole("write"), handleStageUpdate);

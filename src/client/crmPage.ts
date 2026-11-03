@@ -139,627 +139,1355 @@ body{font-family:'Inter',sans-serif;background-color:#020617;color:#f8fafc}
 
 export function renderCrmHtml(): string {
   return `<!DOCTYPE html>
-<html lang="es-MX">
+<html lang="es-MX" class="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ARK CRM · Pipeline</title>
+<title>ARK CRM · Sales Operations</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23020617'/%3E%3Cg transform='translate(32 30)'%3E%3Cpath d='M0,-14 L12,-7 L12,7 L0,14 L-12,7 L-12,-7 Z' fill='none' stroke='%2360a5fa' stroke-width='2.5'/%3E%3Ccircle r='3' fill='%23fbbf24'/%3E%3C/g%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        slate: { 950: '#020617', 900: '#0f172a', 850: '#111827', 800: '#1e293b', 700: '#334155', 600: '#475569', 500: '#64748b', 400: '#94a3b8', 300: '#cbd5e1', 200: '#e2e8f0' },
+        ark: { blue: '#2563eb', blue_hi: '#60a5fa', amber: '#d97706', amber_hi: '#fbbf24', emerald: '#059669', emerald_hi: '#34d399', rose: '#e11d48', rose_hi: '#fb7185', indigo: '#4f46e5', indigo_hi: '#a78bfa' }
+      },
+      fontFamily: { body: ['Inter','system-ui','sans-serif'], mono: ['"JetBrains Mono"','monospace'] },
+    }
+  }
+}
+</script>
 <script src="https://unpkg.com/lucide@latest"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <style>
-body{font-family:'Inter',sans-serif;background-color:#020617;color:#f8fafc}
-.font-mono{font-family:'JetBrains Mono',monospace}
-.glass-panel{background:rgba(15,23,42,0.6);backdrop-filter:blur(12px);border:1px solid rgba(51,65,85,0.5)}
-.grid-bg{background-image:linear-gradient(rgba(51,65,85,0.1) 1px,transparent 1px),linear-gradient(90deg,rgba(51,65,85,0.1) 1px,transparent 1px);background-size:40px 40px}
-.kanban-col{min-height:200px}
-.card{transition:transform .1s ease}
-.card:hover{transform:translateY(-2px)}
-.modal-backdrop{background:rgba(2,6,23,0.8)}
+  * { scrollbar-width: thin; scrollbar-color: #334155 #0f172a; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #0f172a; }
+  ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  body { font-family: 'Inter', sans-serif; }
+  .font-mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  .glass { background: rgba(15,23,42,0.7); backdrop-filter: blur(12px); border: 1px solid rgba(51,65,85,0.5); }
+  .badge { display:inline-flex; align-items:center; gap:4px; padding:2px 10px; border-radius:999px; font-size:0.7rem; font-weight:600; letter-spacing:0.02em; }
+  .badge-azul { background:rgba(37,99,235,0.15); color:#60a5fa; border:1px solid rgba(37,99,235,0.3); }
+  .badge-ambar { background:rgba(217,119,6,0.15); color:#fbbf24; border:1px solid rgba(217,119,6,0.3); }
+  .badge-esmeralda { background:rgba(5,150,105,0.15); color:#34d399; border:1px solid rgba(5,150,105,0.3); }
+  .badge-rojo { background:rgba(225,29,72,0.15); color:#fb7185; border:1px solid rgba(225,29,72,0.3); }
+  .badge-indigo { background:rgba(79,70,229,0.15); color:#a78bfa; border:1px solid rgba(79,70,229,0.3); }
+  .kanban-col { min-width: 280px; max-width: 320px; }
+  .kanban-card { cursor: grab; transition: transform 0.15s, box-shadow 0.15s; }
+  .kanban-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+  .kanban-card.dragging { opacity: 0.5; transform: rotate(2deg); }
+  .kanban-col.drag-over { background: rgba(37,99,235,0.06); border-color: #2563eb; }
+  .nav-item { transition: all 0.15s; }
+  .nav-item.active { background: rgba(37,99,235,0.12); color: #60a5fa; border-right: 2px solid #2563eb; }
+  .nav-item:hover:not(.active) { background: rgba(51,65,85,0.3); }
+  @keyframes toastIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  .toast-in { animation: toastIn 0.25s ease; }
+  .modal-backdrop { transition: opacity 0.2s; }
+  .modal-content { animation: toastIn 0.2s ease; }
 </style>
 </head>
-<body class="grid-bg min-h-screen">
-  <nav class="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-      <div class="flex items-center gap-2">
-        <div class="w-7 h-7 bg-blue-600 rounded flex items-center justify-center"><i data-lucide="hexagon" class="text-white w-4 h-4"></i></div>
-        <span class="font-bold text-base tracking-tight">ARK <span class="text-slate-400 font-normal">CRM</span></span>
+
+<body class="bg-slate-950 text-slate-200 h-screen flex overflow-hidden">
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="w-[240px] bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 hidden lg:flex">
+  <div class="p-5 border-b border-slate-800">
+    <div class="flex items-center gap-3">
+      <svg width="32" height="32" viewBox="0 0 64 64">
+        <rect width="64" height="64" rx="14" fill="#020617"/>
+        <g transform="translate(32 30)">
+          <path d="M0,-14 L12,-7 L12,7 L0,14 L-12,7 L-12,-7 Z" fill="none" stroke="#60a5fa" stroke-width="2.5"/>
+          <path d="M0,-14 L0,0 M0,0 L12,7 M0,0 L-12,7" stroke="#60a5fa" stroke-width="1.5" opacity="0.5"/>
+          <circle r="3" fill="#fbbf24"/>
+        </g>
+      </svg>
+      <div>
+        <span class="font-body font-800 text-lg text-white">ARK</span><span class="font-body font-300 text-lg text-ark-blue_hi ml-1">CRM</span>
+        <div class="font-mono text-[9px] text-slate-500 tracking-widest">SALES OPS</div>
       </div>
-      <div class="flex-1 max-w-md">
-        <input id="globalSearch" placeholder="Buscar en CRM…" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500">
-      </div>
-      <div class="flex items-center gap-3 text-sm">
-        <a href="/superadmin" class="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-blue-900/60 to-indigo-900/60 border border-blue-600/40 hover:border-blue-500 rounded text-xs font-semibold text-blue-300 hover:text-white transition-all shadow-sm">
-          <i data-lucide="shield" class="w-3.5 h-3.5"></i> Super Admin
-        </a>
-        <span id="userInfo" class="text-slate-400 font-mono text-xs"></span>
-        <button id="logoutBtn" class="text-slate-300 hover:text-white text-xs">Salir</button>
-      </div>
+    </div>
+  </div>
+
+  <nav class="flex-1 py-4 space-y-1 px-3" id="sidebarNav">
+    <a href="#/dashboard" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300">
+      <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+    </a>
+    <a href="#/pipeline" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300">
+      <i data-lucide="kanban" class="w-4 h-4"></i> Pipeline
+    </a>
+    <a href="#/cuentas" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300">
+      <i data-lucide="building-2" class="w-4 h-4"></i> Cuentas
+    </a>
+    <a href="#/contactos" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300">
+      <i data-lucide="users" class="w-4 h-4"></i> Contactos
+    </a>
+    <a href="#/tareas" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300">
+      <i data-lucide="check-square" class="w-4 h-4"></i> Tareas
+      <span id="tareasBadge" class="ml-auto badge badge-rojo">0</span>
+    </a>
+    <div class="pt-4 mt-4 border-t border-slate-800">
+      <a href="#/superadmin" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300">
+        <i data-lucide="shield" class="w-4 h-4 text-ark-indigo_hi"></i> Super Admin
+      </a>
     </div>
   </nav>
 
-  <div class="max-w-7xl mx-auto px-4 py-4 flex gap-4">
-    <aside class="w-48 shrink-0">
-      <nav class="space-y-1">
-        <button data-view="dashboard" class="navbtn w-full text-left px-3 py-2 rounded-md text-sm bg-slate-800 text-white">Dashboard</button>
-        <button data-view="pipeline" class="navbtn w-full text-left px-3 py-2 rounded-md text-sm text-slate-300 hover:bg-slate-800">Pipeline</button>
-        <button data-view="accounts" class="navbtn w-full text-left px-3 py-2 rounded-md text-sm text-slate-300 hover:bg-slate-800">Cuentas</button>
-        <button data-view="contacts" class="navbtn w-full text-left px-3 py-2 rounded-md text-sm text-slate-300 hover:bg-slate-800">Contactos</button>
-        <button data-view="tasks" class="navbtn w-full text-left px-3 py-2 rounded-md text-sm text-slate-300 hover:bg-slate-800">Tareas</button>
-        <button data-view="activities" class="navbtn w-full text-left px-3 py-2 rounded-md text-sm text-slate-300 hover:bg-slate-800">Actividad</button>
-      </nav>
-      <div class="mt-6 space-y-2">
-        <button id="newAccountBtn" class="w-full bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium py-2 rounded-md">+ Nueva cuenta</button>
-        <button id="newOpportunityBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2 rounded-md">+ Nueva oportunidad</button>
-        <button id="newContactBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-2 rounded-md">+ Nuevo contacto</button>
-        <button id="inviteUserBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium py-2 rounded-md">+ Invitar usuario</button>
-        <button id="newTaskBtn" class="w-full bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium py-2 rounded-md">+ Nueva tarea</button>
+  <div class="p-4 border-t border-slate-800">
+    <div class="flex items-center gap-3">
+      <div id="userAvatarSidebar" class="w-8 h-8 rounded-full bg-ark-blue flex items-center justify-center text-white text-xs font-bold">OP</div>
+      <div class="flex-1 min-w-0">
+        <div id="userEmailSidebar" class="text-sm font-medium text-white truncate">cargando...</div>
+        <div id="userRoleSidebar" class="text-xs text-slate-500">Comercial</div>
       </div>
-    </aside>
-
-    <main class="flex-1 min-w-0">
-      <div id="view-dashboard" class="view"></div>
-      <div id="view-pipeline" class="view hidden"></div>
-      <div id="view-accounts" class="view hidden"></div>
-      <div id="view-contacts" class="view hidden"></div>
-      <div id="view-tasks" class="view hidden"></div>
-      <div id="view-activities" class="view hidden"></div>
-    </main>
+      <button onclick="logout()" class="p-1.5 rounded hover:bg-slate-800 text-slate-400" title="Cerrar sesión"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+    </div>
   </div>
+</aside>
 
-  <!-- Account detail modal -->
-  <div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
-    <div class="glass-panel rounded-xl w-full max-w-3xl max-h-[90vh] overflow-auto p-6 m-4" id="modalBody"></div>
+<!-- ═══════════════ MAIN ═══════════════ -->
+<div class="flex-1 flex flex-col overflow-hidden">
+
+  <!-- TOP BAR -->
+  <header class="glass h-14 flex items-center px-4 gap-4 shrink-0 z-30">
+    <div class="relative flex-1 max-w-md">
+      <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
+      <input id="buscadorGlobal" type="text" placeholder="Buscar cuentas, contactos, oportunidades…"
+        class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-ark-blue font-body">
+      <div id="searchResults" class="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-lg shadow-2xl overflow-hidden hidden z-50 max-h-80 overflow-y-auto"></div>
+    </div>
+
+    <div class="flex-1"></div>
+
+    <button onclick="location.hash='#/superadmin'" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-ark-indigo/15 text-ark-indigo_hi border border-ark-indigo/30 text-xs font-semibold hover:bg-ark-indigo/25 transition-colors">
+      <i data-lucide="shield" class="w-3.5 h-3.5"></i> Super Admin
+    </button>
+
+    <div class="flex items-center gap-2">
+      <div id="userAvatarTop" class="w-8 h-8 rounded-full bg-ark-blue flex items-center justify-center text-white text-xs font-bold">OP</div>
+      <button onclick="logout()" class="p-1.5 rounded hover:bg-slate-800 text-slate-400 lg:hidden" title="Salir"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+    </div>
+  </header>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="flex-1 overflow-y-auto" id="mainContent">
+
+    <!-- ═══════ VISTA: DASHBOARD ═══════ -->
+    <section id="vista-dashboard" class="p-6 space-y-6">
+      <div class="flex items-center justify-between">
+        <h1 class="text-xl font-bold text-white">Dashboard General</h1>
+        <button onclick="refreshData()" class="flex items-center gap-2 text-xs text-slate-400 hover:text-white px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg hover:border-slate-700 transition-colors">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Actualizar
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" id="kpiGrid"></div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+          <h2 class="font-semibold text-white flex items-center gap-2">
+            <i data-lucide="inbox" class="w-4 h-4 text-ark-rose_hi"></i> Bandeja de Trabajo Urgente
+          </h2>
+          <span class="badge badge-rojo" id="inboxCount">0 pendientes</span>
+        </div>
+        <div id="inboxList" class="divide-y divide-slate-800/50"></div>
+      </div>
+    </section>
+
+    <!-- ═══════ VISTA: PIPELINE KANBAN ═══════ -->
+    <section id="vista-pipeline" class="p-6 h-full flex flex-col hidden">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h1 class="text-xl font-bold text-white">Pipeline Comercial</h1>
+          <p class="text-xs text-slate-400">Arrastra tarjetas entre columnas o haz clic en la flecha para avanzar</p>
+        </div>
+        <button onclick="abrirModalNuevaOportunidad()" class="flex items-center gap-2 bg-ark-blue text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-ark-blue/80 transition-colors shadow-lg shadow-ark-blue/20">
+          <i data-lucide="plus" class="w-4 h-4"></i> Nueva oportunidad
+        </button>
+      </div>
+      <div class="flex-1 overflow-x-auto pb-4">
+        <div id="kanbanBoard" class="flex gap-4 h-full min-w-max"></div>
+      </div>
+    </section>
+
+    <!-- ═══════ VISTA: CUENTAS ═══════ -->
+    <section id="vista-cuentas" class="p-6 space-y-4 hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-bold text-white">Cuentas y Despachos</h1>
+          <p id="cuentasSub" class="text-xs text-slate-400">Directorio de prospectos y clientes calificados</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="abrirModalNuevaCuenta()" class="flex items-center gap-2 bg-ark-amber text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-ark-amber/80 transition-colors">
+            <i data-lucide="plus" class="w-4 h-4"></i> Nueva cuenta
+          </button>
+          <button onclick="exportarCuentasCSV()" class="flex items-center gap-2 border border-slate-700 text-slate-300 text-sm px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">
+            <i data-lucide="download" class="w-4 h-4"></i> CSV
+          </button>
+          <button onclick="abrirModalImportar()" class="flex items-center gap-2 border border-slate-700 text-slate-300 text-sm px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">
+            <i data-lucide="upload" class="w-4 h-4"></i> Importar
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2" id="cuentasFiltros">
+        <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue" id="filtroTamano" onchange="filtrarCuentas()">
+          <option value="">Tamaño (todos)</option>
+          <option value="1-5">1-5 empleados</option>
+          <option value="6-20">6-20 empleados</option>
+          <option value="21-50">21-50 empleados</option>
+          <option value="50+">50+ empleados</option>
+        </select>
+        <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue" id="filtroTenant" onchange="filtrarCuentas()">
+          <option value="">Tenant (todos)</option>
+          <option value="acc_ark_ledger">Ark Ledger</option>
+          <option value="acc_futura_capital">Futura Capital</option>
+        </select>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider">
+              <th class="px-4 py-3">Razón Social</th>
+              <th class="px-4 py-3">SCIAN</th>
+              <th class="px-4 py-3">Tamaño</th>
+              <th class="px-4 py-3">Fuente</th>
+              <th class="px-4 py-3">Tenant</th>
+              <th class="px-4 py-3">Ciudad</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody id="cuentasBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════ VISTA: CONTACTOS ═══════ -->
+    <section id="vista-contactos" class="p-6 space-y-4 hidden">
+      <div class="flex items-center justify-between">
+        <h1 class="text-xl font-bold text-white">Contactos Clave</h1>
+        <button onclick="abrirModalNuevoContacto()" class="flex items-center gap-2 bg-ark-emerald text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-ark-emerald/80 transition-colors">
+          <i data-lucide="plus" class="w-4 h-4"></i> Nuevo contacto
+        </button>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider">
+              <th class="px-4 py-3">Nombre</th>
+              <th class="px-4 py-3">Cuenta</th>
+              <th class="px-4 py-3">Email</th>
+              <th class="px-4 py-3">Teléfono</th>
+              <th class="px-4 py-3">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="contactosBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════ VISTA: TAREAS ═══════ -->
+    <section id="vista-tareas" class="p-6 space-y-4 hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h1 class="text-xl font-bold text-white">Tareas de Seguimiento</h1>
+        <div class="flex items-center gap-3">
+          <div class="flex gap-2" id="tareasFiltros">
+            <button data-tf="todas" class="tf-btn active text-xs font-semibold px-3 py-1.5 rounded-full bg-ark-blue/15 text-ark-blue_hi border border-ark-blue/30">Todas</button>
+            <button data-tf="vencidas" class="tf-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">Vencidas</button>
+            <button data-tf="hoy" class="tf-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">Hoy</button>
+            <button data-tf="semana" class="tf-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">Esta semana</button>
+          </div>
+          <button onclick="abrirModalNuevaTarea()" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Nueva tarea
+          </button>
+        </div>
+      </div>
+      <div id="tareasList" class="space-y-2"></div>
+    </section>
+
+    <!-- ═══════ VISTA: SUPER ADMIN ═══════ -->
+    <section id="vista-superadmin" class="p-6 space-y-6 hidden">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-ark-indigo/15 border border-ark-indigo/30 flex items-center justify-center">
+          <i data-lucide="shield" class="w-5 h-5 text-ark-indigo_hi"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold text-white">Super Admin</h1>
+          <p class="text-sm text-slate-400">Configuración institucional multi-tenant & cohortes SQL</p>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-4">
+        <!-- Selector Tenants -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="layers" class="w-4 h-4 text-ark-amber_hi"></i> Tenants Activos</h3>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-slate-700">
+              <div>
+                <span class="text-sm font-medium text-white block">Ark Ledger</span>
+                <span class="text-xs font-mono text-slate-400">acc_ark_ledger</span>
+              </div>
+              <span class="badge badge-esmeralda">Producción</span>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-slate-700">
+              <div>
+                <span class="text-sm font-medium text-white block">Futura Capital</span>
+                <span class="text-xs font-mono text-slate-400">acc_futura_capital</span>
+              </div>
+              <span class="badge badge-esmeralda">Producción</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cohortes -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="database" class="w-4 h-4 text-ark-blue_hi"></i> Cohortes DENUE</h3>
+          <p class="text-xs text-slate-400 mb-3">Cohorte <code class="text-ark-blue_hi font-mono">ark_ledger_despachos</code> con leads de despachos contables cosechados.</p>
+          <div class="flex gap-2">
+            <button onclick="exportarCohorteCSV()" class="flex-1 bg-slate-800 border border-slate-700 text-sm py-2 rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i> CSV
+            </button>
+            <button onclick="exportarCohortePDF()" class="flex-1 bg-slate-800 border border-slate-700 text-sm py-2 rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
+              <i data-lucide="printer" class="w-3.5 h-3.5"></i> Imprimir
+            </button>
+          </div>
+        </div>
+
+        <!-- Plantillas -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="mail" class="w-4 h-4 text-ark-emerald_hi"></i> Plantillas de Correo</h3>
+          <p class="text-xs text-slate-400 mb-2">Plantilla activa: <code class="font-mono text-xs bg-slate-800 px-1 rounded text-ark-emerald_hi">tmpl_ark_ledger_invitacion_despachos</code></p>
+          <button onclick="abrirModalPlantilla()" class="w-full bg-ark-indigo/15 border border-ark-indigo/30 text-ark-indigo_hi text-sm py-2 rounded-lg hover:bg-ark-indigo/25 transition-colors font-medium">
+            Ver plantilla y variables
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══════════════ MODAL CUENTA (DRAWER) ═══════════════ -->
+<div id="modalCuenta" class="fixed inset-0 z-50 hidden">
+  <div class="modal-backdrop absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="cerrarModalCuenta()"></div>
+  <div class="modal-content absolute right-0 top-0 h-full w-full max-w-lg bg-slate-900 border-l border-slate-800 overflow-y-auto">
+    <div class="p-6" id="modalCuentaContent"></div>
   </div>
+</div>
 
-  <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 border border-slate-700 text-sm px-4 py-2 rounded-md hidden"></div>
+<!-- ═══════════════ MODAL NUEVA OPORTUNIDAD ═══════════════ -->
+<div id="modalNuevaOportunidad" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalNuevaOportunidad()"></div>
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl z-10">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-white">Nueva Oportunidad</h3>
+      <button onclick="cerrarModalNuevaOportunidad()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <form id="formNuevaOportunidad" onsubmit="guardarNuevaOportunidad(event)" class="space-y-4">
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Cuenta / Despacho</label>
+        <select id="oppAccountSelect" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Nombre de la oportunidad</label>
+        <input type="text" id="oppNombreInput" placeholder="Ej. Implementación Ark Ledger Contable" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">Monto Estimado (MXN)</label>
+          <input type="number" id="oppMontoInput" value="399" min="0" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+        </div>
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">Etapa Inicial</label>
+          <select id="oppEtapaSelect" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+            <option value="nuevo">Nuevo</option>
+            <option value="contactado">Contactado</option>
+            <option value="calificado">Calificado</option>
+            <option value="demo_agendada">Demo Agendada</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Fecha estimada de cierre</label>
+        <input type="date" id="oppFechaCierreInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="cerrarModalNuevaOportunidad()" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700">Cancelar</button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-ark-blue text-white text-xs font-semibold hover:bg-ark-blue/80">Crear oportunidad</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════ MODAL NUEVA CUENTA ═══════════════ -->
+<div id="modalNuevaCuenta" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalNuevaCuenta()"></div>
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl z-10">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-white">Nueva Cuenta / Razón Social</h3>
+      <button onclick="cerrarModalNuevaCuenta()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <form id="formNuevaCuenta" onsubmit="guardarNuevaCuenta(event)" class="space-y-4">
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Razón Social</label>
+        <input type="text" id="accNombreInput" placeholder="Ej. Soluciones Fiscales Península SC" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">Ciudad</label>
+          <input type="text" id="accCiudadInput" placeholder="Mérida" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+        </div>
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">Tamaño</label>
+          <select id="accTamanoSelect" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+            <option value="1-5">1-5 empleados</option>
+            <option value="6-20">6-20 empleados</option>
+            <option value="21-50">21-50 empleados</option>
+            <option value="50+">50+ empleados</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Tenant Asignado</label>
+        <select id="accTenantSelect" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+          <option value="acc_ark_ledger">Ark Ledger (Contable / Fiscal)</option>
+          <option value="acc_futura_capital">Futura Capital</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="cerrarModalNuevaCuenta()" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700">Cancelar</button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-ark-amber text-white text-xs font-semibold hover:bg-ark-amber/80">Guardar cuenta</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════ MODAL NUEVO CONTACTO ═══════════════ -->
+<div id="modalNuevoContacto" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalNuevoContacto()"></div>
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl z-10">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-white">Nuevo Contacto</h3>
+      <button onclick="cerrarModalNuevoContacto()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <form id="formNuevoContacto" onsubmit="guardarNuevoContacto(event)" class="space-y-4">
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Cuenta</label>
+        <select id="ctAccountSelect" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Nombre Completo</label>
+        <input type="text" id="ctNombreInput" placeholder="Lic. Roberto Herrera" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">Email</label>
+          <input type="email" id="ctEmailInput" placeholder="roberto@despacho.mx" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+        </div>
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">Teléfono</label>
+          <input type="text" id="ctTelInput" placeholder="+52 999 123 4567" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="cerrarModalNuevoContacto()" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700">Cancelar</button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-ark-emerald text-white text-xs font-semibold hover:bg-ark-emerald/80">Guardar contacto</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════ MODAL NUEVA TAREA ═══════════════ -->
+<div id="modalNuevaTarea" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalNuevaTarea()"></div>
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl z-10">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-white">Nueva Tarea</h3>
+      <button onclick="cerrarModalNuevaTarea()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <form id="formNuevaTarea" onsubmit="guardarNuevaTarea(event)" class="space-y-4">
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Título de la tarea</label>
+        <input type="text" id="taskTituloInput" placeholder="Llamar a despacho para agendar demo" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div>
+        <label class="block text-xs font-mono text-slate-400 mb-1">Fecha de vencimiento</label>
+        <input type="date" id="taskFechaInput" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue">
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="cerrarModalNuevaTarea()" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700">Cancelar</button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-ark-blue text-white text-xs font-semibold hover:bg-ark-blue/80">Guardar tarea</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════ MODAL PLANTILLA EMAIL ═══════════════ -->
+<div id="modalPlantilla" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalPlantilla()"></div>
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl z-10">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h3 class="text-lg font-bold text-white">Plantilla: Invitación Despachos Ark Ledger</h3>
+        <span class="text-xs font-mono text-ark-indigo_hi">tmpl_ark_ledger_invitacion_despachos</span>
+      </div>
+      <button onclick="cerrarModalPlantilla()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="space-y-4">
+      <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-sm">
+        <div class="text-xs text-slate-400 font-mono mb-2">Asunto: Invitación exclusiva: Optimice la carga contable y fiscal de {{despacho_nombre}}</div>
+        <div class="text-slate-300 whitespace-pre-wrap leading-relaxed text-xs font-mono bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+Estimado equipo de {{despacho_nombre}},
+
+Detectamos en la región de {{ciudad}} una creciente demanda de automatización en conciliación fiscal y SAT para despachos de {{tamano}} integrantes.
+
+Ark Ledger permite integrar la facturación y validación con su stack contable existente, reduciendo tiempos manuales en hasta un 70%.
+
+¿Tendría 10 minutos esta semana para una demostración personalizada?
+
+Atentamente,
+Equipo Comercial ARK Systems
+        </div>
+      </div>
+      <div class="flex items-center justify-between text-xs text-slate-400 font-mono">
+        <span>Variables dinámicas: {{despacho_nombre}}, {{ciudad}}, {{tamano}}</span>
+        <button onclick="toast('Plantilla actualizada');cerrarModalPlantilla()" class="px-4 py-2 bg-ark-indigo text-white font-semibold rounded-lg hover:bg-ark-indigo/80">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ MODAL IMPORTAR ═══════════════ -->
+<div id="modalImportar" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalImportar()"></div>
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl z-10">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-white">Importar Cuentas</h3>
+      <button onclick="cerrarModalImportar()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="space-y-4">
+      <p class="text-xs text-slate-400">Pega un listado de razones sociales o un JSON con formato <code class="text-ark-blue_hi">[{"name":"...", "city":"..."}]</code>:</p>
+      <textarea id="importarTextarea" rows="6" placeholder="Despacho Contable ABC, Mérida&#10;Consultores Fiscales Sureste, Cancún" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-white font-mono focus:border-ark-blue"></textarea>
+      <div class="flex justify-end gap-2">
+        <button onclick="cerrarModalImportar()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold">Cancelar</button>
+        <button onclick="procesarImportarCuentas()" class="px-4 py-2 bg-ark-blue text-white rounded-lg text-xs font-semibold hover:bg-ark-blue/80">Importar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TOAST ═══════════════ -->
+<div id="toast" class="fixed bottom-5 right-5 z-50 hidden bg-slate-800 border border-slate-700 text-slate-100 px-4 py-2.5 rounded-xl shadow-2xl text-xs font-medium toast-in flex items-center gap-2"></div>
 
 <script>
+/* ARK CRM SPA — Backend Connected */
 const TOKEN = localStorage.getItem('ark_crm_token');
-const API = (p) => fetch(p, { headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' } });
-const api = {
-  get: (p) => API(p).then(r => r.json()),
-  post: (p, b) => API(p, { method:'POST', body: JSON.stringify(b||{}) }).then(r => r.json()),
-  patch: (p, b) => API(p, { method:'PATCH', body: JSON.stringify(b||{}) }).then(r => r.json()),
+if (!TOKEN) {
+  window.location.href = '/crm/login';
+}
+
+function logout() {
+  localStorage.removeItem('ark_crm_token');
+  fetch('/api/auth/logout', { method: 'POST' }).finally(() => {
+    window.location.href = '/crm/login';
+  });
+}
+
+// ── FETCH HELPER ──
+async function apiCall(endpoint, method = 'GET', body = null) {
+  const options = {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + TOKEN,
+      'Content-Type': 'application/json'
+    },
+    credentials: 'same-origin'
+  };
+  if (body) options.body = JSON.stringify(body);
+  const res = await fetch(endpoint, options);
+  if (res.status === 401) {
+    localStorage.removeItem('ark_crm_token');
+    window.location.href = '/crm/login';
+    return null;
+  }
+  return await res.json();
+}
+
+// ── ESTADO LOCAL DE DATOS ──
+let state = {
+  user: null,
+  accounts: [],
+  contacts: [],
+  opportunities: [],
+  tasks: [],
+  metrics: null,
+  inbox: []
 };
 
-function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),2500); }
+const ETAPAS = [
+  { key: "nuevo", label: "Nuevo", color: "ark-blue_hi" },
+  { key: "contactado", label: "Contactado", color: "ark-blue_hi" },
+  { key: "calificado", label: "Calificado", color: "ark-amber_hi" },
+  { key: "demo_agendada", label: "Demo Agendada", color: "ark-amber_hi" },
+  { key: "propuesta_enviada", label: "Propuesta Enviada", color: "ark-indigo_hi" },
+  { key: "negociacion", label: "Negociación", color: "ark-indigo_hi" },
+  { key: "ganado", label: "Ganado", color: "ark-emerald_hi" },
+  { key: "perdido", label: "Perdido", color: "ark-rose_hi" }
+];
 
-if (!TOKEN) { window.location.href = '/crm/login'; }
-
-async function initUser(){
-  try { const u = await api.get('/api/auth/me'); document.getElementById('userInfo').textContent = (u.user?.email||'') + ' · ' + (u.user?.role||''); } catch(e){}
-}
-initUser();
-
-document.getElementById('logoutBtn').addEventListener('click', () => { localStorage.removeItem('ark_crm_token'); window.location.href='/crm/login'; });
-
-// Navigation
-const views = ['dashboard','pipeline','accounts','contacts','tasks','activities'];
-function showView(v){
-  views.forEach(x => document.getElementById('view-'+x).classList.toggle('hidden', x!==v));
-  document.querySelectorAll('.navbtn').forEach(b => {
-    const active = b.dataset.view===v;
-    b.classList.toggle('bg-slate-800', active);
-    b.classList.toggle('text-white', active);
-    b.classList.toggle('text-slate-300', !active);
-  });
-  if (v==='dashboard') loadDashboard();
-  if (v==='pipeline') loadPipeline();
-  if (v==='accounts') loadAccounts();
-  if (v==='contacts') loadContacts();
-  if (v==='tasks') loadTasks();
-  if (v==='activities') loadActivities();
-}
-document.querySelectorAll('.navbtn').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
-
-// Dashboard
-const STAGE_LABEL_DASH = {nuevo:'Nuevo',contactado:'Contactado',calificado:'Calificado',demo_agendada:'Demo agendada',propuesta_enviada:'Propuesta enviada',negociacion:'Negociación',ganado:'Ganado',perdido:'Perdido'};
-async function loadDashboard(){
-  const el = document.getElementById('view-dashboard');
-  el.innerHTML = '<div class="text-slate-400 text-sm">Cargando métricas…</div>';
-  let metrics = null, inboxData = null;
-  try { metrics = await api.get('/api/crm/metrics'); } catch(e){ el.innerHTML='<div class="text-rose-400 text-sm">Error cargando métricas.</div>'; return; }
-  try { inboxData = await api.get('/api/crm/inbox'); } catch(e){ inboxData = {inbox:[], global_overdue_tasks:[]}; }
-  const o = metrics.opportunities;
-  const kpis = [
-    ['Oportunidades', o.total],
-    ['Ganadas', o.won],
-    ['Perdidas', o.lost],
-    ['Conversión', o.conversion_rate_percent+'%'],
-    ['Cierre prom. (días)', o.avg_time_to_close_days],
-    ['Sin próxima acción', o.open_without_next_action],
-    ['Tareas vencidas', metrics.tasks.overdue],
-    ['Cuentas', metrics.entities.accounts],
-    ['Contactos', metrics.entities.contacts],
-    ['Leads', metrics.entities.leads],
-  ];
-  let html = '<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">';
-  kpis.forEach(([label,val]) => {
-    html += '<div class="glass-panel rounded-lg p-3"><div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">'+label+'</div><div class="text-xl font-mono font-semibold">'+val+'</div></div>';
-  });
-  html += '</div>';
-
-  html += '<div class="glass-panel rounded-lg p-4 mb-6"><h3 class="text-sm font-semibold mb-3">Pipeline por etapa</h3><div class="flex flex-wrap gap-3">';
-  Object.keys(STAGE_LABEL_DASH).forEach(s => {
-    const c = (o.by_stage && o.by_stage[s]) || 0;
-    html += '<div class="flex items-center gap-2"><span class="text-xs text-slate-400">'+STAGE_LABEL_DASH[s]+'</span><span class="font-mono text-sm text-amber-400">'+c+'</span></div>';
-  });
-  html += '</div></div>';
-
-  const inbox = (inboxData && inboxData.inbox) || [];
-  html += '<div class="glass-panel rounded-lg p-4 mb-6"><h3 class="text-sm font-semibold mb-3">Bandeja de trabajo ('+inbox.length+')</h3>';
-  if(!inbox.length){ html += '<div class="text-slate-500 text-sm">Sin oportunidades que requieran atención.</div>'; }
-  else {
-    html += '<div class="space-y-2">';
-    inbox.forEach(item => {
-      const opp = item.opportunity || {};
-      const late = item.overdue_tasks_count > 0;
-      html += '<div class="border-b border-slate-800 py-2 flex items-center justify-between '+(late?'text-rose-300':'')+'">';
-      html += '<div><div class="text-sm font-medium">'+(opp.id||'')+'</div><div class="text-xs text-slate-500">Etapa: '+(opp.stage||'')+' · '+item.days_since_activity+' días sin actividad'+(late?' · '+item.overdue_tasks_count+' vencidas':'')+'</div></div>';
-      html += '<button class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded" data-opp="'+opp.id+'">Abrir</button>';
-      html += '</div>';
-    });
-    html += '</div>';
-  }
-  html += '</div>';
-
-  const globalOverdue = (inboxData && inboxData.global_overdue_tasks) || [];
-  html += '<div class="glass-panel rounded-lg p-4"><h3 class="text-sm font-semibold mb-3">Tareas vencidas sin oportunidad ('+globalOverdue.length+')</h3>';
-  if(!globalOverdue.length){ html += '<div class="text-slate-500 text-sm">Ninguna.</div>'; }
-  else {
-    html += '<div class="space-y-1">';
-    globalOverdue.forEach(t => { html += '<div class="text-xs border-b border-slate-800 py-1">'+t.title+' · '+(t.due_date||'')+'</div>'; });
-    html += '</div>';
-  }
-  html += '</div>';
-
-  el.innerHTML = html;
-  el.querySelectorAll('[data-opp]').forEach(b => b.addEventListener('click', () => openOpportunity(b.dataset.opp)));
-}
-
-// Pipeline
-const STAGE_LABEL = {nuevo:'Nuevo',contactado:'Contactado',calificado:'Calificado',demo_agendada:'Demo agendada',propuesta_enviada:'Propuesta enviada',negociacion:'Negociación',ganado:'Ganado',perdido:'Perdido'};
-async function loadPipeline(){
-  const el = document.getElementById('view-pipeline');
-  el.innerHTML = '<div class="text-slate-400 text-sm">Cargando pipeline…</div>';
-  let opps = [];
-  try { const d = await api.get('/api/crm/opportunities?limit=200'); opps = d.items || []; } catch(e){ el.innerHTML='<div class="text-rose-400 text-sm">Error cargando pipeline.</div>'; return; }
-  const byStage = {};
-  STAGES.forEach(s => byStage[s]=[]);
-  opps.forEach(o => { if(byStage[o.stage]) byStage[o.stage].push(o); else byStage['nuevo'].push(o); });
-
-  let accounts = [];
-  try { const ad = await api.get('/api/crm/accounts?limit=200'); accounts = ad.items || []; } catch(e){}
-  const accMap = {}; accounts.forEach(a => accMap[a.id]=a);
-
-  let html = '<div class="flex gap-3 overflow-x-auto pb-4">';
-  STAGES.forEach(s => {
-    html += '<div class="kanban-col w-64 shrink-0" data-stage="'+s+'">';
-    html += '<div class="flex items-center justify-between mb-2"><h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">'+STAGE_LABEL[s]+'</h3><span class="text-xs font-mono text-slate-500" data-count="'+s+'">'+byStage[s].length+'</span></div>';
-    html += '<div class="space-y-2 min-h-[120px] dropzone rounded-md p-1" data-drop="'+s+'">';
-    byStage[s].forEach(o => {
-      const acc = accMap[o.account_id] || {};
-      html += '<div class="card glass-panel rounded-lg p-3 cursor-grab" draggable="true" data-opp="'+o.id+'" data-stage="'+o.stage+'">';
-      html += '<div class="text-sm font-medium mb-1">'+(acc.name||o.account_id||'Sin cuenta')+'</div>';
-      if(o.estimated_value) html += '<div class="text-xs font-mono text-amber-400 mb-1">$'+Number(o.estimated_value).toLocaleString()+' '+o.currency+'</div>';
-      html += '<div class="flex items-center justify-between text-xs text-slate-500"><span>'+ (o.owner_user_id||'sin responsable') +'</span>';
-      html += '<button class="stageBtn text-slate-400 hover:text-white" data-id="'+o.id+'" data-stage="'+o.stage+'">Cambiar</button></div>';
-      html += '</div>';
-    });
-    html += '</div></div>';
-  });
-  html += '</div>';
-  el.innerHTML = html;
-
-  // click open
-  el.querySelectorAll('.card').forEach(card => {
-    card.addEventListener('click', (e) => {
-      if (e.target.classList.contains('stageBtn')) return;
-      openOpportunity(card.dataset.opp);
-    });
-    card.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/plain', card.dataset.opp);
-      card.classList.add('opacity-50');
-    });
-    card.addEventListener('dragend', () => card.classList.remove('opacity-50'));
-  });
-
-  // dropzones
-  el.querySelectorAll('.dropzone').forEach(zone => {
-    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('bg-slate-800/40'); });
-    zone.addEventListener('dragleave', () => zone.classList.remove('bg-slate-800/40'));
-    zone.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      zone.classList.remove('bg-slate-800/40');
-      const id = e.dataTransfer.getData('text/plain');
-      const newStage = zone.dataset.drop;
-      const card = el.querySelector('.card[data-opp="'+id+'"]');
-      const cur = card ? card.dataset.stage : null;
-      if (!id || !newStage || newStage === cur) return;
-      let lossReason = null;
-      if (newStage === 'perdido') lossReason = prompt('Motivo de pérdida:');
-      try {
-        await api.patch('/api/crm/opportunities/'+id+'/stage', { stage: newStage, loss_reason: lossReason });
-        toast('Etapa actualizada');
-        loadPipeline();
-      } catch(err){ toast('Transición no permitida'); }
-    });
-  });
-
-  el.querySelectorAll('.stageBtn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.id;
-      const cur = btn.dataset.stage;
-      const next = prompt('Nueva etapa ('+STAGES.join(', ')+'):', cur);
-      if (!next || next===cur) return;
-      let lossReason = null;
-      if (next==='perdido') lossReason = prompt('Motivo de pérdida:');
-      try { await api.patch('/api/crm/opportunities/'+id+'/stage' , { stage: next, loss_reason: lossReason }); toast('Etapa actualizada'); loadPipeline(); }
-      catch(err){ toast('Error'); }
-    });
-  });
-}
-
-async function openOpportunity(id){
-  const d = await api.get('/api/crm/opportunities/'+id);
-  const o = d.opportunity;
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modalBody');
-  let html = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">Oportunidad</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div>'
-    + '<div class="grid grid-cols-2 gap-3 text-sm mb-4">'
-    + '<div><span class="text-slate-500 text-xs">Etapa</span><div class="font-mono">'+o.stage+'</div></div>'
-    + '<div><span class="text-slate-500 text-xs">Valor</span><div class="font-mono">'+(o.estimated_value||'—')+' '+o.currency+'</div></div>'
-    + '<div><span class="text-slate-500 text-xs">Cierre esperado</span><div>'+(o.expected_close_date||'—')+'</div></div>'
-    + '<div><span class="text-slate-500 text-xs">Responsable</span><div>'+(o.owner_user_id||'—')+'</div></div>'
-    + '<div><span class="text-slate-500 text-xs">Cuenta</span><div>'+(o.account_id||'—')+'</div></div>'
-    + '<div><span class="text-slate-500 text-xs">Contacto</span><div>'+(o.contact_id||'—')+'</div></div>'
-    + '</div>'
-    + '<h3 class="text-sm font-semibold mb-2">Registrar actividad</h3>'
-    + '<form id="actForm" class="flex gap-2 mb-4">'
-    + '<select name="type" class="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 text-xs"><option value="nota">Nota</option><option value="llamada">Llamada</option><option value="email">Email</option><option value="demo">Demo</option></select>'
-    + '<input name="content" placeholder="Descripción…" class="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-1 text-xs">'
-    + '<button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded">Agregar</button>'
-    + '</form>'
-    + '<h3 class="text-sm font-semibold mb-2">Actividades</h3>'
-    + (d.activities||[]).map(a=>'<div class="text-xs border-b border-slate-800 py-2"><span class="font-mono text-slate-500">'+a.type+'</span> — '+ (a.content||'') +'<span class="text-slate-600 ml-2">'+a.created_at+'</span></div>').join('')
-    + '<h3 class="text-sm font-semibold mt-4 mb-2">Tareas</h3>'
-    + (d.tasks||[]).map(t=>'<div class="text-xs border-b border-slate-800 py-2">'+t.title+' · '+t.status+'</div>').join('');
-  body.innerHTML = html;
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
-  const form = document.getElementById('actForm');
-  if (form) form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    await api.post('/api/crm/activities', { type: fd.get('type'), content: fd.get('content'), opportunity_id: id, account_id: o.account_id });
-    toast('Actividad registrada'); openOpportunity(id);
-  });
-}
-function closeModal(){ const m=document.getElementById('modal'); m.classList.add('hidden'); m.classList.remove('flex'); }
-window.closeModal = closeModal;
-
-// Accounts
-async function loadAccounts(){
-  const el = document.getElementById('view-accounts');
-  el.innerHTML = '<div class="mb-4 flex gap-2 flex-wrap"><input id="accSearch" placeholder="Buscar cuenta…" class="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm flex-1"><select id="accSize" class="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm"><option value="">Tamaño</option><option>1-5</option><option>6-20</option><option>21-50</option><option>50+</option></select><button id="saveAccFilter" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 rounded">Guardar filtro</button><button id="importCsvBtn" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-2 rounded">Importar CSV</button><button id="exportCsvBtn" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 rounded">Exportar CSV</button><input id="csvFile" type="file" accept=".csv" class="hidden"></div><div id="accList" class="space-y-2"></div>';
-  const saved = JSON.parse(localStorage.getItem('ark_acc_filter')||'{}');
-  if (saved.q) document.getElementById('accSearch').value = saved.q;
-  if (saved.size) document.getElementById('accSize').value = saved.size;
-  async function render(){
-    const q = document.getElementById('accSearch').value;
-    const size = document.getElementById('accSize').value;
-    localStorage.setItem('ark_acc_filter', JSON.stringify({q,size}));
-    let url = '/api/crm/accounts?limit=100';
-    if(q) url += '&q='+encodeURIComponent(q);
-    if(size) url += '&size='+encodeURIComponent(size);
-    const d = await api.get(url);
-    const list = document.getElementById('accList');
-    if(!d.items || !d.items.length){ list.innerHTML='<div class="text-slate-500 text-sm">Sin cuentas.</div>'; return; }
-    list.innerHTML = d.items.map(a=>'<div class="glass-panel rounded-lg p-3 flex items-center justify-between cursor-pointer" data-acc="'+a.id+'"><div><div class="text-sm font-medium">'+a.name+'</div><div class="text-xs text-slate-500">'+(a.size||'—')+' · '+(a.city||'—')+' · '+(a.origin||'—')+'</div></div><span class="text-xs font-mono text-slate-500">'+a.duplicate_review_status+'</span></div>').join('');
-    list.querySelectorAll('[data-acc]').forEach(row => row.addEventListener('click', () => openAccount(row.dataset.acc)));
-  }
-  document.getElementById('accSearch').addEventListener('input', render);
-  document.getElementById('accSize').addEventListener('change', render);
-  document.getElementById('saveAccFilter').addEventListener('click', () => { toast('Filtro guardado'); });
-  document.getElementById('importCsvBtn').addEventListener('click', () => document.getElementById('csvFile').click());
-  document.getElementById('csvFile').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const text = await file.text();
-    const lines = text.trim().split(/\r?\n/);
-    if (lines.length < 2) { toast('CSV vacío'); return; }
-    const header = lines[0].split(',').map(h=>h.trim().toLowerCase());
-    const items = [];
-    for (let i=1;i<lines.length;i++){
-      if (!lines[i].trim()) continue;
-      const cols = lines[i].split(',').map(c=>c.trim());
-      const obj = {};
-      header.forEach((h,idx)=> obj[h]=cols[idx]||'');
-      items.push({ name: obj.name||obj.nombre, size: obj.size||obj.tamano||null, city: obj.city||obj.ciudad||null, origin: obj.origin||obj.origen||'csv' });
-    }
-    try {
-      const r = await api.post('/api/crm/accounts/bulk', { items });
-      toast('Importadas '+r.created+' cuentas');
-      loadAccounts();
-    } catch(err){ toast('Error importando'); }
-    e.target.value = '';
-  });
-  document.getElementById('exportCsvBtn').addEventListener('click', async () => {
-    const d = await api.get('/api/crm/accounts?limit=1000');
-    const items = d.items||[];
-    const csv = ['name,size,city,origin'].concat(items.map(a=>[a.name,a.size,a.city,a.origin].map(v=>'"'+(v||'')+'"').join(','))).join('\n');
-    const blob = new Blob([csv], {type:'text/csv'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download='accounts.csv'; a.click();
-    URL.revokeObjectURL(url);
-  });
-  render();
-}
-
-async function openAccount(id){
-  const d = await api.get('/api/crm/accounts/'+id);
-  const a = d.account;
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modalBody');
-  let html = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">'+a.name+'</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div>'
-    + '<div class="text-xs text-slate-500 mb-4">'+(a.size||'—')+' · '+(a.city||'—')+' · '+(a.origin||'—')+'</div>'
-    + '<h3 class="text-sm font-semibold mb-2">Agregar contacto</h3>'
-    + '<form id="addContactForm" class="grid grid-cols-2 gap-2 mb-4">'
-    + '<input name="name" placeholder="Nombre" class="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="email" placeholder="Correo" class="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="phone" placeholder="Teléfono" class="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="title" placeholder="Cargo" class="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<button type="submit" class="col-span-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2 rounded-md">Agregar contacto</button>'
-    + '</form>'
-    + '<h3 class="text-sm font-semibold mb-2">Contactos ('+d.contacts.length+')</h3>'
-    + d.contacts.map(c=>'<div class="text-xs border-b border-slate-800 py-2">'+(c.name||'—')+' · '+(c.email||'—')+' · '+(c.title||'—')+'</div>').join('')
-    + '<h3 class="text-sm font-semibold mt-4 mb-2">Oportunidades ('+d.opportunities.length+')</h3>'
-    + d.opportunities.map(o=>'<div class="text-xs border-b border-slate-800 py-2">'+o.stage+' · '+(o.estimated_value||'—')+'</div>').join('')
-    + '<h3 class="text-sm font-semibold mt-4 mb-2">Tareas ('+d.tasks.length+')</h3>'
-    + d.tasks.map(t=>'<div class="text-xs border-b border-slate-800 py-2">'+t.title+' · '+t.status+'</div>').join('')
-    + '<h3 class="text-sm font-semibold mt-4 mb-2">Actividad reciente</h3>'
-    + d.activities.map(a=>'<div class="text-xs border-b border-slate-800 py-2">'+a.type+' · '+(a.content||'')+'</div>').join('');
-  body.innerHTML = html;
-  modal.classList.remove('hidden'); modal.classList.add('flex');
-  const form = document.getElementById('addContactForm');
-  if (form) form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    await api.post('/api/crm/contacts', { account_id: id, name: fd.get('name')||null, email: fd.get('email')||null, phone: fd.get('phone')||null, title: fd.get('title')||null });
-    toast('Contacto agregado'); openAccount(id);
-  });
-}
-
-// Contacts
-async function loadContacts(){
-  const el = document.getElementById('view-contacts');
-  el.innerHTML = '<div class="mb-4 flex gap-2"><input id="ctSearch" placeholder="Buscar contacto…" class="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm flex-1"><select id="ctAccount" class="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm"><option value="">Todas las cuentas</option></select></div><div id="ctList" class="space-y-2"></div>';
-  let accounts = [];
-  try { const ad = await api.get('/api/crm/accounts?limit=200'); accounts = ad.items || []; } catch(e){}
-  const sel = document.getElementById('ctAccount');
-  accounts.forEach(a => { const o=document.createElement('option'); o.value=a.id; o.textContent=a.name; sel.appendChild(o); });
-
-  async function render(){
-    const q = document.getElementById('ctSearch').value;
-    const acc = document.getElementById('ctAccount').value;
-    let url = '/api/crm/contacts?limit=100';
-    if(q) url += '&q='+encodeURIComponent(q);
-    if(acc) url += '&account_id='+encodeURIComponent(acc);
-    const d = await api.get(url);
-    const list = document.getElementById('ctList');
-    if(!d.items || !d.items.length){ list.innerHTML='<div class="text-slate-500 text-sm">Sin contactos.</div>'; return; }
-    const accMap = {}; accounts.forEach(a => accMap[a.id]=a);
-    list.innerHTML = d.items.map(c => '<div class="glass-panel rounded-lg p-3 flex items-center justify-between cursor-pointer" data-ct="'+c.id+'"><div><div class="text-sm font-medium">'+(c.name||'—')+'</div><div class="text-xs text-slate-500">'+(accMap[c.account_id]?.name||c.account_id||'—')+' · '+(c.email||'—')+' · '+(c.title||'—')+'</div></div><span class="text-xs font-mono text-slate-500">'+(c.consent_status||'')+'</span></div>').join('');
-    list.querySelectorAll('[data-ct]').forEach(row => row.addEventListener('click', () => openContact(row.dataset.ct)));
-  }
-  document.getElementById('ctSearch').addEventListener('input', render);
-  document.getElementById('ctAccount').addEventListener('change', render);
-  render();
-}
-
-async function openContact(id){
-  const d = await api.get('/api/crm/contacts/'+id);
-  const c = d.contact;
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modalBody');
-  body.innerHTML = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">'+(c.name||'Contacto')+'</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div>'
-    + '<div class="grid grid-cols-2 gap-3 text-sm mb-4">'
-    + '<div><span class="text-slate-500 text-xs">Cuenta</span><div>'+c.account_id+'</div></div>'
-    + '<div><span class="text-slate-500 text-xs">Correo</span><div>'+(c.email||'—')+'</div></div>'
-    + '<div><span class="text-slate-500 text-xs">Teléfono</span><div>'+(c.phone||'—')+'</div></div>'
-    + '<div><span class="text-slate-500 text-xs">Cargo</span><div>'+(c.title||'—')+'</div></div>'
-    + '<div><span class="text-slate-500 text-xs">Consentimiento</span><div>'+(c.consent_status||'—')+'</div></div>'
-    + '</div>';
-  modal.classList.remove('hidden'); modal.classList.add('flex');
-}
-
-// Tasks
-async function loadTasks(){
-  const el = document.getElementById('view-tasks');
-  el.innerHTML = '<div class="mb-4 flex gap-2"><select id="taskStatus" class="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm"><option value="">Todos</option><option value="pending">Pendientes</option><option value="in_progress">En progreso</option><option value="done">Hechas</option><option value="cancelled">Canceladas</option></select><label class="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" id="taskOverdue"> Solo vencidas</label></div><div id="taskList" class="space-y-2"></div>';
-  const saved = JSON.parse(localStorage.getItem('ark_task_filter')||'{}');
-  if (saved.status) document.getElementById('taskStatus').value = saved.status;
-  if (saved.overdue) document.getElementById('taskOverdue').checked = true;
-  async function render(){
-    const status = document.getElementById('taskStatus').value;
-    const overdue = document.getElementById('taskOverdue').checked;
-    localStorage.setItem('ark_task_filter', JSON.stringify({status,overdue}));
-    let url = '/api/crm/tasks?limit=100';
-    if(status) url += '&status='+encodeURIComponent(status);
-    if(overdue) url += '&overdue=true';
-    const d = await api.get(url);
-    const list = document.getElementById('taskList');
-    if(!d.items || !d.items.length){ list.innerHTML='<div class="text-slate-500 text-sm">Sin tareas.</div>'; return; }
-    list.innerHTML = d.items.map(t=>{
-      const late = t.due_date && new Date(t.due_date) < new Date() && t.status!=='done';
-      return '<div class="glass-panel rounded-lg p-3 flex items-center justify-between '+(late?'border-rose-900':'')+'"><div><div class="text-sm font-medium">'+t.title+'</div><div class="text-xs text-slate-500">'+(t.due_date||'sin fecha')+' · '+(t.status)+'</div></div>'+(t.status!=='done'?'<button class="completeBtn text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded" data-id="'+t.id+'">Completar</button>':'<span class="text-xs text-emerald-400">Hecha</span>')+'</div>';
-    }).join('');
-    list.querySelectorAll('.completeBtn').forEach(b => b.addEventListener('click', async () => {
-      await api.post('/api/crm/tasks/'+b.dataset.id+'/complete', {});
-      toast('Tarea completada'); loadTasks();
-    }));
-  }
-  document.getElementById('taskStatus').addEventListener('change', render);
-  document.getElementById('taskOverdue').addEventListener('change', render);
-  render();
-}
-
-// Activities
-async function loadActivities(){
-  const el = document.getElementById('view-activities');
-  el.innerHTML = '<div id="actList" class="space-y-2"></div>';
-  const d = await api.get('/api/crm/activities?limit=50');
-  const list = document.getElementById('actList');
-  if(!d.items || !d.items.length){ list.innerHTML='<div class="text-slate-500 text-sm">Sin actividad.</div>'; return; }
-  list.innerHTML = d.items.map(a=>'<div class="glass-panel rounded-lg p-3"><div class="flex items-center justify-between mb-1"><span class="text-xs font-mono text-slate-500">'+a.type+'</span><span class="text-xs text-slate-600">'+a.created_at+'</span></div><div class="text-sm">'+(a.content||'')+'</div></div>').join('');
-}
-
-// Modals for new account/task
-document.getElementById('newAccountBtn').addEventListener('click', () => {
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modalBody');
-  body.innerHTML = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">Nueva cuenta</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div>'
-    + '<form id="newAccForm" class="space-y-3">'
-    + '<input name="name" placeholder="Nombre del despacho" required class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<select name="size" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm"><option value="">Tamaño</option><option>1-5</option><option>6-20</option><option>21-50</option><option>50+</option></select>'
-    + '<input name="city" placeholder="Ciudad" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="origin" placeholder="Origen (lead, referido…)" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-2 rounded-md text-sm">Crear</button>'
-    + '</form>';
-  modal.classList.remove('hidden'); modal.classList.add('flex');
-  document.getElementById('newAccForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    await api.post('/api/crm/accounts', { name: fd.get('name'), size: fd.get('size')||null, city: fd.get('city')||null, origin: fd.get('origin')||null });
-    toast('Cuenta creada'); closeModal(); loadAccounts();
-  });
-});
-
-document.getElementById('newOpportunityBtn').addEventListener('click', async () => {
-  let accounts = [];
-  try { const ad = await api.get('/api/crm/accounts?limit=200'); accounts = ad.items || []; } catch(e){}
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modalBody');
-  body.innerHTML = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">Nueva oportunidad</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div>'
-    + '<form id="newOppForm" class="space-y-3">'
-    + '<select name="account_id" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm"><option value="">Sin cuenta</option>'+accounts.map(a=>'<option value="'+a.id+'">'+a.name+'</option>').join('')+'</select>'
-    + '<select name="stage" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm"><option value="nuevo">Nuevo</option><option value="contactado">Contactado</option><option value="calificado">Calificado</option></select>'
-    + '<input name="estimated_value" type="number" placeholder="Valor estimado" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="currency" placeholder="Moneda (MXN)" value="MXN" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="expected_close_date" type="date" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="owner_user_id" placeholder="Responsable (id)" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 rounded-md text-sm">Crear</button>'
-    + '</form>';
-  modal.classList.remove('hidden'); modal.classList.add('flex');
-  document.getElementById('newOppForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    await api.post('/api/crm/opportunities', {
-      account_id: fd.get('account_id')||null,
-      stage: fd.get('stage')||'nuevo',
-      estimated_value: fd.get('estimated_value')?Number(fd.get('estimated_value')):null,
-      currency: fd.get('currency')||'MXN',
-      expected_close_date: fd.get('expected_close_date')||null,
-      owner_user_id: fd.get('owner_user_id')||null,
-    });
-    toast('Oportunidad creada'); closeModal(); loadPipeline();
-  });
-});
-
-document.getElementById('newContactBtn').addEventListener('click', async () => {
-  let accounts = [];
-  try { const ad = await api.get('/api/crm/accounts?limit=200'); accounts = ad.items || []; } catch(e){}
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modalBody');
-  body.innerHTML = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">Nuevo contacto</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div>'
-    + '<form id="newContactForm" class="space-y-3">'
-    + '<select name="account_id" required class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm"><option value="">Cuenta *</option>'+accounts.map(a=>'<option value="'+a.id+'">'+a.name+'</option>').join('')+'</select>'
-    + '<input name="name" placeholder="Nombre" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="email" placeholder="Correo" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="phone" placeholder="Teléfono" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="title" placeholder="Cargo" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-md text-sm">Crear</button>'
-    + '</form>';
-  modal.classList.remove('hidden'); modal.classList.add('flex');
-  document.getElementById('newContactForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    await api.post('/api/crm/contacts', { account_id: fd.get('account_id'), name: fd.get('name')||null, email: fd.get('email')||null, phone: fd.get('phone')||null, title: fd.get('title')||null });
-    toast('Contacto creado'); closeModal(); loadContacts();
-  });
-});
-
-document.getElementById('inviteUserBtn').addEventListener('click', () => {
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modalBody');
-  body.innerHTML = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">Invitar usuario</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div>'
-    + '<form id="inviteForm" class="space-y-3">'
-    + '<input name="email" type="email" placeholder="Correo" required class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<input name="name" placeholder="Nombre" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<select name="role" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm"><option value="vendedor">Vendedor</option><option value="lector">Lector</option><option value="admin">Admin</option></select>'
-    + '<button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded-md text-sm">Invitar</button>'
-    + '</form>'
-    + '<p id="inviteMsg" class="text-xs text-slate-400 mt-2"></p>';
-  modal.classList.remove('hidden'); modal.classList.add('flex');
-  document.getElementById('inviteForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const res = await fetch('/api/auth/invite', { method:'POST', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'}, body: JSON.stringify({ email: fd.get('email'), name: fd.get('name'), role: fd.get('role') }) });
-    const data = await res.json();
-    const msg = document.getElementById('inviteMsg');
-    if (!res.ok) { msg.textContent = data.error || 'Error'; msg.className='text-xs text-rose-400 mt-2'; return; }
-    msg.textContent = 'Invitación enviada' + (data.reset_token ? ' (dev token: '+data.reset_token+')' : '');
-    msg.className='text-xs text-emerald-400 mt-2';
-  });
-});
-
-document.getElementById('newTaskBtn').addEventListener('click', () => {
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modalBody');
-  body.innerHTML = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">Nueva tarea</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div>'
-    + '<form id="newTaskForm" class="space-y-3">'
-    + '<input name="title" placeholder="Título" required class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<textarea name="description" placeholder="Descripción" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm"></textarea>'
-    + '<input name="due_date" type="date" class="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm">'
-    + '<button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-2 rounded-md text-sm">Crear</button>'
-    + '</form>';
-  modal.classList.remove('hidden'); modal.classList.add('flex');
-  document.getElementById('newTaskForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    await api.post('/api/crm/tasks', { title: fd.get('title'), description: fd.get('description')||null, due_date: fd.get('due_date')||null });
-    toast('Tarea creada'); closeModal(); loadTasks();
-  });
-});
-
-document.getElementById('globalSearch').addEventListener('keydown', async (e) => {
-  if (e.key !== 'Enter') return;
-  const q = e.target.value.trim();
-  if (!q) return;
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modalBody');
-  body.innerHTML = '<div class="text-slate-400 text-sm">Buscando…</div>';
-  modal.classList.remove('hidden'); modal.classList.add('flex');
+// ── INICIALIZAR SESIÓN DE USUARIO ──
+async function initUser() {
   try {
-    const d = await api.get('/api/crm/search?q='+encodeURIComponent(q));
-    let html = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">Resultados: '+q+'</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div>';
-    const section = (title, items, render) => {
-      if (!items || !items.length) return '';
-      return '<h3 class="text-sm font-semibold mt-3 mb-1">'+title+' ('+items.length+')</h3>'+items.map(render).join('');
-    };
-    html += section('Cuentas', d.accounts, a=>'<div class="text-xs border-b border-slate-800 py-1 cursor-pointer" data-acc="'+a.id+'">'+a.name+' · '+(a.city||'')+'</div>');
-    html += section('Contactos', d.contacts, c=>'<div class="text-xs border-b border-slate-800 py-1 cursor-pointer" data-ct="'+c.id+'">'+(c.name||'—')+' · '+(c.email||'')+'</div>');
-    html += section('Oportunidades', d.opportunities, o=>'<div class="text-xs border-b border-slate-800 py-1 cursor-pointer" data-opp="'+o.id+'">'+o.id+' · '+o.stage+' · '+(o.estimated_value||'')+'</div>');
-    html += section('Actividades', d.activities, a=>'<div class="text-xs border-b border-slate-800 py-1">'+a.type+' · '+(a.content||'').slice(0,80)+'</div>');
-    if (!d.accounts.length && !d.contacts.length && !d.opportunities.length && !d.activities.length) html += '<div class="text-slate-500 text-sm mt-2">Sin resultados.</div>';
-    body.innerHTML = html;
-    body.querySelectorAll('[data-acc]').forEach(x=>x.addEventListener('click',()=>{ closeModal(); openAccount(x.dataset.acc); }));
-    body.querySelectorAll('[data-ct]').forEach(x=>x.addEventListener('click',()=>{ closeModal(); openContact(x.dataset.ct); }));
-    body.querySelectorAll('[data-opp]').forEach(x=>x.addEventListener('click',()=>{ closeModal(); openOpportunity(x.dataset.opp); }));
-  } catch(err){ body.innerHTML = '<div class="text-rose-400 text-sm">Error en búsqueda.</div>'; }
+    const data = await apiCall('/api/auth/me');
+    if (data && data.user) {
+      state.user = data.user;
+      const email = data.user.email || 'comercial@ark.mx';
+      const initials = (email.split('@')[0] || 'OP').slice(0, 2).toUpperCase();
+      const role = data.user.role === 'admin' ? 'Super Admin' : (data.user.role || 'Ventas');
+      
+      document.getElementById('userEmailSidebar').textContent = email;
+      document.getElementById('userRoleSidebar').textContent = role;
+      document.getElementById('userAvatarSidebar').textContent = initials;
+      document.getElementById('userAvatarTop').textContent = initials;
+    }
+  } catch(e) {
+    console.warn('Error cargando usuario:', e);
+  }
+}
+
+// ── ROUTER ──
+function router() {
+  const hash = location.hash || '#/dashboard';
+  const vista = hash.replace('#/', '') || 'dashboard';
+
+  document.querySelectorAll('#mainContent > section').forEach(s => s.classList.add('hidden'));
+  const target = document.getElementById('vista-' + vista);
+  if (target) target.classList.remove('hidden');
+
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navEl = document.querySelector('.nav-item[href="#/' + vista + '"]');
+  if (navEl) navEl.classList.add('active');
+
+  if (vista === 'dashboard') renderDashboard();
+  if (vista === 'pipeline') renderKanban();
+  if (vista === 'cuentas') renderCuentas();
+  if (vista === 'contactos') renderContactos();
+  if (vista === 'tareas') renderTareas();
+  if (vista === 'superadmin') renderSuperadmin();
+
+  lucide.createIcons();
+}
+
+async function refreshData() {
+  toast('Actualizando datos de producción…');
+  await Promise.all([loadMetrics(), loadAccounts(), loadOpportunities(), loadContacts(), loadTasks()]);
+  router();
+  toast('Datos actualizados');
+}
+
+// ── DATA LOADERS ──
+async function loadMetrics() {
+  try {
+    const m = await apiCall('/api/crm/metrics');
+    if (m) state.metrics = m;
+    const ib = await apiCall('/api/crm/inbox');
+    if (ib && ib.inbox) state.inbox = ib.inbox;
+  } catch (e) { console.error('loadMetrics error:', e); }
+}
+
+async function loadAccounts() {
+  try {
+    const data = await apiCall('/api/crm/accounts?limit=200');
+    if (data && data.items) state.accounts = data.items;
+  } catch (e) { console.error('loadAccounts error:', e); }
+}
+
+async function loadOpportunities() {
+  try {
+    const data = await apiCall('/api/crm/opportunities?limit=200');
+    if (data && data.items) state.opportunities = data.items;
+  } catch (e) { console.error('loadOpportunities error:', e); }
+}
+
+async function loadContacts() {
+  try {
+    const data = await apiCall('/api/crm/contacts?limit=200');
+    if (data && data.items) state.contacts = data.items;
+  } catch (e) { console.error('loadContacts error:', e); }
+}
+
+async function loadTasks() {
+  try {
+    const data = await apiCall('/api/crm/tasks?limit=200');
+    if (data && data.items) state.tasks = data.items;
+  } catch (e) { console.error('loadTasks error:', e); }
+}
+
+// ── DASHBOARD ──
+async function renderDashboard() {
+  if (!state.metrics) await loadMetrics();
+  const m = state.metrics || {};
+  const o = m.opportunities || {};
+  const t = m.tasks || {};
+  const ent = m.entities || {};
+
+  const totalOpps = o.total !== undefined ? o.total : state.opportunities.length;
+  const convRate = o.conversion_rate_percent !== undefined ? o.conversion_rate_percent : 0;
+  const avgDays = o.avg_time_to_close_days !== undefined ? o.avg_time_to_close_days : 0;
+  const overdueCount = t.overdue !== undefined ? t.overdue : 0;
+  const accCount = ent.accounts !== undefined ? ent.accounts : state.accounts.length;
+  const contCount = ent.contacts !== undefined ? ent.contacts : state.contacts.length;
+  const leadsCount = ent.leads !== undefined ? ent.leads : 0;
+
+  document.getElementById('tareasBadge').textContent = overdueCount;
+
+  const kpis = [
+    { label: "Oportunidades Activas", value: totalOpps, sub: (o.won || 0) + " ganadas · " + (o.lost || 0) + " perdidas", icon: "target", color: "text-ark-blue_hi" },
+    { label: "Conversión", value: convRate + "%", sub: avgDays + " días promedio de cierre", icon: "trending-up", color: "text-ark-emerald_hi" },
+    { label: "Tareas Vencidas", value: overdueCount, sub: overdueCount > 0 ? "Requieren acción hoy" : "Al día", icon: "alert-triangle", color: "text-ark-rose_hi" },
+    { label: "Cuentas / Contactos", value: accCount.toLocaleString(), sub: contCount + " contactos · " + leadsCount + " leads DENUE", icon: "users", color: "text-ark-amber_hi" },
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k => \`
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition-colors">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">\${k.label}</span>
+        <i data-lucide="\${k.icon}" class="w-4 h-4 \${k.color}"></i>
+      </div>
+      <div class="font-mono text-2xl font-semibold text-white">\${k.value}</div>
+      <div class="text-xs text-slate-400 mt-1">\${k.sub}</div>
+    </div>\`).join('');
+
+  // Inbox
+  const inboxList = state.inbox || [];
+  document.getElementById('inboxCount').textContent = \`\${inboxList.length} pendientes\`;
+  document.getElementById('inboxList').innerHTML = inboxList.length === 0
+    ? '<p class="p-5 text-sm text-slate-500">Sin pendientes urgentes en la bandeja 🎉</p>'
+    : inboxList.map(item => {
+        const opp = item.opportunity || {};
+        const acc = state.accounts.find(a => a.id === opp.account_id) || {};
+        const nombre = acc.name || ('Oportunidad ' + (opp.id ? opp.id.slice(0,8) : ''));
+        const dias = item.days_since_activity || 0;
+        return \`
+        <div class="flex items-center justify-between px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
+          <div class="flex items-center gap-3">
+            <span class="badge \${dias >= 5 ? 'badge-rojo' : 'badge-ambar'}">\${dias}d sin contacto</span>
+            <div>
+              <div class="text-sm font-medium text-white">\${nombre}</div>
+              <div class="text-xs text-slate-400 font-mono">\${opp.stage || 'nuevo'} · $\${opp.estimated_value || 399} MXN</div>
+            </div>
+          </div>
+          <button onclick="actuarInbox('\${opp.id}')" class="text-xs bg-ark-blue/15 text-ark-blue_hi border border-ark-blue/30 px-3 py-1.5 rounded-lg hover:bg-ark-blue/25 transition-colors font-semibold">Actuar</button>
+        </div>\`;
+      }).join('');
+
+  lucide.createIcons();
+}
+
+function actuarInbox(oppId) {
+  location.hash = '#/pipeline';
+  toast('Abriendo pipeline para oportunidad ' + (oppId ? oppId.slice(0,8) : ''));
+}
+
+// ── KANBAN PIPELINE ──
+async function renderKanban() {
+  if (!state.opportunities.length) await loadOpportunities();
+  if (!state.accounts.length) await loadAccounts();
+
+  const opps = state.opportunities || [];
+  const accountsMap = new Map(state.accounts.map(a => [a.id, a]));
+
+  const board = document.getElementById('kanbanBoard');
+  board.innerHTML = ETAPAS.map(et => {
+    const cards = opps.filter(o => o.stage === et.key);
+    return \`
+    <div class="kanban-col flex flex-col bg-slate-900/50 border border-slate-800 rounded-xl" data-stage="\${et.key}"
+         ondragover="event.preventDefault();this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="dropCard(event, '\${et.key}')">
+      <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+        <span class="text-sm font-semibold text-\${et.color}">\${et.label}</span>
+        <span class="font-mono text-xs text-slate-500">\${cards.length}</span>
+      </div>
+      <div class="flex-1 p-3 space-y-2 overflow-y-auto min-h-[140px] max-h-[70vh]">
+        \${cards.map(c => {
+          const acc = accountsMap.get(c.account_id) || {};
+          const accountName = acc.name || 'Sin cuenta';
+          const oppTitle = c.name || accountName;
+          const owner = c.owner_user_id ? c.owner_user_id.slice(0, 4) : 'OP';
+          const value = c.estimated_value ? \`$\${c.estimated_value}\` : '$399';
+          return \`
+          <div class="kanban-card bg-slate-800 border border-slate-700 rounded-lg p-3.5 shadow-sm" draggable="true"
+               ondragstart="dragCard(event, '\${c.id}')" data-opp-id="\${c.id}">
+            <div class="flex items-start justify-between gap-2 mb-1.5">
+              <span class="text-sm font-semibold text-white leading-tight">\${oppTitle}</span>
+              <span class="font-mono text-xs text-ark-emerald_hi shrink-0">\${value}</span>
+            </div>
+            <div class="text-xs text-slate-400 mb-2 truncate">\${accountName}</div>
+            <div class="flex items-center justify-between pt-1 border-t border-slate-700/50">
+              <span class="text-[10px] font-mono text-slate-400 bg-slate-700/50 px-2 py-0.5 rounded">\${owner}</span>
+              <button onclick="moverEtapa('\${c.id}')" title="Avanzar etapa" class="text-xs text-slate-400 hover:text-white transition-colors p-1 hover:bg-slate-700 rounded">
+                <i data-lucide="chevrons-right" class="w-3.5 h-3.5 text-ark-blue_hi"></i>
+              </button>
+            </div>
+          </div>\`;
+        }).join('')}
+      </div>
+    </div>\`;
+  }).join('');
+
+  lucide.createIcons();
+}
+
+function dragCard(e, id) {
+  e.dataTransfer.setData('text/plain', id);
+  e.target.classList.add('dragging');
+}
+
+function dropCard(e, stage) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const id = e.dataTransfer.getData('text/plain');
+  if (id) moverEtapaAPi(id, stage);
+}
+
+const ALLOWED_NEXT = {
+  nuevo: 'contactado',
+  contactado: 'calificado',
+  calificado: 'demo_agendada',
+  demo_agendada: 'propuesta_enviada',
+  propuesta_enviada: 'negociacion',
+  negociacion: 'ganado',
+  ganado: 'ganado',
+  perdido: 'nuevo'
+};
+
+async function moverEtapa(id) {
+  const opp = state.opportunities.find(o => o.id === id);
+  if (!opp) return;
+  const nextStage = ALLOWED_NEXT[opp.stage] || 'contactado';
+  await moverEtapaAPi(id, nextStage);
+}
+
+async function moverEtapaAPi(id, stage) {
+  const opp = state.opportunities.find(o => o.id === id);
+  const oldStage = opp ? opp.stage : 'nuevo';
+  if (opp) opp.stage = stage;
+  renderKanban();
+
+  try {
+    const res = await apiCall(\`/api/crm/opportunities/\${id}/stage\`, 'POST', { stage, loss_reason: null });
+    if (res && res.error) {
+      toast(\`⚠️ \${res.error}\`);
+      if (opp) opp.stage = oldStage;
+      renderKanban();
+      return;
+    }
+    const label = ETAPAS.find(e => e.key === stage)?.label || stage;
+    toast(\`Oportunidad movida a "\${label}"\`);
+    loadMetrics();
+  } catch(e) {
+    console.error('Error al cambiar etapa:', e);
+    toast('Error comunicando con el servidor');
+  }
+}
+
+// ── CUENTAS Y DESPACHOS ──
+async function renderCuentas() {
+  if (!state.accounts.length) await loadAccounts();
+  filtrarCuentas();
+}
+
+function filtrarCuentas() {
+  const tamano = document.getElementById('filtroTamano').value;
+  const tenant = document.getElementById('filtroTenant').value;
+
+  let list = state.accounts || [];
+  if (tamano) list = list.filter(a => (a.size || a.employee_count_range || '').includes(tamano));
+  if (tenant) list = list.filter(a => (a.tenant_id || '').includes(tenant));
+
+  document.getElementById('cuentasSub').textContent = \`\${list.length} de \${state.accounts.length} cuentas registradas en D1\`;
+
+  const body = document.getElementById('cuentasBody');
+  body.innerHTML = list.length === 0
+    ? '<tr><td colspan="7" class="p-6 text-center text-slate-500 text-sm">No se encontraron cuentas con los filtros seleccionados</td></tr>'
+    : list.map(a => \`
+    <tr class="hover:bg-slate-800/30 cursor-pointer transition-colors" onclick="abrirModalCuenta('\${a.id}')">
+      <td class="px-4 py-3 font-medium text-white">\${a.name || '-'}</td>
+      <td class="px-4 py-3 font-mono text-xs text-slate-400">\${a.scian_code || '-'}</td>
+      <td class="px-4 py-3"><span class="badge badge-ambar">\${a.size || a.employee_count_range || '1-5'}</span></td>
+      <td class="px-4 py-3 font-mono text-xs text-slate-400">\${a.harvest_source || a.origin || 'denue'}</td>
+      <td class="px-4 py-3"><span class="badge \${(a.tenant_id || '').includes('ark') ? 'badge-azul' : 'badge-indigo'}">\${(a.tenant_id || 'acc_ark_ledger').replace('acc_','')}</span></td>
+      <td class="px-4 py-3 text-xs text-slate-400">\${a.city || 'Mérida'}</td>
+      <td class="px-4 py-3 text-right"><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 inline"></i></td>
+    </tr>\`).join('');
+
+  lucide.createIcons();
+}
+
+async function abrirModalCuenta(id) {
+  const acc = state.accounts.find(a => a.id === id);
+  if (!acc) return;
+
+  const content = document.getElementById('modalCuentaContent');
+  content.innerHTML = '<div class="text-sm text-slate-400 p-4">Cargando detalles de cuenta…</div>';
+  document.getElementById('modalCuenta').classList.remove('hidden');
+
+  try {
+    const detail = await apiCall(\`/api/crm/accounts/\${id}\`);
+    const account = detail?.account || acc;
+    const contactos = detail?.contacts || [];
+    const opps = detail?.opportunities || [];
+
+    content.innerHTML = \`
+      <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
+        <div>
+          <h2 class="text-lg font-bold text-white">\${account.name}</h2>
+          <span class="text-xs font-mono text-slate-500">\${account.id}</span>
+        </div>
+        <button onclick="cerrarModalCuenta()" class="p-2 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="space-y-5">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+            <div class="text-xs text-slate-500 mb-1">SCIAN</div>
+            <div class="font-mono text-sm text-white">\${account.scian_code || '541211 (Contabilidad/Auditoría)'}</div>
+          </div>
+          <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+            <div class="text-xs text-slate-500 mb-1">Fuente</div>
+            <div class="font-mono text-sm text-white">\${account.harvest_source || account.origin || 'DENUE INEGI'}</div>
+          </div>
+          <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+            <div class="text-xs text-slate-500 mb-1">Tenant Asignado</div>
+            <div class="font-mono text-sm text-ark-blue_hi">\${account.tenant_id || 'acc_ark_ledger'}</div>
+          </div>
+          <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+            <div class="text-xs text-slate-500 mb-1">Ubicación</div>
+            <div class="text-sm text-white">\${account.city || 'Mérida'}\${account.state ? ', ' + account.state : ''}</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-semibold text-white text-sm">Contactos (\${contactos.length})</h3>
+            <button onclick="abrirModalNuevoContacto('\${account.id}')" class="text-xs text-ark-emerald_hi hover:underline">+ Agregar</button>
+          </div>
+          \${contactos.length ? contactos.map(c => \`
+            <div class="flex items-center justify-between bg-slate-800/30 rounded-lg p-3 border border-slate-700/50 mb-2">
+              <div>
+                <div class="text-sm text-white font-medium">\${c.name || 'Sin nombre'}</div>
+                <div class="font-mono text-xs text-slate-400">\${c.phone || 'Sin tel'}</div>
+              </div>
+              <span class="text-xs text-slate-400 font-mono">\${c.email || 'Sin email'}</span>
+            </div>\`).join('') : '<p class="text-xs text-slate-500 bg-slate-800/20 p-3 rounded-lg">Sin contactos directos todavía</p>'}
+        </div>
+
+        <div>
+          <h3 class="font-semibold text-white text-sm mb-2">Oportunidades Activas (\${opps.length})</h3>
+          \${opps.length ? opps.map(o => \`
+            <div class="flex items-center justify-between bg-slate-800/30 rounded-lg p-3 border border-slate-700/50 mb-2">
+              <div>
+                <div class="text-xs font-semibold text-white">\${o.name || ('Oportunidad ' + o.id.slice(0,8))}</div>
+                <div class="text-[11px] text-slate-400">Etapa: <span class="text-ark-blue_hi uppercase font-mono">\${o.stage}</span></div>
+              </div>
+              <span class="text-xs font-mono text-ark-emerald_hi">$\${o.estimated_value || 399} MXN</span>
+            </div>\`).join('') : '<p class="text-xs text-slate-500 bg-slate-800/20 p-3 rounded-lg">Sin oportunidades abiertas</p>'}
+        </div>
+
+        <h3 class="font-semibold text-white text-sm">Observaciones del Profiler Agéntico</h3>
+        <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="badge badge-rojo">DOLOR_SAT</span>
+            <span class="text-xs text-slate-400">Firma contable con carga en declaración y cálculo fiscal</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="badge badge-ambar">STACK CONTABLE</span>
+            <span class="text-xs text-slate-400">Objetivo para integración con CONTPAQi / Aspel</span>
+          </div>
+        </div>
+      </div>\`;
+    lucide.createIcons();
+  } catch(e) {
+    content.innerHTML = '<div class="text-rose-400 text-sm p-4">Error cargando detalles</div>';
+  }
+}
+
+function cerrarModalCuenta() {
+  document.getElementById('modalCuenta').classList.add('hidden');
+}
+
+// ── CONTACTOS ──
+async function renderContactos() {
+  if (!state.contacts.length) await loadContacts();
+  const body = document.getElementById('contactosBody');
+  const contacts = state.contacts || [];
+
+  body.innerHTML = contacts.length === 0
+    ? '<tr><td colspan="5" class="p-6 text-center text-slate-500 text-sm">Sin contactos registrados. Haz clic en "+ Nuevo contacto" para dar de alta uno.</td></tr>'
+    : contacts.map(c => {
+        const acc = state.accounts.find(a => a.id === c.account_id);
+        const cuentaNombre = acc ? acc.name : (c.account_id ? 'Cuenta ' + c.account_id.slice(0,8) : '-');
+        return \`
+        <tr class="hover:bg-slate-800/30 transition-colors">
+          <td class="px-4 py-3 font-medium text-white">\${c.name || 'Sin nombre'}</td>
+          <td class="px-4 py-3 text-slate-400">\${cuentaNombre}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.email || '-'}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.phone || '-'}</td>
+          <td class="px-4 py-3">
+            <div class="flex gap-2">
+              <button onclick="accionLlamar('\${c.phone}')" class="p-1.5 rounded-lg bg-ark-emerald/10 text-ark-emerald_hi hover:bg-ark-emerald/20 transition-colors" title="Llamada IA"><i data-lucide="phone" class="w-4 h-4"></i></button>
+              <button onclick="accionEmail('\${c.email}')" class="p-1.5 rounded-lg bg-ark-blue/10 text-ark-blue_hi hover:bg-ark-blue/20 transition-colors" title="Enviar correo"><i data-lucide="mail" class="w-4 h-4"></i></button>
+            </div>
+          </td>
+        </tr>\`;
+      }).join('');
+
+  lucide.createIcons();
+}
+
+function accionLlamar(tel) {
+  if (!tel || tel === '-') { toast('Contacto sin teléfono registrado'); return; }
+  toast(\`📞 Iniciando llamada agente IA a \${tel}…\`);
+}
+
+function accionEmail(email) {
+  if (!email || email === '-') { toast('Contacto sin correo registrado'); return; }
+  toast(\`✉️ Redactando correo agéntico a \${email}…\`);
+}
+
+// ── TAREAS ──
+let tareasFilter = 'todas';
+async function renderTareas() {
+  if (!state.tasks.length) await loadTasks();
+  let list = state.tasks || [];
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (tareasFilter === 'vencidas') {
+    list = list.filter(t => t.due_date && t.due_date.slice(0,10) < todayStr && t.status !== 'done');
+  }
+  if (tareasFilter === 'hoy') {
+    list = list.filter(t => t.due_date && t.due_date.slice(0, 10) === todayStr);
+  }
+  if (tareasFilter === 'semana') {
+    const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    list = list.filter(t => t.due_date && t.due_date.slice(0,10) <= nextWeek);
+  }
+
+  const container = document.getElementById('tareasList');
+  container.innerHTML = list.length === 0
+    ? '<p class="text-sm text-slate-500 py-8 text-center bg-slate-900 border border-slate-800 rounded-xl">Sin tareas en este filtro</p>'
+    : list.map(t => {
+        const isDone = t.status === 'done';
+        const isVencida = t.due_date && t.due_date.slice(0,10) < todayStr && !isDone;
+        return \`
+        <div class="flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3.5 hover:border-slate-700 transition-colors \${isDone ? 'opacity-50' : ''}">
+          <input type="checkbox" \${isDone ? 'checked' : ''} onchange="completarTarea('\${t.id}')"
+            class="w-4 h-4 rounded border-slate-600 bg-slate-800 text-ark-emerald focus:ring-ark-emerald/30 cursor-pointer">
+          <div class="flex-1 min-w-0">
+            <div class="text-sm text-white \${isDone ? 'line-through text-slate-500' : ''}">\${t.title}</div>
+            <div class="font-mono text-xs \${isVencida ? 'text-ark-rose_hi' : 'text-slate-500'}">\${t.due_date ? t.due_date.slice(0,10) : 'Sin fecha'}</div>
+          </div>
+          \${isVencida ? '<span class="badge badge-rojo">Vencida</span>' : (isDone ? '<span class="badge badge-esmeralda">Completada</span>' : '')}
+        </div>\`;
+      }).join('');
+
+  lucide.createIcons();
+}
+
+async function completarTarea(id) {
+  const t = state.tasks.find(x => x.id === id);
+  if (!t) return;
+  const isDone = t.status === 'done';
+  t.status = isDone ? 'pending' : 'done';
+  renderTareas();
+
+  try {
+    if (!isDone) {
+      await apiCall(\`/api/crm/tasks/\${id}/complete\`, 'POST', {});
+      toast('✅ Tarea marcada como completada');
+    } else {
+      await apiCall(\`/api/crm/tasks/\${id}\`, 'PATCH', { status: 'pending' });
+      toast('Tarea reabierta');
+    }
+    loadMetrics();
+  } catch(e) {
+    console.error('Error toggling tarea:', e);
+  }
+}
+
+document.querySelectorAll('.tf-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tf-btn').forEach(b => {
+      b.className = 'tf-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
+    });
+    btn.className = 'tf-btn active text-xs font-semibold px-3 py-1.5 rounded-full bg-ark-blue/15 text-ark-blue_hi border border-ark-blue/30';
+    tareasFilter = btn.dataset.tf;
+    renderTareas();
+  });
 });
+
+// ── SUPERADMIN VIEW ──
+function renderSuperadmin() {
+  lucide.createIcons();
+}
+
+// ── CREACIÓN DE ENTIDADES (MODALES) ──
+
+// Nueva Oportunidad
+async function abrirModalNuevaOportunidad() {
+  if (!state.accounts.length) await loadAccounts();
+  const select = document.getElementById('oppAccountSelect');
+  select.innerHTML = state.accounts.map(a => \`<option value="\${a.id}">\${a.name} (\${a.city || 'Mérida'})</option>\`).join('');
+  document.getElementById('modalNuevaOportunidad').classList.remove('hidden');
+  lucide.createIcons();
+}
+function cerrarModalNuevaOportunidad() { document.getElementById('modalNuevaOportunidad').classList.add('hidden'); }
+
+async function guardarNuevaOportunidad(e) {
+  e.preventDefault();
+  const accountId = document.getElementById('oppAccountSelect').value;
+  const nombre = document.getElementById('oppNombreInput').value.trim();
+  const monto = parseFloat(document.getElementById('oppMontoInput').value) || 399;
+  const etapa = document.getElementById('oppEtapaSelect').value;
+  const fecha = document.getElementById('oppFechaCierreInput').value || null;
+
+  try {
+    const res = await apiCall('/api/crm/opportunities', 'POST', {
+      account_id: accountId,
+      name: nombre,
+      estimated_value: monto,
+      stage: etapa,
+      expected_close_date: fecha,
+      currency: 'MXN'
+    });
+    if (res && res.error) { toast('⚠️ ' + res.error); return; }
+    cerrarModalNuevaOportunidad();
+    toast('🎉 Oportunidad creada exitosamente');
+    await loadOpportunities();
+    renderKanban();
+  } catch(err) {
+    toast('Error creando oportunidad');
+  }
+}
+
+// Nueva Cuenta
+function abrirModalNuevaCuenta() {
+  document.getElementById('modalNuevaCuenta').classList.remove('hidden');
+  lucide.createIcons();
+}
+function cerrarModalNuevaCuenta() { document.getElementById('modalNuevaCuenta').classList.add('hidden'); }
+
+async function guardarNuevaCuenta(e) {
+  e.preventDefault();
+  const nombre = document.getElementById('accNombreInput').value.trim();
+  const ciudad = document.getElementById('accCiudadInput').value.trim();
+  const tamano = document.getElementById('accTamanoSelect').value;
+  const tenant = document.getElementById('accTenantSelect').value;
+
+  try {
+    const res = await apiCall('/api/crm/accounts', 'POST', {
+      name: nombre,
+      city: ciudad || 'Mérida',
+      size: tamano,
+      origin: 'manual'
+    });
+    if (res && res.error) { toast('⚠️ ' + res.error); return; }
+    cerrarModalNuevaCuenta();
+    toast('Cuenta dada de alta');
+    await loadAccounts();
+    renderCuentas();
+  } catch(err) {
+    toast('Error creando cuenta');
+  }
+}
+
+// Nuevo Contacto
+async function abrirModalNuevoContacto(preselectedAccountId = null) {
+  if (!state.accounts.length) await loadAccounts();
+  const select = document.getElementById('ctAccountSelect');
+  select.innerHTML = state.accounts.map(a => \`<option value="\${a.id}" \${a.id === preselectedAccountId ? 'selected' : ''}>\${a.name}</option>\`).join('');
+  document.getElementById('modalNuevoContacto').classList.remove('hidden');
+  lucide.createIcons();
+}
+function cerrarModalNuevoContacto() { document.getElementById('modalNuevoContacto').classList.add('hidden'); }
+
+async function guardarNuevoContacto(e) {
+  e.preventDefault();
+  const accountId = document.getElementById('ctAccountSelect').value;
+  const nombre = document.getElementById('ctNombreInput').value.trim();
+  const email = document.getElementById('ctEmailInput').value.trim();
+  const tel = document.getElementById('ctTelInput').value.trim();
+
+  try {
+    const res = await apiCall('/api/crm/contacts', 'POST', {
+      account_id: accountId,
+      name: nombre,
+      email: email || null,
+      phone: tel || null
+    });
+    if (res && res.error) { toast('⚠️ ' + res.error); return; }
+    cerrarModalNuevoContacto();
+    toast('Contacto registrado');
+    await loadContacts();
+    renderContactos();
+  } catch(err) {
+    toast('Error creando contacto');
+  }
+}
+
+// Nueva Tarea
+function abrirModalNuevaTarea() {
+  document.getElementById('modalNuevaTarea').classList.remove('hidden');
+  lucide.createIcons();
+}
+function cerrarModalNuevaTarea() { document.getElementById('modalNuevaTarea').classList.add('hidden'); }
+
+async function guardarNuevaTarea(e) {
+  e.preventDefault();
+  const titulo = document.getElementById('taskTituloInput').value.trim();
+  const fecha = document.getElementById('taskFechaInput').value;
+
+  try {
+    const res = await apiCall('/api/crm/tasks', 'POST', {
+      title: titulo,
+      due_date: fecha || null
+    });
+    if (res && res.error) { toast('⚠️ ' + res.error); return; }
+    cerrarModalNuevaTarea();
+    toast('Tarea programada');
+    await loadTasks();
+    renderTareas();
+  } catch(err) {
+    toast('Error creando tarea');
+  }
+}
+
+// Plantilla Modal
+function abrirModalPlantilla() { document.getElementById('modalPlantilla').classList.remove('hidden'); lucide.createIcons(); }
+function cerrarModalPlantilla() { document.getElementById('modalPlantilla').classList.add('hidden'); }
+
+// Importar Modal
+function abrirModalImportar() { document.getElementById('modalImportar').classList.remove('hidden'); lucide.createIcons(); }
+function cerrarModalImportar() { document.getElementById('modalImportar').classList.add('hidden'); }
+
+async function procesarImportarCuentas() {
+  const text = document.getElementById('importarTextarea').value.trim();
+  if (!text) return;
+  const items = [];
+  try {
+    if (text.startsWith('[')) {
+      items.push(...JSON.parse(text));
+    } else {
+      const lines = text.split('\\n');
+      for (const line of lines) {
+        const parts = line.split(',');
+        if (parts[0]) {
+          items.push({ name: parts[0].trim(), city: (parts[1] || 'Mérida').trim(), origin: 'csv_import' });
+        }
+      }
+    }
+    const res = await apiCall('/api/crm/accounts/bulk', 'POST', { items });
+    toast(\`✅ \${res?.created || items.length} cuentas importadas\`);
+    cerrarModalImportar();
+    await loadAccounts();
+    renderCuentas();
+  } catch(err) {
+    toast('Error en formato de importación');
+  }
+}
+
+// ── EXPORTADORES CSV / PDF ──
+function descargarCSV(nombreArchivo, contenido) {
+  const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  toast(\`Archivo descargado: \${nombreArchivo}\`);
+}
+
+function exportarCuentasCSV() {
+  const encabezados = 'id,nombre,scian,tamano,fuente,tenant,ciudad\\n';
+  const filas = (state.accounts || []).map(a => 
+    \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||''}","\${a.size||'1-5'}","\${a.harvest_source||a.origin||'denue'}","\${a.tenant_id||'acc_ark_ledger'}","\${a.city||'Mérida'}"\`
+  ).join('\\n');
+  descargarCSV('cuentas_ark_crm.csv', encabezados + filas);
+}
+
+function exportarCohorteCSV() {
+  const leads = (state.accounts || []).filter(a => (a.tenant_id || '').includes('ark_ledger') || a.harvest_source === 'denue');
+  const encabezados = 'id,nombre,scian,fuente,ciudad\\n';
+  const filas = leads.map(a => \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||'541211'}","\${a.harvest_source||'denue'}","\${a.city||'Mérida'}"\`).join('\\n');
+  descargarCSV('cohorte_ark_ledger_despachos.csv', encabezados + filas);
+}
+
+function exportarCohortePDF() {
+  window.print();
+}
+
+// ── BÚSQUEDA GLOBAL ──
+const buscador = document.getElementById('buscadorGlobal');
+const searchResults = document.getElementById('searchResults');
+let searchDebounce;
+
+buscador.addEventListener('input', (e) => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(async () => {
+    const q = e.target.value.trim();
+    if (q.length < 2) { searchResults.classList.add('hidden'); return; }
+
+    try {
+      const data = await apiCall(\`/api/crm/search?q=\${encodeURIComponent(q)}\`);
+      const resultados = [];
+      (data?.accounts || []).forEach(a => resultados.push({ tipo: 'Cuenta', id: a.id, nombre: a.name, badge: 'badge-ambar', action: () => abrirModalCuenta(a.id) }));
+      (data?.contacts || []).forEach(c => resultados.push({ tipo: 'Contacto', id: c.id, nombre: c.name, badge: 'badge-esmeralda', action: () => { location.hash = '#/contactos'; } }));
+      (data?.opportunities || []).forEach(o => resultados.push({ tipo: 'Oportunidad', id: o.id, nombre: o.name || ('Oportunidad ' + o.id.slice(0,8)), badge: 'badge-azul', action: () => { location.hash = '#/pipeline'; } }));
+
+      searchResults.innerHTML = resultados.length === 0
+        ? '<p class="p-4 text-xs text-slate-500">Sin resultados para "' + q + '"</p>'
+        : resultados.slice(0, 8).map((r, i) => \`
+          <div onclick="searchResults.classList.add('hidden'); window._searchActions[\${i}]()" class="px-4 py-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-800/50 last:border-0 flex items-center justify-between">
+            <span class="text-xs text-white">\${r.nombre}</span>
+            <span class="badge \${r.badge}">\${r.tipo}</span>
+          </div>\`).join('');
+
+      window._searchActions = resultados.map(r => r.action);
+      searchResults.classList.remove('hidden');
+    } catch(err) {
+      console.warn('Error en búsqueda:', err);
+    }
+  }, 250);
+});
+
+document.addEventListener('click', (e) => {
+  if (!buscador.contains(e.target)) searchResults.classList.add('hidden');
+});
+
+// ── TOAST ──
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.innerHTML = \`<span>\${msg}</span>\`;
+  t.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add('hidden'), 3200);
+}
+
+// ── INIT ──
+window.addEventListener('hashchange', router);
+initUser();
+refreshData();
 </script>
 </body>
 </html>`;
