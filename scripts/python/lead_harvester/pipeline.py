@@ -46,7 +46,8 @@ async def run_pipeline(
                 result.ingested += 1
             else:
                 result.errors += 1
-        except Exception:
+        except Exception as exc:
+            print(f"[pipeline exception] {lead.lead_id}: {exc}", file=__import__("sys").stderr)
             result.errors += 1
     return result
 

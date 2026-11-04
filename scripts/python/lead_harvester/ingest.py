@@ -149,4 +149,6 @@ async def ingest_lead(lead: RawLead, score: int = 50, base_url: Optional[str] = 
             json=payload.model_dump(),
             headers=headers,
         )
+        if resp.status_code not in (200, 201, 202):
+            print(f"[ingest error] HTTP {resp.status_code} for {lead.lead_id}: {resp.text}", file=__import__("sys").stderr)
         return resp.status_code in (200, 201, 202)

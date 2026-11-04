@@ -113,7 +113,7 @@ webhookRouter.post("/", async (c) => {
 
         await c.env.DB.prepare(`
           INSERT INTO sales_leads (id, email, despacho_nombre, tamano, dolor_detectado, especialista_asignado, estado, score, phone, account_id, contact_id, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'nuevo', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          VALUES (?, ?, ?, ?, ?, ?, 'nuevo', ?, ?, NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         `).bind(
           finalLeadId,
           email,
@@ -122,9 +122,7 @@ webhookRouter.post("/", async (c) => {
           diag.dolor_detectado,
           diag.especialista_asignado,
           initialScore,
-          normalizedPhone || null,
-          targetAccountId,
-          targetContactId
+          normalizedPhone || null
         ).run();
       }
 
@@ -145,14 +143,16 @@ webhookRouter.post("/", async (c) => {
             .bind(normalizedPhone, contact_name || "Contacto Corporativo", targetContactId, targetAccountId).run();
         } catch {}
       }
+      const ubicacion = ctx.ubicacion || body.ciudad || null;
       try {
         await c.env.DB.prepare(`
           UPDATE sales_accounts
           SET scian_code = COALESCE(?, scian_code),
               harvest_source = COALESCE(?, harvest_source),
+              city = COALESCE(?, city),
               last_enriched_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(scian_code || null, harvest_source || "denue", targetAccountId).run();
+        `).bind(scian_code || null, harvest_source || "denue", ubicacion, targetAccountId).run();
       } catch {}
       if (contact_email) {
         try {
