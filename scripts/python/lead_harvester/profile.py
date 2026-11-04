@@ -10,7 +10,9 @@ import httpx
 PATS_SOFTWARE = {
     "CONTPAQi": r"contpaq",
     "COI": r"\bcoi\b",
+    "NOI": r"\bnoi\b",
     "Aspel": r"aspel",
+    "SAE": r"\bsae\b",
     "Shopify": r"shopify",
     "WooCommerce": r"woocommerce",
     "WordPress": r"wp-content|wordpress",
@@ -19,6 +21,8 @@ PATS_DOLOR = {
     "DOLOR_SAT": r"\bsat\b|multas.*sat|contingencia.*fiscal",
     "DOLOR_MOROSIDAD": r"cartera.*vencida|morosidad|cobranza",
     "DOLOR_CFDI": r"cfdi|facturaci[oó]n.*electr[oó]nica|timbrado",
+    "DOLOR_AUDITORIA": r"auditor[ií]a|defensa.*fiscal|dictamen|cr[eé]dito.*fiscal",
+    "DOLOR_NOMINA": r"maquila.*n[oó]mina|c[aá]lculo.*n[oó]mina|imss|infonavit",
 }
 PATS_FUTURA = {
     "SENAL_BROKER_INMOBILIARIO": r"preventa|lotes.*inversi[oó]n|asesor.*inmobiliario|\bampi\b|bienes.*ra[ií]ces|desarrollos.*yucat[aá]n",

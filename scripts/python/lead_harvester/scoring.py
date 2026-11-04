@@ -11,6 +11,14 @@ PAIN_KEYWORDS = {
     "CFDI": 15,
     "multas": 20,
     "cobranza": 10,
+    # Señales contables y fiscales para Ark Ledger
+    "contabilidad": 20,
+    "despacho contable": 25,
+    "contadores": 20,
+    "auditoría": 20,
+    "asesoría fiscal": 25,
+    "nóminas": 15,
+    "fiscal": 15,
     # Señales de alta intención para Futura Capital Partners
     "medicina especializada": 25,
     "consultorio": 20,

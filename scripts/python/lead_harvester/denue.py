@@ -69,25 +69,36 @@ FUTURA_GEO_CLUSTERS = [
 
 # Palabras clave y coordenadas estratégicas para Ark Ledger (Despachos Contables y Fiscalistas)
 ARK_LEDGER_GEO_CLUSTERS = [
-    # CDMX — Benito Juárez / Insurgentes Sur / Del Valle
+    # 1. Mérida — Zona Norte / Altabrisa / San Ramón Norte / City Center (Alta densidad de firmas contables)
+    {"query": "despacho contable", "coords": "21.0185,-89.5850", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores", "coords": "21.0185,-89.5850", "radio": 5000, "scian_default": "541211"},
+    {"query": "asesoria fiscal", "coords": "21.0185,-89.5850", "radio": 5000, "scian_default": "541110"},
+    {"query": "auditoria fiscal", "coords": "21.0185,-89.5850", "radio": 5000, "scian_default": "541212"},
+    {"query": "consultoria fiscal", "coords": "21.0450,-89.6150", "radio": 5000, "scian_default": "541211"},
+
+    # 2. Mérida — Paseo Montejo / Campestre / García Ginerés / Centro (Firmas tradicionales y auditores)
+    {"query": "despacho contable", "coords": "20.9850,-89.6180", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores", "coords": "20.9850,-89.6180", "radio": 5000, "scian_default": "541211"},
+    {"query": "auditoria", "coords": "20.9850,-89.6180", "radio": 5000, "scian_default": "541212"},
+    {"query": "asesoria fiscal", "coords": "20.9850,-89.6180", "radio": 5000, "scian_default": "541110"},
+    {"query": "contabilidad", "coords": "20.9850,-89.6180", "radio": 5000, "scian_default": "541211"},
+
+    # 3. CDMX — Benito Juárez / Insurgentes Sur / Del Valle
     {"query": "despacho contable", "coords": "19.3850,-99.1650", "radio": 5000, "scian_default": "541211"},
     {"query": "contadores", "coords": "19.3732,-99.1793", "radio": 5000, "scian_default": "541211"},
-    # CDMX — Cuauhtémoc / Reforma / Polanco
+    # 4. CDMX — Cuauhtémoc / Reforma / Polanco
     {"query": "auditoria fiscal", "coords": "19.4326,-99.1550", "radio": 5000, "scian_default": "541212"},
     {"query": "asesoria fiscal", "coords": "19.4335,-99.1950", "radio": 5000, "scian_default": "541110"},
-    # Guadalajara & Zapopan — Puerta de Hierro / Providencia
+    # 5. Guadalajara & Zapopan — Puerta de Hierro / Providencia
     {"query": "despacho contable", "coords": "20.6950,-103.3850", "radio": 5000, "scian_default": "541211"},
     {"query": "contadores", "coords": "20.7100,-103.4120", "radio": 5000, "scian_default": "541211"},
-    # Monterrey & San Pedro Garza García — Valle Oriente / Obispado
+    # 6. Monterrey & San Pedro Garza García — Valle Oriente / Obispado
     {"query": "despacho contable", "coords": "25.6570,-100.3650", "radio": 5000, "scian_default": "541211"},
     {"query": "contabilidad", "coords": "25.6710,-100.3400", "radio": 5000, "scian_default": "541211"},
     {"query": "asesoria fiscal", "coords": "25.6420,-100.3250", "radio": 5000, "scian_default": "541110"},
-    # Mérida — Paseo Montejo / Altabrisa
-    {"query": "despacho contable", "coords": "20.9850,-89.6180", "radio": 5000, "scian_default": "541211"},
-    {"query": "contadores", "coords": "21.0185,-89.5850", "radio": 5000, "scian_default": "541211"},
-    # Querétaro — Centro Sur / Bernardo Quintana
+    # 7. Querétaro — Centro Sur / Bernardo Quintana
     {"query": "despacho contable", "coords": "20.5930,-100.3920", "radio": 5000, "scian_default": "541211"},
-    # Puebla — Angelópolis / Juárez
+    # 8. Puebla — Angelópolis / Juárez
     {"query": "despacho contable", "coords": "19.0300,-98.2350", "radio": 5000, "scian_default": "541211"},
 ]
 
