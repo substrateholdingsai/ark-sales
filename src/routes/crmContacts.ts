@@ -17,6 +17,7 @@ function parsePagination(c: any) {
 crmContactsRouter.get("/", async (c) => {
   const { limit, offset } = parsePagination(c);
   const accountId = c.req.query("account_id");
+  const city = (c.req.query("city") || "").trim();
   const q = (c.req.query("q") || "").trim();
   let sql = `
     SELECT c.*, a.name AS account_name, a.city AS account_city, a.origin AS account_origin, a.scian_code AS account_scian
@@ -26,17 +27,30 @@ crmContactsRouter.get("/", async (c) => {
   `;
   const params: any[] = [];
   if (accountId) { sql += " AND c.account_id = ?"; params.push(accountId); }
-  if (q) { sql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.whatsapp LIKE ?)"; params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`); }
+  if (city) { sql += " AND a.city LIKE ?"; params.push(`%${city}%`); }
+  if (q) {
+    sql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.whatsapp LIKE ? OR a.name LIKE ? OR a.city LIKE ?)";
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+  }
   sql += " ORDER BY c.created_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
   const stmt = c.env.DB.prepare(sql);
   const bound = params.length ? stmt.bind(...params) : stmt;
   const { results } = await bound.all();
 
-  let countSql = "SELECT COUNT(*) as n FROM sales_contacts c WHERE 1=1";
+  let countSql = `
+    SELECT COUNT(*) as n
+    FROM sales_contacts c
+    LEFT JOIN sales_accounts a ON c.account_id = a.id
+    WHERE 1=1
+  `;
   const cparams: any[] = [];
   if (accountId) { countSql += " AND c.account_id = ?"; cparams.push(accountId); }
-  if (q) { countSql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.whatsapp LIKE ?)"; cparams.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`); }
+  if (city) { countSql += " AND a.city LIKE ?"; cparams.push(`%${city}%`); }
+  if (q) {
+    countSql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.whatsapp LIKE ? OR a.name LIKE ? OR a.city LIKE ?)";
+    cparams.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+  }
   const countStmt = c.env.DB.prepare(countSql);
   const countBound = cparams.length ? countStmt.bind(...cparams) : countStmt;
   const countRow: any = await countBound.first();

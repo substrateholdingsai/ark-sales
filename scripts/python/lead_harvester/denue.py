@@ -92,6 +92,44 @@ ARK_LEDGER_GEO_CLUSTERS = [
 ]
 
 
+def parse_ubicacion(item: dict) -> tuple[Optional[str], Optional[str]]:
+    municipio = (item.get("Municipio") or item.get("ciudad") or "").strip()
+    entidad = (item.get("Entidad") or item.get("estado") or "").strip()
+    if municipio and entidad:
+        return municipio, entidad
+
+    raw_ubi = str(item.get("Ubicacion") or "").upper().strip()
+    if not raw_ubi:
+        return municipio or None, entidad or None
+
+    # Detectar principales clusters turísticos y ciudades clave
+    if "CANCUN" in raw_ubi or "BENITO JUAREZ" in raw_ubi:
+        return "Cancún", "Quintana Roo"
+    if "PLAYA DEL CARMEN" in raw_ubi or "SOLIDARIDAD" in raw_ubi:
+        return "Playa del Carmen", "Quintana Roo"
+    if "TULUM" in raw_ubi:
+        return "Tulum", "Quintana Roo"
+    if "COZUMEL" in raw_ubi:
+        return "Cozumel", "Quintana Roo"
+    if "ISLA MUJERES" in raw_ubi:
+        return "Isla Mujeres", "Quintana Roo"
+    if "CHETUMAL" in raw_ubi or "OTHON P. BLANCO" in raw_ubi or "OTHÓN P. BLANCO" in raw_ubi:
+        return "Chetumal", "Quintana Roo"
+    if "MERIDA" in raw_ubi or "MÉRIDA" in raw_ubi:
+        return "Mérida", "Yucatán"
+    if "PROGRESO" in raw_ubi:
+        return "Progreso", "Yucatán"
+    if "VALLADOLID" in raw_ubi:
+        return "Valladolid", "Yucatán"
+
+    parts = [p.strip() for p in raw_ubi.split(",") if p.strip()]
+    if len(parts) >= 2:
+        return parts[0].title(), parts[-1].title()
+    if len(parts) == 1:
+        return parts[0].title(), entidad or None
+    return municipio or None, entidad or None
+
+
 class DenueHarvester(BaseHarvester):
     source_name = "denue"
     rate_limit = 2.0
@@ -203,6 +241,8 @@ class DenueHarvester(BaseHarvester):
             import hashlib
             lead_id_kwargs["lead_id"] = f"lead_nt_{hashlib.sha256(f'{nombre}_{raw_tel}'.lower().encode('utf-8')).hexdigest()[:16]}"
 
+        ciudad_norm, estado_norm = parse_ubicacion(item)
+
         return RawLead(
             **lead_id_kwargs,
             razon_social=nombre,
@@ -210,8 +250,8 @@ class DenueHarvester(BaseHarvester):
             actividad=item.get("Actividad") or item.get("actividad") or item.get("Nombre_Act") or "",
             scian_code=code,
             empleados_rango=item.get("Estrato") or item.get("empleados_rango"),
-            ciudad=item.get("Municipio") or item.get("ciudad"),
-            estado=item.get("Entidad") or item.get("estado"),
+            ciudad=ciudad_norm,
+            estado=estado_norm,
             lat=float(item["Latitud"]) if item.get("Latitud") else item.get("lat"),
             lon=float(item["Longitud"]) if item.get("Longitud") else item.get("lon"),
             sitio_web=item.get("Sitio_Web") or item.get("sitio_web"),

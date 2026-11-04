@@ -352,6 +352,12 @@ tailwind.config = {
           <option value="acc_ark_ledger">Ark Ledger</option>
           <option value="acc_futura_capital">Futura Capital</option>
         </select>
+        <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue" id="filtroCiudad" onchange="filtrarCuentas()">
+          <option value="">Ciudad (todas)</option>
+          <option value="cancun">Cancún / Quintana Roo</option>
+          <option value="merida">Mérida / Yucatán</option>
+          <option value="otra">Otras plazas</option>
+        </select>
       </div>
 
       <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -394,10 +400,17 @@ tailwind.config = {
         <div class="flex items-center gap-2 flex-1 max-w-md">
           <div class="relative w-full">
             <i data-lucide="search" class="w-4 h-4 text-slate-500 absolute left-3 top-2.5"></i>
-            <input type="text" id="filtroContactosInput" oninput="buscarContactosEnTabla(event)" placeholder="Buscar por médico, consultorio, teléfono o WhatsApp..." class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white focus:border-ark-blue">
+            <input type="text" id="filtroContactosInput" oninput="buscarContactosEnTabla(event)" placeholder="Buscar por médico, consultorio, ciudad, teléfono o WhatsApp..." class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white focus:border-ark-blue">
           </div>
         </div>
         <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          <select id="filtroContactosCiudad" onchange="cambiarFiltroCiudadContactos(event)" class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-ark-blue font-medium cursor-pointer">
+            <option value="">📍 Ciudad (Todas)</option>
+            <option value="cancun">🌴 Cancún / Q. Roo</option>
+            <option value="playa">🌊 Riviera Maya / Tulum</option>
+            <option value="merida">🏛️ Mérida / Yucatán</option>
+            <option value="otra">Otras plazas</option>
+          </select>
           <button data-ct-tab="todos" onclick="cambiarTabContactos('todos')" class="ct-tab-btn active text-xs font-semibold px-3 py-1.5 rounded-full bg-ark-blue/15 text-ark-blue_hi border border-ark-blue/30">Todos</button>
           <button data-ct-tab="con_whatsapp" onclick="cambiarTabContactos('con_whatsapp')" class="ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-emerald-400">🟢 Con WhatsApp</button>
           <button data-ct-tab="pendientes" onclick="cambiarTabContactos('pendientes')" class="ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-300">Pendientes</button>
@@ -441,7 +454,7 @@ tailwind.config = {
 
       <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg relative">
         <div id="contactosTableScrollContainer" class="overflow-x-auto w-full scroll-smooth">
-          <table class="w-full text-sm min-w-[1140px]">
+          <table class="w-full text-sm min-w-[1240px]">
             <thead>
               <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider select-none bg-slate-900/90">
                 <th class="px-3 py-3 w-10 text-center select-none sticky left-0 bg-slate-900/95 backdrop-blur-sm z-10 border-r border-slate-800/80">
@@ -457,6 +470,12 @@ tailwind.config = {
                   <div class="flex items-center gap-1.5">
                     <span>Cuenta / Empresa</span>
                     <span id="sortIconAccount" class="text-slate-600">⇅</span>
+                  </div>
+                </th>
+                <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors min-w-[150px]" onclick="alternarOrdenContactos('city')">
+                  <div class="flex items-center gap-1.5">
+                    <span>Ciudad / Plaza</span>
+                    <span id="sortIconCity" class="text-slate-600">⇅</span>
                   </div>
                 </th>
                 <th class="px-4 py-3 min-w-[180px]">Email</th>
@@ -1493,12 +1512,21 @@ function getAccountTenant(a) {
 }
 
 function filtrarCuentas() {
-  const tamano = document.getElementById('filtroTamano').value;
-  const tenant = document.getElementById('filtroTenant').value;
+  const tamano = document.getElementById('filtroTamano')?.value || '';
+  const tenant = document.getElementById('filtroTenant')?.value || '';
+  const ciudad = document.getElementById('filtroCiudad')?.value || '';
 
   let list = state.accounts || [];
   if (tamano) list = list.filter(a => (a.size || a.employee_count_range || '').includes(tamano));
   if (tenant) list = list.filter(a => getAccountTenant(a) === tenant);
+  if (ciudad) {
+    list = list.filter(a => {
+      const c = (a.city || '').toLowerCase();
+      if (ciudad === 'cancun') return c.includes('cancún') || c.includes('cancun') || c.includes('benito') || c.includes('quintana');
+      if (ciudad === 'merida') return c.includes('mérida') || c.includes('merida') || c.includes('yucatán') || c.includes('yucatan');
+      return !c.includes('cancun') && !c.includes('cancún') && !c.includes('merida') && !c.includes('mérida');
+    });
+  }
 
   document.getElementById('cuentasSub').textContent = \`\${list.length} de \${state.accounts.length} cuentas registradas en D1\`;
 
@@ -1645,6 +1673,13 @@ function cerrarModalCuenta() {
 let sortContactos = { campo: 'name', dir: 'asc' };
 let filtroContactosTexto = '';
 let filtroContactosTab = 'todos';
+let filtroContactosCiudad = '';
+
+function cambiarFiltroCiudadContactos(e) {
+  filtroContactosCiudad = (e.target.value || '').trim();
+  paginaContactos = 1;
+  renderContactos();
+}
 
 let paginaContactos = 1;
 const CONTACTOS_POR_PAGINA = 50;
@@ -1849,6 +1884,11 @@ async function renderContactos() {
     icoTitle.textContent = sortContactos.campo === 'title' ? (sortContactos.dir === 'asc' ? '▲' : '▼') : '⇅';
     icoTitle.className = sortContactos.campo === 'title' ? 'text-ark-blue_hi font-bold' : 'text-slate-600';
   }
+  const icoCity = document.getElementById('sortIconCity');
+  if (icoCity) {
+    icoCity.textContent = sortContactos.campo === 'city' ? (sortContactos.dir === 'asc' ? '▲' : '▼') : '⇅';
+    icoCity.className = sortContactos.campo === 'city' ? 'text-ark-blue_hi font-bold' : 'text-slate-600';
+  }
 
   // Filtrado
   let list = contacts.slice();
@@ -1864,17 +1904,41 @@ async function renderContactos() {
     });
   }
 
+  if (filtroContactosCiudad) {
+    list = list.filter(c => {
+      const acc = state.accounts.find(a => a.id === c.account_id);
+      const rawCity = c.account_city || acc?.city || '';
+      const city = rawCity.toLowerCase();
+      const phone = (c.phone || c.whatsapp || '').toLowerCase();
+      const email = (c.email || '').toLowerCase();
+      if (filtroContactosCiudad === 'cancun') {
+        return city.includes('cancún') || city.includes('cancun') || city.includes('benito') || city.includes('quintana') || phone.includes('998') || email.includes('cancun') || email.includes('caribe');
+      }
+      if (filtroContactosCiudad === 'playa') {
+        return city.includes('playa') || city.includes('solidaridad') || city.includes('tulum') || city.includes('cozumel');
+      }
+      if (filtroContactosCiudad === 'merida') {
+        return city.includes('mérida') || city.includes('merida') || city.includes('yucatán') || city.includes('yucatan') || (phone.includes('999') && !phone.includes('998'));
+      }
+      if (filtroContactosCiudad === 'otra') {
+        return !city.includes('cancun') && !city.includes('cancún') && !city.includes('merida') && !city.includes('mérida') && !city.includes('playa') && !phone.includes('998') && !phone.includes('999');
+      }
+      return true;
+    });
+  }
+
   if (filtroContactosTexto) {
     const q = filtroContactosTexto.toLowerCase();
     list = list.filter(c => {
       const acc = state.accounts.find(a => a.id === c.account_id);
       const accName = (c.account_name || acc?.name || '').toLowerCase();
+      const city = (c.account_city || acc?.city || '').toLowerCase();
       const name = (c.name || '').toLowerCase();
       const email = (c.email || '').toLowerCase();
       const phone = (c.phone || '').toLowerCase();
       const wa = (c.whatsapp || '').toLowerCase();
       const title = (c.title || '').toLowerCase();
-      return name.includes(q) || accName.includes(q) || email.includes(q) || phone.includes(q) || wa.includes(q) || title.includes(q);
+      return name.includes(q) || accName.includes(q) || city.includes(q) || email.includes(q) || phone.includes(q) || wa.includes(q) || title.includes(q);
     });
   }
 
@@ -1892,6 +1956,12 @@ async function renderContactos() {
       const aAcc = a.account_name || (state.accounts.find(acc => acc.id === a.account_id)?.name) || '';
       const bAcc = b.account_name || (state.accounts.find(acc => acc.id === b.account_id)?.name) || '';
       const cmp = aAcc.localeCompare(bAcc, 'es', { sensitivity: 'base' });
+      return sortContactos.dir === 'asc' ? cmp : -cmp;
+    }
+    if (sortContactos.campo === 'city') {
+      const aCity = a.account_city || (state.accounts.find(acc => acc.id === a.account_id)?.city) || '';
+      const bCity = b.account_city || (state.accounts.find(acc => acc.id === b.account_id)?.city) || '';
+      const cmp = aCity.localeCompare(bCity, 'es', { sensitivity: 'base' });
       return sortContactos.dir === 'asc' ? cmp : -cmp;
     }
     if (sortContactos.campo === 'whatsapp') {
@@ -1973,10 +2043,24 @@ async function renderContactos() {
   }
 
   body.innerHTML = itemsPagina.length === 0
-    ? '<tr><td colspan="8" class="p-6 text-center text-slate-500 text-sm">No se encontraron contactos que coincidan con la búsqueda o filtro.</td></tr>'
+    ? '<tr><td colspan="9" class="p-6 text-center text-slate-500 text-sm">No se encontraron contactos que coincidan con la búsqueda o filtro.</td></tr>'
     : itemsPagina.map(c => {
         const acc = state.accounts.find(a => a.id === c.account_id);
         const cuentaNombre = c.account_name || (acc ? acc.name : (c.account_id ? 'Cuenta ' + c.account_id.slice(0,8) : '-'));
+        const cityRaw = c.account_city || acc?.city || '';
+        const cityLower = cityRaw.toLowerCase();
+        const phone = (c.phone || c.whatsapp || '').toLowerCase();
+        const email = (c.email || '').toLowerCase();
+        let cityBadge = '<span class="text-slate-600 font-mono text-xs">-</span>';
+        if (cityLower.includes('cancún') || cityLower.includes('cancun') || cityLower.includes('benito') || cityLower.includes('quintana') || phone.includes('998') || email.includes('cancun') || email.includes('caribe')) {
+          cityBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 whitespace-nowrap">🌴 Cancún, Q.R.</span>';
+        } else if (cityLower.includes('playa') || cityLower.includes('solidaridad') || cityLower.includes('tulum') || cityLower.includes('cozumel')) {
+          cityBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-teal-500/10 text-teal-400 border border-teal-500/25 whitespace-nowrap">🌊 Riviera Maya</span>';
+        } else if (cityLower.includes('mérida') || cityLower.includes('merida') || cityLower.includes('yucatán') || cityLower.includes('yucatan') || phone.includes('999')) {
+          cityBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 whitespace-nowrap">🏛️ Mérida, Yuc.</span>';
+        } else if (cityRaw) {
+          cityBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap max-w-[140px] truncate" title="' + cityRaw + '">' + cityRaw + '</span>';
+        }
         return \`
         <tr class="hover:bg-slate-800/30 transition-colors">
           <td class="px-3 py-3 text-center sticky left-0 bg-slate-900/90 backdrop-blur-sm z-10 border-r border-slate-800/80">
@@ -1984,6 +2068,7 @@ async function renderContactos() {
           </td>
           <td class="px-4 py-3 font-medium text-white">\${c.name || 'Sin nombre'}</td>
           <td class="px-4 py-3 text-slate-400">\${cuentaNombre}</td>
+          <td class="px-4 py-3">\${cityBadge}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.email || '-'}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.phone || '-'}</td>
           <td class="px-4 py-3">
