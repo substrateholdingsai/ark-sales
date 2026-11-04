@@ -474,6 +474,32 @@ tailwind.config = {
           </table>
         </div>
       </div>
+
+      <!-- Controles de Paginación (50 por página) -->
+      <div id="contactosPagination" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-400">
+        <div class="flex items-center gap-2">
+          <span>Mostrando <span id="pagStart" class="text-white font-mono font-medium">1</span> - <span id="pagEnd" class="text-white font-mono font-medium">50</span> de <span id="pagTotal" class="text-white font-mono font-medium">0</span> contactos</span>
+          <span class="text-slate-600">|</span>
+          <span>Página <span id="pagActual" class="text-ark-blue_hi font-bold">1</span> de <span id="pagTotalPags" class="text-slate-300">1</span></span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button type="button" onclick="irPrimeraPaginaContactos()" id="btnPagPrimera" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Primera página">
+            <i data-lucide="chevrons-left" class="w-4 h-4"></i>
+          </button>
+          <button type="button" onclick="cambiarPaginaContactos(-1)" id="btnPagAnterior" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Página anterior">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Anterior</span>
+          </button>
+          <div id="pagNumerosContainer" class="flex items-center gap-1"></div>
+          <button type="button" onclick="cambiarPaginaContactos(1)" id="btnPagSiguiente" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Página siguiente">
+            <span class="hidden sm:inline">Siguiente</span>
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+          <button type="button" onclick="irUltimaPaginaContactos()" id="btnPagUltima" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Última página">
+            <i data-lucide="chevrons-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
     </section>
 
     <!-- ═══════ VISTA: TAREAS ═══════ -->
@@ -1604,13 +1630,42 @@ let sortContactos = { campo: 'name', dir: 'asc' };
 let filtroContactosTexto = '';
 let filtroContactosTab = 'todos';
 
+let paginaContactos = 1;
+const CONTACTOS_POR_PAGINA = 50;
+let totalPaginasContactos = 1;
+
+function cambiarPaginaContactos(delta) {
+  irAPaginaContactos(paginaContactos + delta);
+}
+
+function irPrimeraPaginaContactos() {
+  irAPaginaContactos(1);
+}
+
+function irUltimaPaginaContactos() {
+  irAPaginaContactos(totalPaginasContactos);
+}
+
+function irAPaginaContactos(pag) {
+  if (pag < 1) pag = 1;
+  if (pag > totalPaginasContactos) pag = totalPaginasContactos;
+  if (pag !== paginaContactos) {
+    paginaContactos = pag;
+    renderContactos();
+    const scrollEl = document.getElementById('contactosTableScrollContainer');
+    if (scrollEl) scrollEl.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  }
+}
+
 function buscarContactosEnTabla(e) {
   filtroContactosTexto = (e.target.value || '').trim().toLowerCase();
+  paginaContactos = 1;
   renderContactos();
 }
 
 function cambiarTabContactos(tab) {
   filtroContactosTab = tab;
+  paginaContactos = 1;
   document.querySelectorAll('.ct-tab-btn').forEach(btn => {
     if (btn.getAttribute('data-ct-tab') === tab) {
       btn.className = 'ct-tab-btn active text-xs font-semibold px-3 py-1.5 rounded-full bg-ark-blue/15 text-ark-blue_hi border border-ark-blue/30';
@@ -1628,6 +1683,7 @@ function alternarOrdenContactos(campo) {
     sortContactos.campo = campo;
     sortContactos.dir = 'asc';
   }
+  paginaContactos = 1;
   renderContactos();
 }
 
@@ -1827,16 +1883,68 @@ async function renderContactos() {
     return 0;
   });
 
+  const totalItems = list.length;
+  totalPaginasContactos = Math.max(1, Math.ceil(totalItems / CONTACTOS_POR_PAGINA));
+  if (paginaContactos > totalPaginasContactos) paginaContactos = totalPaginasContactos;
+  if (paginaContactos < 1) paginaContactos = 1;
+
+  const startIndex = totalItems === 0 ? 0 : (paginaContactos - 1) * CONTACTOS_POR_PAGINA;
+  const endIndex = Math.min(startIndex + CONTACTOS_POR_PAGINA, totalItems);
+  const itemsPagina = list.slice(startIndex, endIndex);
+
   const sub = document.getElementById('contactosSub');
   if (sub) {
-    sub.textContent = (filtroContactosTexto || filtroContactosTab !== 'todos')
-      ? (list.length + ' de ' + contacts.length + ' contactos')
-      : (contacts.length + ' contactos registrados');
+    sub.textContent = totalItems === 0
+      ? '0 contactos'
+      : (filtroContactosTexto || filtroContactosTab !== 'todos')
+        ? (totalItems + ' de ' + contacts.length + ' contactos (Pág. ' + paginaContactos + ' de ' + totalPaginasContactos + ')')
+        : (contacts.length + ' contactos registrados (Pág. ' + paginaContactos + ' de ' + totalPaginasContactos + ')');
   }
 
-  body.innerHTML = list.length === 0
+  // Actualizar indicadores numéricos de paginación
+  const pStart = document.getElementById('pagStart');
+  const pEnd = document.getElementById('pagEnd');
+  const pTotal = document.getElementById('pagTotal');
+  const pActual = document.getElementById('pagActual');
+  const pTotalPags = document.getElementById('pagTotalPags');
+  const btnPrev = document.getElementById('btnPagAnterior');
+  const btnNext = document.getElementById('btnPagSiguiente');
+  const btnFirst = document.getElementById('btnPagPrimera');
+  const btnLast = document.getElementById('btnPagUltima');
+
+  if (pStart) pStart.textContent = totalItems === 0 ? 0 : (startIndex + 1);
+  if (pEnd) pEnd.textContent = endIndex;
+  if (pTotal) pTotal.textContent = totalItems;
+  if (pActual) pActual.textContent = paginaContactos;
+  if (pTotalPags) pTotalPags.textContent = totalPaginasContactos;
+
+  if (btnFirst) btnFirst.disabled = paginaContactos <= 1;
+  if (btnPrev) btnPrev.disabled = paginaContactos <= 1;
+  if (btnNext) btnNext.disabled = paginaContactos >= totalPaginasContactos;
+  if (btnLast) btnLast.disabled = paginaContactos >= totalPaginasContactos;
+
+  // Botones rápidos de páginas
+  const numContainer = document.getElementById('pagNumerosContainer');
+  if (numContainer) {
+    let pills = '';
+    const maxVisiblePills = 5;
+    let startPill = Math.max(1, paginaContactos - 2);
+    let endPill = Math.min(totalPaginasContactos, startPill + maxVisiblePills - 1);
+    if (endPill - startPill < maxVisiblePills - 1) {
+      startPill = Math.max(1, endPill - maxVisiblePills + 1);
+    }
+    for (let p = startPill; p <= endPill; p++) {
+      const activeClass = p === paginaContactos
+        ? 'bg-ark-blue/25 text-ark-blue_hi border-ark-blue/50 font-bold'
+        : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 border-transparent';
+      pills += '<button type="button" onclick="irAPaginaContactos(' + p + ')" class="w-7 h-7 flex items-center justify-center rounded-lg border text-xs font-mono transition-colors ' + activeClass + '">' + p + '</button>';
+    }
+    numContainer.innerHTML = pills;
+  }
+
+  body.innerHTML = itemsPagina.length === 0
     ? '<tr><td colspan="7" class="p-6 text-center text-slate-500 text-sm">No se encontraron contactos que coincidan con la búsqueda o filtro.</td></tr>'
-    : list.map(c => {
+    : itemsPagina.map(c => {
         const acc = state.accounts.find(a => a.id === c.account_id);
         const cuentaNombre = c.account_name || (acc ? acc.name : (c.account_id ? 'Cuenta ' + c.account_id.slice(0,8) : '-'));
         return \`
