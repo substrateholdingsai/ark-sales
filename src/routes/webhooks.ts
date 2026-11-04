@@ -109,10 +109,24 @@ webhookRouter.post("/", async (c) => {
       } catch {}
       if (contact_email) {
         try {
-          await c.env.DB.prepare(`
-            INSERT OR IGNORE INTO sales_contacts (id, account_id, name, email, phone, title, consent_status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          `).bind(`ctc_${leadId}`, `acc_${leadId}`, contact_name || "Contacto Corporativo", contact_email, normalizedPhone, "Dirección General").run();
+          const existingCt: any = await c.env.DB.prepare("SELECT id FROM sales_contacts WHERE account_id = ? LIMIT 1")
+            .bind(`acc_${leadId}`).first();
+          if (existingCt) {
+            await c.env.DB.prepare(`
+              UPDATE sales_contacts
+              SET name = COALESCE(name, ?),
+                  email = CASE WHEN email LIKE '%@harvest.arksystems.local' THEN ? ELSE email END,
+                  phone = COALESCE(phone, ?),
+                  title = COALESCE(title, 'Dirección General'),
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?
+            `).bind(contact_name || "Contacto Corporativo", contact_email, normalizedPhone, existingCt.id).run();
+          } else {
+            await c.env.DB.prepare(`
+              INSERT OR IGNORE INTO sales_contacts (id, account_id, name, email, phone, title, consent_status, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `).bind(`ct_${leadId}`, `acc_${leadId}`, contact_name || "Contacto Corporativo", contact_email, normalizedPhone, "Dirección General").run();
+          }
         } catch {}
       }
       if (hLead.source || origen === "hermes_us_proptech") {
