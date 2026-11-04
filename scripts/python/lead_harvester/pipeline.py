@@ -24,10 +24,17 @@ async def run_pipeline(
     harvester = DenueHarvester(fixture_path=fixture_path, profile=profile)
     result = HarvestResult(source=source)
     stream = harvester.harvest_and_enrich() if enrich else harvester.harvest()
+    seen_ids: set[str] = set()
     count = 0
     async for lead in stream:
         if limit is not None and count >= limit:
             break
+        if lead.lead_id in seen_ids or (lead.email and lead.email in seen_ids):
+            result.deduped += 1
+            continue
+        seen_ids.add(lead.lead_id)
+        if lead.email:
+            seen_ids.add(lead.email)
         count += 1
         result.total += 1
         score = getattr(lead, "score", 0) or rule_score(lead)

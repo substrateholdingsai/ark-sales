@@ -11,22 +11,55 @@ export async function ensureAccountContactForLead(db: any, lead: {
   email?: string | null;
   despacho_nombre?: string | null;
   tamano?: string | null;
+  accountId?: string | null;
+  contactId?: string | null;
 }): Promise<{ accountId: string; contactId: string }> {
-  const accountId = `acc_${lead.id}`;
-  const contactId = `ct_${lead.id}`;
+  let accountId = lead.accountId || `acc_${lead.id}`;
+  let contactId = lead.contactId || `ct_${lead.id}`;
   if (!db) return { accountId, contactId };
   try {
+    // Si no se proporcionó accountId, buscar si ya existe una cuenta por normalized_name
+    if (!lead.accountId) {
+      const normalizedName = (lead.despacho_nombre || lead.email || "").toLowerCase().trim();
+      if (normalizedName) {
+        const existingAcc: any = await db.prepare("SELECT id FROM sales_accounts WHERE normalized_name = ? LIMIT 1")
+          .bind(normalizedName).first();
+        if (existingAcc?.id) {
+          accountId = existingAcc.id;
+        }
+      }
+    }
+
+    // Si no se proporcionó contactId, buscar si ya existe un contacto con este email
+    if (!lead.contactId && lead.email && !lead.email.includes("@harvest.arksystems.local")) {
+      const existingCt: any = await db.prepare("SELECT id FROM sales_contacts WHERE LOWER(email) = LOWER(?) LIMIT 1")
+        .bind(lead.email).first();
+      if (existingCt?.id) {
+        contactId = existingCt.id;
+      }
+    }
+
     const stmt1 = db.prepare(`
-      INSERT OR IGNORE INTO sales_accounts (id, name, normalized_name, size, origin, created_at, updated_at)
+      INSERT INTO sales_accounts (id, name, normalized_name, size, origin, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'lead', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET
+        name = COALESCE(excluded.name, sales_accounts.name),
+        size = COALESCE(excluded.size, sales_accounts.size),
+        updated_at = CURRENT_TIMESTAMP
     `).bind(accountId, lead.despacho_nombre || lead.email || "Despacho", (lead.despacho_nombre || lead.email || "").toLowerCase().trim(), lead.tamano || null);
+
     const stmt2 = db.prepare(`
-      INSERT OR IGNORE INTO sales_contacts (id, account_id, email, created_at, updated_at)
+      INSERT INTO sales_contacts (id, account_id, email, created_at, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET
+        email = COALESCE(excluded.email, sales_contacts.email),
+        updated_at = CURRENT_TIMESTAMP
     `).bind(contactId, accountId, lead.email || null);
+
     const stmt3 = db.prepare(`
       UPDATE sales_leads SET account_id = ?, contact_id = ? WHERE id = ? AND (account_id IS NULL OR contact_id IS NULL)
     `).bind(accountId, contactId, lead.id);
+
     if (typeof db.batch === "function") {
       await db.batch([stmt1, stmt2, stmt3]);
     } else {

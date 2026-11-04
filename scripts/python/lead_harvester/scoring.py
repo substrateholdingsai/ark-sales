@@ -15,6 +15,19 @@ PAIN_KEYWORDS = {
     "medicina especializada": 25,
     "consultorio": 20,
     "clínica": 20,
+    "turismo médico": 30,
+    "medical tourism": 30,
+    "american board": 30,
+    "board certified": 25,
+    "cirugía plástica": 25,
+    "plastic surgery": 25,
+    "cirugía bariátrica": 25,
+    "bariatric": 25,
+    "reproducción asistida": 25,
+    "fertilidad": 25,
+    "dental clinic": 20,
+    "odontología": 20,
+    "wellness": 20,
     "almacenes": 25,
     "logística": 25,
     "cedis": 25,
@@ -33,6 +46,9 @@ SCIAN_TO_FUTURA_PRODUCTS: dict[str, list[str]] = {
     "621211": ["futura_mb_medical_tower", "futura_paseos_temozon"],
     "621511": ["futura_mb_medical_tower", "futura_paseos_temozon"],
     "622111": ["futura_mb_medical_tower", "futura_paseos_temozon"],
+    # Cluster Turismo Médico / Quintana Roo -> MB Medical Tower + Hotelería y Preventas Patrimoniales
+    "621491": ["futura_mb_medical_tower", "futura_the_mb_hotel", "futura_soletta_sisal", "futura_azureno"],
+    "621399": ["futura_mb_medical_tower", "futura_the_mb_hotel", "futura_soletta_sisal", "futura_azureno"],
     # Cluster Industrial / Logístico -> Logistic Park (Tamanché)
     "484111": ["futura_logistic_park"],
     "484121": ["futura_logistic_park"],
@@ -74,6 +90,10 @@ def recomendar_desarrollos_futura(raw_lead: RawLead, observaciones: Optional[lis
                     productos.append(p)
         elif sc == "SENAL_INVERSION_PATRIMONIAL":
             for p in ("futura_the_mb_hotel", "futura_soletta_chicxulub", "futura_paseos_temozon"):
+                if p not in productos:
+                    productos.append(p)
+        elif sc in ("SENAL_TURISMO_MEDICO", "SENAL_DOCTOR_AMERICANO_BILINGUE", "SENAL_CIRUGIA_ALTO_TICKET"):
+            for p in ("futura_the_mb_hotel", "futura_soletta_sisal", "futura_azureno", "futura_paseos_temozon", "futura_mb_medical_tower"):
                 if p not in productos:
                     productos.append(p)
 
@@ -120,6 +140,15 @@ def calcular_score_con_observaciones(raw_lead: RawLead, observaciones: list[dict
         elif sc == "SENAL_SALUD_ESPECIALISTA":
             score += int(25 * conf)
             dolor_scores["inversion_consultorio_medico"] = dolor_scores.get("inversion_consultorio_medico", 0) + 25 * conf
+        elif sc == "SENAL_TURISMO_MEDICO":
+            score += int(30 * conf)
+            dolor_scores["turismo_medico_expansion"] = dolor_scores.get("turismo_medico_expansion", 0) + 30 * conf
+        elif sc == "SENAL_DOCTOR_AMERICANO_BILINGUE":
+            score += int(25 * conf)
+            dolor_scores["turismo_medico_inversion_patrimonial"] = dolor_scores.get("turismo_medico_inversion_patrimonial", 0) + 25 * conf
+        elif sc == "SENAL_CIRUGIA_ALTO_TICKET":
+            score += int(25 * conf)
+            dolor_scores["clinica_alto_ticket_inversion"] = dolor_scores.get("clinica_alto_ticket_inversion", 0) + 25 * conf
         elif sc == "SENAL_LOGISTICA_CEDIS":
             score += int(25 * conf)
             dolor_scores["expansion_logistica_cedis"] = dolor_scores.get("expansion_logistica_cedis", 0) + 25 * conf

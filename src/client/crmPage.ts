@@ -1257,8 +1257,18 @@ async function loadOpportunities() {
 
 async function loadContacts() {
   try {
-    const data = await apiCall('/api/crm/contacts?limit=1000');
-    if (data && data.items) state.contacts = data.items;
+    const all = [];
+    let offset = 0;
+    const pageSize = 500;
+    while (true) {
+      const data = await apiCall(\`/api/crm/contacts?limit=\${pageSize}&offset=\${offset}\`);
+      const items = (data && data.items) || [];
+      all.push(...items);
+      if (items.length < pageSize) break;
+      offset += pageSize;
+      if (offset > 20000) break;
+    }
+    state.contacts = all;
   } catch (e) { console.error('loadContacts error:', e); }
 }
 
@@ -2320,7 +2330,8 @@ async function procesarImportarCuentas() {
 
 // ── EXPORTADORES CSV / PDF ──
 function descargarCSV(nombreArchivo, contenido) {
-  const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
+  const contenidoConBom = contenido.startsWith('\uFEFF') ? contenido : ('\uFEFF' + contenido);
+  const blob = new Blob([contenidoConBom], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -2328,6 +2339,7 @@ function descargarCSV(nombreArchivo, contenido) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast(\`Archivo descargado: \${nombreArchivo}\`);
 }
 
@@ -2340,27 +2352,35 @@ function exportarCuentasCSV() {
     }
   });
 
-  const encabezados = 'id,nombre,scian,tamano,fuente,tenant,ciudad,total_contactos,contacto_principal,telefono_principal,whatsapp_principal,email_principal\\n';
+  const encabezados = 'id,nombre,scian,tamano,fuente,tenant,ciudad,total_contactos,contacto_principal,telefono_principal,whatsapp_principal,email_principal\\r\\n';
   const filas = (state.accounts || []).map(a => {
     const cts = contactMap[a.id] || [];
     const p = cts[0] || {};
     return \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||''}","\${a.size||'1-5'}","\${a.harvest_source||a.origin||'denue'}","\${getAccountTenant(a)}","\${a.city||'Mérida'}","\${cts.length}","\${(p.name||'').replace(/"/g, '""')}","\${(p.phone||'').replace(/"/g, '""')}","\${(p.whatsapp||'').replace(/"/g, '""')}","\${(p.email||'').replace(/"/g, '""')}"\`;
-  }).join('\\n');
+  }).join('\\r\\n');
   descargarCSV('cuentas_ark_crm.csv', encabezados + filas);
 }
 
 async function exportarContactosCSV() {
-  let contacts = state.contacts || [];
-  if (!contacts.length) {
-    try {
-      const data = await apiCall('/api/crm/contacts?limit=5000');
-      if (data && data.items) {
-        state.contacts = data.items;
-        contacts = data.items;
-      }
-    } catch(e) {
-      console.warn('Error cargando contactos para exportación:', e);
+  toast('Preparando exportación completa de contactos…');
+  let contacts = [];
+  try {
+    let offset = 0;
+    const pageSize = 1000;
+    while (true) {
+      const data = await apiCall(\`/api/crm/contacts?limit=\${pageSize}&offset=\${offset}\`);
+      const items = (data && data.items) || [];
+      contacts.push(...items);
+      if (items.length < pageSize) break;
+      offset += pageSize;
+      if (offset > 20000) break;
     }
+    if (contacts.length > 0) {
+      state.contacts = contacts;
+    }
+  } catch(e) {
+    console.warn('Error cargando contactos para exportación, usando memoria:', e);
+    contacts = state.contacts || [];
   }
 
   if (!contacts.length) {
@@ -2371,16 +2391,17 @@ async function exportarContactosCSV() {
   const accMap = {};
   (state.accounts || []).forEach(a => { accMap[a.id] = a; });
 
-  const encabezados = 'id,nombre,puesto,email,telefono_consultorio,whatsapp,cuenta_id,cuenta_nombre,ciudad,tenant,consentimiento,fecha_creacion\\n';
+  const encabezados = 'id,nombre,puesto,email,telefono_consultorio,whatsapp,cuenta_id,cuenta_nombre,ciudad,tenant,consentimiento,fecha_creacion\\r\\n';
   const filas = contacts.map(c => {
     const acc = accMap[c.account_id] || {};
     const accName = c.account_name || acc.name || '';
     const accCity = c.account_city || acc.city || 'Mérida';
     const accTenant = acc.id ? getAccountTenant(acc) : '';
     return \`"\${c.id}","\${(c.name||'').replace(/"/g, '""')}","\${(c.title||'').replace(/"/g, '""')}","\${(c.email||'').replace(/"/g, '""')}","\${(c.phone||'').replace(/"/g, '""')}","\${(c.whatsapp||'').replace(/"/g, '""')}","\${c.account_id||''}","\${accName.replace(/"/g, '""')}","\${accCity.replace(/"/g, '""')}","\${accTenant}","\${c.consent_status||'opt_in'}","\${c.created_at||''}"\`;
-  }).join('\\n');
+  }).join('\\r\\n');
 
   descargarCSV('contactos_ark_crm.csv', encabezados + filas);
+  toast(\`Exportados \${contacts.length} contactos a CSV\`);
 }
 
 // ── CONFIRMACIÓN Y ELIMINACIÓN ──
@@ -2636,8 +2657,8 @@ async function guardarEditarContacto(e) {
 
 function exportarCohorteCSV() {
   const leads = (state.accounts || []).filter(a => getAccountTenant(a) === 'acc_ark_ledger' || a.harvest_source === 'denue');
-  const encabezados = 'id,nombre,scian,fuente,ciudad\\n';
-  const filas = leads.map(a => \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||'541211'}","\${a.harvest_source||'denue'}","\${a.city||'Mérida'}"\`).join('\\n');
+  const encabezados = 'id,nombre,scian,fuente,ciudad\\r\\n';
+  const filas = leads.map(a => \`"\${a.id}","\${(a.name||'').replace(/"/g, '""')}","\${a.scian_code||'541211'}","\${a.harvest_source||'denue'}","\${a.city||'Mérida'}"\`).join('\\r\\n');
   descargarCSV('cohorte_ark_ledger_despachos.csv', encabezados + filas);
 }
 

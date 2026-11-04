@@ -67,5 +67,6 @@ class IngestPayload(BaseModel):
 class HarvestResult(BaseModel):
     total: int = 0
     ingested: int = 0
+    deduped: int = 0
     errors: int = 0
     source: str = "denue"

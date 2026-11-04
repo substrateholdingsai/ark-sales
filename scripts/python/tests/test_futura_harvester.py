@@ -90,3 +90,51 @@ def test_scoring_with_futura_observations():
         assert "futura_mb_medical_tower" in prods
 
     asyncio.run(run())
+
+
+def test_quintana_roo_medical_tourism_and_american_doctor_signals():
+    profiler = HTTPProfiler()
+    html = """
+    <html>
+      <body>
+        <h1>Cancun International Plastic Surgery & Dental Clinic</h1>
+        <p>Welcoming US patients and Canadian patients with board certified surgeons.</p>
+        <p>Our bilingual doctors are trained in the USA and members of the American Dental Association.</p>
+        <a href="https://wa.me/529981234567">WhatsApp Direct</a>
+      </body>
+    </html>
+    """
+    senales = profiler._detect(html, PATS_FUTURA)
+    assert "SENAL_TURISMO_MEDICO" in senales
+    assert "SENAL_DOCTOR_AMERICANO_BILINGUE" in senales
+    assert "SENAL_CIRUGIA_ALTO_TICKET" in senales
+
+    # Test scoring with these high-value signals
+    h = DenueHarvester(profile="futura_capital", fixture_path="lead_harvester/fixtures/denue_futura_sample.json")
+    async def run():
+        leads = [l async for l in h.harvest()]
+        lead = leads[0]
+        obs = [
+            {"signal_code": "SENAL_TURISMO_MEDICO", "confidence": 0.95},
+            {"signal_code": "SENAL_DOCTOR_AMERICANO_BILINGUE", "confidence": 0.9},
+        ]
+        score, dolor = calcular_score_con_observaciones(lead, obs)
+        assert score >= 85
+        assert dolor == "turismo_medico_expansion"
+        prods = recomendar_desarrollos_futura(lead, obs)
+        assert "futura_the_mb_hotel" in prods
+        assert "futura_soletta_sisal" in prods
+
+    asyncio.run(run())
+
+
+def test_futura_clusters_target_only_quintana_roo():
+    from lead_harvester.denue import FUTURA_GEO_CLUSTERS
+    # Verify there are no Merida coordinates in FUTURA_GEO_CLUSTERS
+    for c in FUTURA_GEO_CLUSTERS:
+        coords = c["coords"]
+        # Merida latitude is ~20.9-21.05 and longitude ~ -89.6
+        lat, lon = [float(x) for x in coords.split(",")]
+        # Ensure longitude is in Quintana Roo (~ -86.8 to -87.5) and NOT Merida (~ -89.6)
+        assert lon > -88.0, f"Found non-Quintana Roo cluster: {c}"
+

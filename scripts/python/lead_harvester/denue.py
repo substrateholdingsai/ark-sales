@@ -17,7 +17,7 @@ PROFILES_SCIAN: dict[str, list[str]] = {
     "ark": ["541210", "531110", "531210", "522250", "561490"],
     "futura_capital": [
         "531210", "531311", "523920",
-        "621111", "621112", "621211", "621511", "622111",
+        "621111", "621112", "621211", "621511", "622111", "621491", "621399",
         "484111", "484121", "493111", "488511",
         "721111", "721190", "531110", "551110",
     ],
@@ -36,21 +36,35 @@ PROFILES_ENTIDADES: dict[str, list[str]] = {
     "ark_ledger": ["0"],
 }
 
-# Palabras clave y coordenadas estratégicas para Futura Capital en Yucatán
+# Palabras clave y coordenadas estratégicas para Futura Capital en Quintana Roo y Riviera Maya (Turismo Médico & Médicos Americanos)
 FUTURA_GEO_CLUSTERS = [
-    # Mérida Norte (Zona Médica Faro del Mayab / Christus Muguerza / MB Medical Tower / Temozón)
-    {"query": "clinica", "coords": "21.0185,-89.6123", "radio": 5000, "scian_default": "621111"},
-    {"query": "medica", "coords": "21.0421,-89.6013", "radio": 5000, "scian_default": "621112"},
-    {"query": "consultorio", "coords": "21.0421,-89.6013", "radio": 5000, "scian_default": "621111"},
-    {"query": "inmobiliaria", "coords": "21.0340,-89.5980", "radio": 5000, "scian_default": "531210"},
-    {"query": "bienes raices", "coords": "21.0185,-89.6123", "radio": 5000, "scian_default": "531210"},
-    # Corredor Tamanché / Mérida-Progreso (Logistic Park)
-    {"query": "logistica", "coords": "21.1349,-89.6458", "radio": 5000, "scian_default": "493111"},
-    {"query": "bodega", "coords": "21.1349,-89.6458", "radio": 5000, "scian_default": "493111"},
-    # Puerto de Progreso (Logística Portuaria y Autotransporte)
-    {"query": "transporte", "coords": "21.2812,-89.6650", "radio": 5000, "scian_default": "484111"},
-    {"query": "almacen", "coords": "21.2812,-89.6650", "radio": 5000, "scian_default": "493111"},
-    {"query": "aduana", "coords": "21.2812,-89.6650", "radio": 5000, "scian_default": "488511"},
+    # 1. Cancún — Zona Médica Hospitalaria (Galenia / Amerimed / Hospiten / Av. Bonampak)
+    {"query": "cirugia plastica", "coords": "21.1450,-86.8250", "radio": 5000, "scian_default": "621112"},
+    {"query": "clinica", "coords": "21.1450,-86.8250", "radio": 5000, "scian_default": "621111"},
+    {"query": "dental", "coords": "21.1450,-86.8250", "radio": 5000, "scian_default": "621211"},
+    {"query": "bariatrica", "coords": "21.1450,-86.8250", "radio": 5000, "scian_default": "621112"},
+    {"query": "fertilidad", "coords": "21.1450,-86.8250", "radio": 5000, "scian_default": "621491"},
+
+    # 2. Cancún — Puerto Cancún & Zona Hotelera (Turismo Médico Internacional & Estética)
+    {"query": "dental clinic", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "621211"},
+    {"query": "plastic surgery", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "621112"},
+    {"query": "medical center", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "622111"},
+    {"query": "estetica", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "621399"},
+
+    # 3. Playa del Carmen — Corredor Turístico & Hospiten Riviera Maya
+    {"query": "dental", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621211"},
+    {"query": "cirugia plastica", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621112"},
+    {"query": "clinica", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621111"},
+    {"query": "dermatologia", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621112"},
+
+    # 4. Tulum — Aldea Zamá / La Veleta / Wellness Corredor
+    {"query": "clinica", "coords": "20.2100,-87.4650", "radio": 4000, "scian_default": "621111"},
+    {"query": "wellness", "coords": "20.2100,-87.4650", "radio": 4000, "scian_default": "621399"},
+    {"query": "dental", "coords": "20.2100,-87.4650", "radio": 4000, "scian_default": "621211"},
+
+    # 5. Cozumel — Zona San Miguel / Costamed
+    {"query": "clinica", "coords": "20.5050,-86.9500", "radio": 4000, "scian_default": "621111"},
+    {"query": "dental", "coords": "20.5050,-86.9500", "radio": 4000, "scian_default": "621211"},
 ]
 
 # Palabras clave y coordenadas estratégicas para Ark Ledger (Despachos Contables y Fiscalistas)
@@ -173,8 +187,25 @@ class DenueHarvester(BaseHarvester):
             tenant_id = "acc_ark_ledger"
         else:
             tenant_id = item.get("tenant_id")
+
+        clee = str(item.get("CLEE") or "").strip()
+        denue_id = str(item.get("Id") or "").strip()
+        nombre = item.get("Nombre") or item.get("razon_social", "")
+        lead_id_kwargs = {}
+        if clee:
+            lead_id_kwargs["lead_id"] = f"lead_clee_{clee}"
+        elif denue_id:
+            lead_id_kwargs["lead_id"] = f"lead_denue_{denue_id}"
+        elif raw_email:
+            import hashlib
+            lead_id_kwargs["lead_id"] = f"lead_m_{hashlib.sha256(raw_email.lower().encode('utf-8')).hexdigest()[:16]}"
+        elif nombre and raw_tel:
+            import hashlib
+            lead_id_kwargs["lead_id"] = f"lead_nt_{hashlib.sha256(f'{nombre}_{raw_tel}'.lower().encode('utf-8')).hexdigest()[:16]}"
+
         return RawLead(
-            razon_social=item.get("Nombre") or item.get("razon_social", ""),
+            **lead_id_kwargs,
+            razon_social=nombre,
             rfc=item.get("RFC"),
             actividad=item.get("Actividad") or item.get("actividad") or item.get("Nombre_Act") or "",
             scian_code=code,

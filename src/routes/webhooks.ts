@@ -56,9 +56,9 @@ webhookRouter.post("/", async (c) => {
       return c.json({ error: "El campo 'email' es obligatorio." }, 400);
     }
 
-    const leadId = (typeof body.lead_id === "string" && body.lead_id.trim())
+    let leadId = (typeof body.lead_id === "string" && body.lead_id.trim())
       ? body.lead_id.trim()
-      : (c.req.header("X-Idempotency-Key")?.trim() || crypto.randomUUID());
+      : (c.req.header("X-Idempotency-Key")?.trim() || null);
     const validTamanos = ["1-5", "6-20", "21-50", "50+"];
     const effectiveTamano = validTamanos.includes(tamano) ? tamano : "1-5";
     const initialScore = typeof body.score === "number" && body.score >= 0 && body.score <= 100
@@ -73,29 +73,76 @@ webhookRouter.post("/", async (c) => {
       productos_interes
     );
 
-    // 2. Persistir en sales_leads
+    let finalLeadId = leadId;
+    let targetAccountId = `acc_${leadId || crypto.randomUUID()}`;
+    let targetContactId = `ct_${leadId || crypto.randomUUID()}`;
+
+    // 2. Persistir en sales_leads con deduplicación inteligente
     if (c.env.DB) {
-      await c.env.DB.prepare(`
-        INSERT OR REPLACE INTO sales_leads (id, email, despacho_nombre, tamano, dolor_detectado, especialista_asignado, estado, score, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'nuevo', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `).bind(
-        leadId,
+      let existingLead: any = null;
+      if (leadId) {
+        existingLead = await c.env.DB.prepare("SELECT id, account_id, contact_id, score, phone FROM sales_leads WHERE id = ? LIMIT 1")
+          .bind(leadId).first();
+      }
+      if (!existingLead && email) {
+        existingLead = await c.env.DB.prepare("SELECT id, account_id, contact_id, score, phone FROM sales_leads WHERE LOWER(email) = LOWER(?) ORDER BY score DESC, created_at ASC LIMIT 1")
+          .bind(email).first();
+      }
+
+      if (existingLead) {
+        finalLeadId = existingLead.id;
+        targetAccountId = existingLead.account_id || `acc_${finalLeadId}`;
+        targetContactId = existingLead.contact_id || `ct_${finalLeadId}`;
+        const finalScore = Math.max(existingLead.score, initialScore);
+        const finalPhone = normalizedPhone || existingLead.phone || null;
+
+        await c.env.DB.prepare(`
+          UPDATE sales_leads
+          SET despacho_nombre = COALESCE(?, despacho_nombre),
+              tamano = COALESCE(?, tamano),
+              score = ?,
+              phone = COALESCE(?, phone),
+              dolor_detectado = COALESCE(?, dolor_detectado),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(despacho_nombre || null, effectiveTamano, finalScore, finalPhone, diag.dolor_detectado, finalLeadId).run();
+      } else {
+        finalLeadId = leadId || crypto.randomUUID();
+        targetAccountId = `acc_${finalLeadId}`;
+        targetContactId = `ct_${finalLeadId}`;
+
+        await c.env.DB.prepare(`
+          INSERT INTO sales_leads (id, email, despacho_nombre, tamano, dolor_detectado, especialista_asignado, estado, score, phone, account_id, contact_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, 'nuevo', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `).bind(
+          finalLeadId,
+          email,
+          despacho_nombre || null,
+          effectiveTamano,
+          diag.dolor_detectado,
+          diag.especialista_asignado,
+          initialScore,
+          normalizedPhone || null,
+          targetAccountId,
+          targetContactId
+        ).run();
+      }
+
+      const ensured = await ensureAccountContactForLead(c.env.DB, {
+        id: finalLeadId,
         email,
-        despacho_nombre || null,
-        effectiveTamano,
-        diag.dolor_detectado,
-        diag.especialista_asignado,
-        initialScore
-      ).run();
-      await ensureAccountContactForLead(c.env.DB, { id: leadId, email, despacho_nombre, tamano: effectiveTamano });
+        despacho_nombre,
+        tamano: effectiveTamano,
+        accountId: targetAccountId,
+        contactId: targetContactId
+      });
+      targetAccountId = ensured.accountId;
+      targetContactId = ensured.contactId;
+
       if (normalizedPhone) {
         try {
-          await c.env.DB.prepare(`UPDATE sales_leads SET phone = COALESCE(?, phone) WHERE id = ?`)
-            .bind(normalizedPhone, leadId).run();
-        } catch {}
-        try {
-          await c.env.DB.prepare(`UPDATE sales_contacts SET phone = COALESCE(?, phone), name = COALESCE(?, name) WHERE account_id = ?`)
-            .bind(normalizedPhone, contact_name || "Contacto Corporativo", `acc_${leadId}`).run();
+          await c.env.DB.prepare(`UPDATE sales_contacts SET phone = COALESCE(?, phone), name = COALESCE(?, name) WHERE id = ? OR account_id = ?`)
+            .bind(normalizedPhone, contact_name || "Contacto Corporativo", targetContactId, targetAccountId).run();
         } catch {}
       }
       try {
@@ -105,12 +152,12 @@ webhookRouter.post("/", async (c) => {
               harvest_source = COALESCE(?, harvest_source),
               last_enriched_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(scian_code || null, harvest_source || "denue", `acc_${leadId}`).run();
+        `).bind(scian_code || null, harvest_source || "denue", targetAccountId).run();
       } catch {}
       if (contact_email) {
         try {
-          const existingCt: any = await c.env.DB.prepare("SELECT id FROM sales_contacts WHERE account_id = ? LIMIT 1")
-            .bind(`acc_${leadId}`).first();
+          const existingCt: any = await c.env.DB.prepare("SELECT id FROM sales_contacts WHERE account_id = ? OR LOWER(email) = LOWER(?) LIMIT 1")
+            .bind(targetAccountId, contact_email).first();
           if (existingCt) {
             await c.env.DB.prepare(`
               UPDATE sales_contacts
@@ -125,7 +172,7 @@ webhookRouter.post("/", async (c) => {
             await c.env.DB.prepare(`
               INSERT OR IGNORE INTO sales_contacts (id, account_id, name, email, phone, title, consent_status, created_at, updated_at)
               VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            `).bind(`ct_${leadId}`, `acc_${leadId}`, contact_name || "Contacto Corporativo", contact_email, normalizedPhone, "Dirección General").run();
+            `).bind(targetContactId, targetAccountId, contact_name || "Contacto Corporativo", contact_email, normalizedPhone, "Dirección General").run();
           }
         } catch {}
       }
@@ -136,8 +183,8 @@ webhookRouter.post("/", async (c) => {
             INSERT OR REPLACE INTO sales_observations (id, account_id, signal_code, observation_value, observed_at)
             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
           `).bind(
-            `obs_hermes_${leadId}`,
-            `acc_${leadId}`,
+            `obs_hermes_${finalLeadId}`,
+            targetAccountId,
             signalCode,
             JSON.stringify({ state: hLead.state, equityDollars: hLead.equityDollars, marketValueDollars: hLead.marketValueDollars })
           ).run();
@@ -145,16 +192,28 @@ webhookRouter.post("/", async (c) => {
       }
     }
 
-    // 3. Inicializar el Durable Object para tener el contexto listo para cuando el usuario chatee
-    if (c.env.SALES_AGENT) {
+    // 3. Inicializar el Durable Object para tener el contexto listo SOLO si no es cosecha masiva de fondo
+    // En ingestas masivas (denue, hermes, background) EVITAMOS precalentar para no agotar cuota de escritura en D1 ni quemar tokens LLM
+    const isBackgroundHarvest = Boolean(
+      harvest_source === "denue" ||
+      origen === "denue" ||
+      origen === "hermes_us_proptech" ||
+      body.harvest_source ||
+      body.skip_chat_preheat
+    );
+    const shouldPreheatDO = !isBackgroundHarvest && Boolean(
+      body.chat_preheat === true || origen === "web" || origen === "chat"
+    );
+
+    if (c.env.SALES_AGENT && shouldPreheatDO) {
       try {
-        const doId = c.env.SALES_AGENT.idFromName(leadId);
+        const doId = c.env.SALES_AGENT.idFromName(finalLeadId);
         const stub = c.env.SALES_AGENT.get(doId);
         await stub.fetch("https://sales-agent/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            lead_id: leadId,
+            lead_id: finalLeadId,
             message: `Lead ingresado desde webhook (${origen || "web"}). Dolor detectado: ${dolor_principal || "general"}.`,
             email,
             despacho_nombre,
@@ -168,7 +227,7 @@ webhookRouter.post("/", async (c) => {
 
     return c.json({
       success: true,
-      lead_id: leadId,
+      lead_id: finalLeadId,
       diagnostico: diag,
       message: "Lead registrado exitosamente y clasificado por dolor operativo.",
     }, 201);

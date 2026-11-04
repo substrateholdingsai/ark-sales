@@ -23,8 +23,11 @@ PATS_DOLOR = {
 PATS_FUTURA = {
     "SENAL_BROKER_INMOBILIARIO": r"preventa|lotes.*inversi[oó]n|asesor.*inmobiliario|\bampi\b|bienes.*ra[ií]ces|desarrollos.*yucat[aá]n",
     "SENAL_SALUD_ESPECIALISTA": r"especialidades.*m[eé]dicas|cl[ií]nica|cirug[ií]a|consultorio.*m[eé]dico|hospital|laboratorio.*cl[ií]nico",
+    "SENAL_TURISMO_MEDICO": r"medical.*tourism|turismo.*m[eé]dico|us.*patients|american.*patients|international.*patients|canadian.*patients|destination.*medicine",
+    "SENAL_DOCTOR_AMERICANO_BILINGUE": r"american.*board|board.*certified|english.*spoken|bilingual.*doctor|fluent.*english|trained.*in.*the.*usa|us.*trained|ada.*member|jci.*accredited|american.*dental",
+    "SENAL_CIRUGIA_ALTO_TICKET": r"plastic.*surgery|cirug[ií]a.*pl[aá]stica|bariatric|bari[aá]trica|gastric.*sleeve|hair.*transplant|injerto.*capilar|reproducci[oó]n.*asistida|ivf.*treatment|implantolog[ií]a",
     "SENAL_LOGISTICA_CEDIS": r"bodega.*industrial|\bcedis\b|almacenaje|log[ií]stica|distribuci[oó]n|puerto.*progreso|parque.*industrial|carga.*pesada",
-    "SENAL_INVERSION_PATRIMONIAL": r"plusval[ií]a|rendimiento|rentas.*vacacionales|fractional|patrimonio|hotel.*boutique|airbnb",
+    "SENAL_INVERSION_PATRIMONIAL": r"plusval[ií]a|rendimiento|rentas.*vacacionales|fractional|patrimonio|hotel.*boutique|airbnb|riviera.*maya|tulum|canc[uú]n|playa.*del.*carmen",
 }
 PATS_TAMANO = {
     "1-5": r"microempresa|1.*a.*5.*empleados",

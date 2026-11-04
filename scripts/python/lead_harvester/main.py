@@ -94,8 +94,9 @@ async def main(argv=None) -> int:
             base_url=base_url,
             profile=args.profile,
         )
-        metrics["leads_discovered"] = result.total
+        metrics["leads_discovered"] = result.total + result.deduped
         metrics["leads_ingested"] = result.ingested
+        metrics["leads_deduped"] = result.deduped
         metrics["leads_enriched"] = result.total if enrich else 0
         write_report(result, "harvest_report.json")
         print(result.model_dump_json(indent=2))
