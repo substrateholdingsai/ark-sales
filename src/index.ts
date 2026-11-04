@@ -26,6 +26,8 @@ import { renderPublicLandingHtml } from "./client/landingPage";
 import { renderCrmLoginHtml, renderCrmHtml, isAuthenticated, isAdminAuthenticated } from "./client/crmPage";
 import { renderSuperAdminHtml } from "./client/superAdminPage";
 import { renderAltumPage } from "./client/altumPage";
+import { adminAssistantRouter } from "./routes/adminAssistant";
+import { ADMIN_ASSISTANT_WIDGET_JS_SOURCE } from "./client/adminAssistantWidget";
 import { getAltumAsset } from "./client/altumAssets";
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
@@ -71,6 +73,30 @@ app.get("/widget.js", (c) => {
     },
   });
 });
+
+// Admin AI Assistant Widget
+const ADMIN_ASSISTANT_WIDGET_PATHS = [
+  "/admin-assistant.js",
+  "/assistant-widget.js",
+  "/admin-widget.js",
+  "/ai-assistant.js",
+  "/assistant.js",
+  "/admin-assistant-widget.js",
+  "/ark-admin-assistant.js",
+  "/admin-ai-assistant.js",
+];
+for (const p of ADMIN_ASSISTANT_WIDGET_PATHS) {
+  app.get(p, (c) => {
+    return new Response(ADMIN_ASSISTANT_WIDGET_JS_SOURCE, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  });
+}
 
 // Landing Page Demo con el widget interactivo embebido
 app.get("/", (c) => {
@@ -138,6 +164,12 @@ app.use("/api/crm", authMiddleware());
 app.use("/api/crm/*", authMiddleware());
 app.use("/api/superadmin", authMiddleware());
 app.use("/api/superadmin/*", authMiddleware());
+app.use("/api/admin", authMiddleware());
+app.use("/api/admin/*", authMiddleware());
+app.use("/api/assistant", authMiddleware());
+app.use("/api/assistant/*", authMiddleware());
+app.use("/api/ai-assistant", authMiddleware());
+app.use("/api/ai-assistant/*", authMiddleware());
 
 // Montar submódulos
 app.route("/api/chat", chatRouter);
@@ -155,6 +187,11 @@ app.route("/api/crm/opportunities", crmOpportunitiesRouter);
 app.route("/api/crm/activities", crmActivitiesRouter);
 app.route("/api/crm/tasks", crmTasksRouter);
 app.route("/api/superadmin", superadminRouter);
+app.route("/api/admin/assistant", adminAssistantRouter);
+app.route("/api/superadmin/assistant", adminAssistantRouter);
+app.route("/api/assistant", adminAssistantRouter);
+app.route("/api/admin/ai-assistant", adminAssistantRouter);
+app.route("/api/ai-assistant", adminAssistantRouter);
 
 // CRM privado
 app.get("/crm/login", (c) => {

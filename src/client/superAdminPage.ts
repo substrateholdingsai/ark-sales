@@ -1644,6 +1644,7 @@ loadEmailDispatches();
 loadBillingStatus();
 loadBillingOrders();
 </script>
+<script src="/admin-assistant.js" defer></script>
 </body>
 </html>`;
 }

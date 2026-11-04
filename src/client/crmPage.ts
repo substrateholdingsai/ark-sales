@@ -1706,6 +1706,7 @@ async function renderContactos() {
               \${c.whatsapp && c.whatsapp !== '-'
                 ? \`<button onclick="accionWhatsApp('\${c.whatsapp}')" class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors" title="Abrir WhatsApp Web"><i data-lucide="message-circle" class="w-4 h-4"></i></button>\`
                 : ''}
+              <button onclick="enriquecerContactoRow(\'\${c.id}\')" class="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors" title="🔍 Enriquecer con Google / Doctoralia"><i data-lucide="sparkles" class="w-4 h-4"></i></button>
               <button onclick="abrirModalEditarContacto('\${c.id}')" class="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors" title="Editar contacto"><i data-lucide="pencil" class="w-4 h-4"></i></button>
               <button onclick="accionLlamar('\${c.phone || c.whatsapp}')" class="p-1.5 rounded-lg bg-ark-emerald/10 text-ark-emerald_hi hover:bg-ark-emerald/20 transition-colors" title="Llamada IA"><i data-lucide="phone" class="w-4 h-4"></i></button>
               <button onclick="accionEmail('\${c.email}')" class="p-1.5 rounded-lg bg-ark-blue/10 text-ark-blue_hi hover:bg-ark-blue/20 transition-colors" title="Enviar correo"><i data-lucide="mail" class="w-4 h-4"></i></button>
@@ -2178,6 +2179,93 @@ function eliminarContactoModal(e, id, accountId) {
   confirmarEliminarContacto(id, c ? c.name : 'este contacto', accountId);
 }
 
+// ── ENRIQUECIMIENTO NIVEL 2 ──
+async function enriquecerContactoRow(id) {
+  const c = state.contacts.find(x => x.id === id);
+  const acc = c ? state.accounts.find(a => a.id === c.account_id) : null;
+  const nameToSearch = c && c.name && c.name !== 'Sin nombre' && !c.name.toLowerCase().includes('contacto corporativo')
+    ? c.name
+    : (acc && acc.name ? acc.name : (c && c.account_name ? c.account_name : 'Contacto'));
+
+  toast('🔍 Buscando en Doctoralia y Google para ' + nameToSearch + '…');
+  try {
+    const res = await apiCall('/api/crm/contacts/' + id + '/enrich', 'POST', { auto_apply: true });
+    if (res && res.success) {
+      if (res.enrichment && res.enrichment.found) {
+        if (res.contact) {
+          const idx = state.contacts.findIndex(x => x.id === id);
+          if (idx !== -1) state.contacts[idx] = { ...state.contacts[idx], ...res.contact };
+          renderContactos();
+        }
+        const wa = res.enrichment.whatsapp || res.enrichment.phone || '';
+        toast('✨ ¡Enriquecido con éxito! WhatsApp: ' + wa);
+      } else {
+        toast('No se halló teléfono en Doctoralia para ' + nameToSearch + '.');
+        if (res.enrichment && res.enrichment.google_search_url) {
+          window.open(res.enrichment.google_search_url, '_blank');
+        }
+      }
+    } else {
+      toast('Error al consultar motor de enriquecimiento.');
+    }
+  } catch(err) {
+    toast('Error: ' + (err.message || 'Error de red'));
+  }
+}
+
+async function autoEnriquecerModalContacto() {
+  const id = document.getElementById('editCtId').value;
+  if (!id) return;
+  const btn = document.getElementById('btnAutoEnriquecerModal');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Buscando…';
+  lucide.createIcons();
+  toast('🔍 Consultando Doctoralia y Google con IA…');
+
+  try {
+    const res = await apiCall('/api/crm/contacts/' + id + '/enrich', 'POST', { auto_apply: false });
+    if (res && res.success && res.enrichment && res.enrichment.found) {
+      const e = res.enrichment;
+      if (e.doctor_name && (!document.getElementById('editCtNombreInput').value || document.getElementById('editCtNombreInput').value.includes('Sin nombre'))) {
+        document.getElementById('editCtNombreInput').value = e.doctor_name;
+      }
+      if (e.title && !document.getElementById('editCtCargoInput').value) {
+        document.getElementById('editCtCargoInput').value = e.title;
+      }
+      if (e.phone) {
+        document.getElementById('editCtTelInput').value = e.phone;
+      }
+      if (e.whatsapp) {
+        document.getElementById('editCtWhatsAppInput').value = e.whatsapp;
+      }
+      toast('✨ Datos encontrados: ' + (e.whatsapp || e.phone));
+    } else {
+      toast('No se encontraron teléfonos públicos de forma automática.');
+    }
+  } catch(err) {
+    toast('Error: ' + (err.message || 'Error de red'));
+  } finally {
+    btn.innerHTML = originalText;
+    lucide.createIcons();
+  }
+}
+
+function abrirBusquedaGoogleModal() {
+  const id = document.getElementById('editCtId').value;
+  const c = state.contacts.find(x => x.id === id);
+  const acc = c ? state.accounts.find(a => a.id === c.account_id) : null;
+  const q = ((c && c.name && c.name !== 'Sin nombre') ? c.name : (acc && acc.name ? acc.name : '')) + ' telefono whatsapp medico';
+  window.open('https://www.google.com/search?q=' + encodeURIComponent(q.trim()), '_blank');
+}
+
+function abrirBusquedaDoctoraliaModal() {
+  const id = document.getElementById('editCtId').value;
+  const c = state.contacts.find(x => x.id === id);
+  const acc = c ? state.accounts.find(a => a.id === c.account_id) : null;
+  const q = (c && c.name && c.name !== 'Sin nombre') ? c.name : (acc && acc.name ? acc.name : '');
+  window.open('https://www.doctoralia.com.mx/buscar?q=' + encodeURIComponent(q.trim()), '_blank');
+}
+
 // ── EDICIÓN DE CONTACTO ──
 function abrirModalEditarContacto(id, modalAccountId = null) {
   const c = state.contacts.find(x => x.id === id);
@@ -2551,6 +2639,7 @@ async function dispararCampañaCohorte() {
   }
 }
 </script>
+<script src="/admin-assistant.js" defer></script>
 </body>
 </html>`;
 }

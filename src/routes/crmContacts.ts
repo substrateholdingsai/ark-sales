@@ -3,6 +3,7 @@ import { Env } from "../types";
 import { AuthVariables } from "../auth/middleware";
 import { requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
+import { enrichDoctorLead } from "../services/contactEnrichment";
 
 export const crmContactsRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 crmContactsRouter.use("*", requireAuth());
@@ -129,6 +130,70 @@ crmContactsRouter.patch("/:id", requireRole("write"), async (c) => {
     return c.json({ contact });
   } catch (err: any) {
     return c.json({ error: err.message || "Error actualizando contacto" }, 400);
+  }
+});
+
+// Enriquecimiento Nivel 2 (Google / Doctoralia)
+crmContactsRouter.post("/:id/enrich", requireRole("write"), async (c) => {
+  try {
+    const id = c.req.param("id");
+    const existing: any = await c.env.DB.prepare(`
+      SELECT c.*, a.name AS account_name, a.city AS account_city
+      FROM sales_contacts c
+      LEFT JOIN sales_accounts a ON c.account_id = a.id
+      WHERE c.id = ?
+    `).bind(id).first();
+    if (!existing) return c.json({ error: "Contacto no encontrado." }, 404);
+
+    let body: any = {};
+    try { body = await c.req.json(); } catch {}
+    const autoApply = body?.auto_apply !== false;
+
+    const enrichment = await enrichDoctorLead({
+      name: existing.name,
+      accountName: existing.account_name,
+      city: existing.account_city,
+    });
+
+    let updatedContact = existing;
+    if (autoApply && enrichment.found) {
+      const isPlaceholder = !existing.name || existing.name === "Sin nombre" || existing.name.toLowerCase().includes("contacto corporativo");
+      const newName = (isPlaceholder && enrichment.doctor_name) ? enrichment.doctor_name : existing.name;
+      const newPhone = enrichment.phone || existing.phone;
+      const newWhatsapp = enrichment.whatsapp || existing.whatsapp;
+      const newTitle = enrichment.title || existing.title;
+
+      await c.env.DB.prepare(`
+        UPDATE sales_contacts
+        SET name = ?, phone = ?, whatsapp = ?, title = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(newName, newPhone, newWhatsapp, newTitle, id).run();
+
+      const audit = new AuditService(c.env.DB);
+      await audit.record({
+        actor_user_id: c.get("user")!.sub,
+        actor_email: c.get("user")!.email,
+        action: "crm.contact_enriched",
+        entity_type: "contact",
+        entity_id: id,
+        metadata: {
+          previous: { name: existing.name, phone: existing.phone, whatsapp: existing.whatsapp },
+          enriched: { name: newName, phone: newPhone, whatsapp: newWhatsapp, title: newTitle },
+          source_url: enrichment.source_url,
+        },
+        ip: clientIp(c),
+      });
+
+      updatedContact = await c.env.DB.prepare("SELECT * FROM sales_contacts WHERE id = ?").bind(id).first();
+    }
+
+    return c.json({
+      success: true,
+      enrichment,
+      contact: updatedContact,
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message || "Error enriqueciendo contacto" }, 400);
   }
 });
 
