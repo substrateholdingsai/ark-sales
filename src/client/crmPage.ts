@@ -388,15 +388,49 @@ tailwind.config = {
           </button>
         </div>
       </div>
+
+      <!-- Barra de Filtros & Búsqueda de Contactos -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+        <div class="flex items-center gap-2 flex-1 max-w-md">
+          <div class="relative w-full">
+            <i data-lucide="search" class="w-4 h-4 text-slate-500 absolute left-3 top-2.5"></i>
+            <input type="text" id="filtroContactosInput" oninput="buscarContactosEnTabla(event)" placeholder="Buscar por médico, consultorio, teléfono o WhatsApp..." class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white focus:border-ark-blue">
+          </div>
+        </div>
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          <button data-ct-tab="todos" onclick="cambiarTabContactos('todos')" class="ct-tab-btn active text-xs font-semibold px-3 py-1.5 rounded-full bg-ark-blue/15 text-ark-blue_hi border border-ark-blue/30">Todos</button>
+          <button data-ct-tab="con_whatsapp" onclick="cambiarTabContactos('con_whatsapp')" class="ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-emerald-400">🟢 Con WhatsApp</button>
+          <button data-ct-tab="pendientes" onclick="cambiarTabContactos('pendientes')" class="ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-300">Pendientes</button>
+          <button onclick="alternarOrdenContactos('name')" class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors ml-1" title="Ordenar A-Z / Z-A">
+            <i data-lucide="arrow-down-a-z" class="w-3.5 h-3.5"></i> <span id="lblOrdenContactos">A-Z</span>
+          </button>
+        </div>
+      </div>
+
       <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider">
-              <th class="px-4 py-3">Nombre</th>
-              <th class="px-4 py-3">Cuenta / Empresa</th>
+            <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider select-none">
+              <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors" onclick="alternarOrdenContactos('name')">
+                <div class="flex items-center gap-1.5">
+                  <span>Nombre</span>
+                  <span id="sortIconName" class="text-ark-blue_hi font-bold">▲</span>
+                </div>
+              </th>
+              <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors" onclick="alternarOrdenContactos('account_name')">
+                <div class="flex items-center gap-1.5">
+                  <span>Cuenta / Empresa</span>
+                  <span id="sortIconAccount" class="text-slate-600">⇅</span>
+                </div>
+              </th>
               <th class="px-4 py-3">Email</th>
               <th class="px-4 py-3">Teléfono</th>
-              <th class="px-4 py-3">WhatsApp</th>
+              <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors" onclick="alternarOrdenContactos('whatsapp')">
+                <div class="flex items-center gap-1.5">
+                  <span>WhatsApp</span>
+                  <span id="sortIconWhatsapp" class="text-slate-600">⇅</span>
+                </div>
+              </th>
               <th class="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
@@ -1529,17 +1563,129 @@ function cerrarModalCuenta() {
 }
 
 // ── CONTACTOS ──
+let sortContactos = { campo: 'name', dir: 'asc' };
+let filtroContactosTexto = '';
+let filtroContactosTab = 'todos';
+
+function buscarContactosEnTabla(e) {
+  filtroContactosTexto = (e.target.value || '').trim().toLowerCase();
+  renderContactos();
+}
+
+function cambiarTabContactos(tab) {
+  filtroContactosTab = tab;
+  document.querySelectorAll('.ct-tab-btn').forEach(btn => {
+    if (btn.getAttribute('data-ct-tab') === tab) {
+      btn.className = 'ct-tab-btn active text-xs font-semibold px-3 py-1.5 rounded-full bg-ark-blue/15 text-ark-blue_hi border border-ark-blue/30';
+    } else {
+      btn.className = 'ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-white';
+    }
+  });
+  renderContactos();
+}
+
+function alternarOrdenContactos(campo) {
+  if (sortContactos.campo === campo) {
+    sortContactos.dir = sortContactos.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortContactos.campo = campo;
+    sortContactos.dir = 'asc';
+  }
+  renderContactos();
+}
+
 async function renderContactos() {
   if (!state.contacts.length) await loadContacts();
   const body = document.getElementById('contactosBody');
   const contacts = state.contacts || [];
 
-  const sub = document.getElementById('contactosSub');
-  if (sub) sub.textContent = \`\${contacts.length} contactos registrados\`;
+  // Actualizar indicadores visuales de ordenamiento
+  const lblBtn = document.getElementById('lblOrdenContactos');
+  if (lblBtn) {
+    lblBtn.textContent = sortContactos.campo === 'name'
+      ? (sortContactos.dir === 'asc' ? 'A-Z' : 'Z-A')
+      : (sortContactos.dir === 'asc' ? '▲ ' + sortContactos.campo : '▼ ' + sortContactos.campo);
+  }
+  const icoName = document.getElementById('sortIconName');
+  if (icoName) {
+    icoName.textContent = sortContactos.campo === 'name' ? (sortContactos.dir === 'asc' ? '▲' : '▼') : '⇅';
+    icoName.className = sortContactos.campo === 'name' ? 'text-ark-blue_hi font-bold' : 'text-slate-600';
+  }
+  const icoAcc = document.getElementById('sortIconAccount');
+  if (icoAcc) {
+    icoAcc.textContent = sortContactos.campo === 'account_name' ? (sortContactos.dir === 'asc' ? '▲' : '▼') : '⇅';
+    icoAcc.className = sortContactos.campo === 'account_name' ? 'text-ark-blue_hi font-bold' : 'text-slate-600';
+  }
+  const icoWa = document.getElementById('sortIconWhatsapp');
+  if (icoWa) {
+    icoWa.textContent = sortContactos.campo === 'whatsapp' ? (sortContactos.dir === 'asc' ? '▲' : '▼') : '⇅';
+    icoWa.className = sortContactos.campo === 'whatsapp' ? 'text-ark-blue_hi font-bold' : 'text-slate-600';
+  }
 
-  body.innerHTML = contacts.length === 0
-    ? '<tr><td colspan="5" class="p-6 text-center text-slate-500 text-sm">Sin contactos registrados. Haz clic en "+ Nuevo contacto" para dar de alta uno.</td></tr>'
-    : contacts.map(c => {
+  // Filtrado
+  let list = contacts.slice();
+
+  if (filtroContactosTab === 'con_whatsapp') {
+    list = list.filter(c => c.whatsapp && c.whatsapp !== '-' && c.whatsapp.trim() !== '');
+  } else if (filtroContactosTab === 'pendientes') {
+    list = list.filter(c => {
+      const isPlaceholder = !c.name || c.name === 'Sin nombre' || c.name.toLowerCase().includes('contacto corporativo');
+      const missingWa = !c.whatsapp || c.whatsapp === '-';
+      const missingPhone = !c.phone || c.phone === '-';
+      return isPlaceholder || missingWa || missingPhone;
+    });
+  }
+
+  if (filtroContactosTexto) {
+    const q = filtroContactosTexto.toLowerCase();
+    list = list.filter(c => {
+      const acc = state.accounts.find(a => a.id === c.account_id);
+      const accName = (c.account_name || acc?.name || '').toLowerCase();
+      const name = (c.name || '').toLowerCase();
+      const email = (c.email || '').toLowerCase();
+      const phone = (c.phone || '').toLowerCase();
+      const wa = (c.whatsapp || '').toLowerCase();
+      return name.includes(q) || accName.includes(q) || email.includes(q) || phone.includes(q) || wa.includes(q);
+    });
+  }
+
+  // Ordenamiento
+  list.sort((a, b) => {
+    if (sortContactos.campo === 'name') {
+      const aIsPlace = !a.name || a.name === 'Sin nombre' || a.name.toLowerCase().includes('contacto corporativo');
+      const bIsPlace = !b.name || b.name === 'Sin nombre' || b.name.toLowerCase().includes('contacto corporativo');
+      if (aIsPlace && !bIsPlace) return 1;
+      if (!aIsPlace && bIsPlace) return -1;
+      const cmp = (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' });
+      return sortContactos.dir === 'asc' ? cmp : -cmp;
+    }
+    if (sortContactos.campo === 'account_name') {
+      const aAcc = a.account_name || (state.accounts.find(acc => acc.id === a.account_id)?.name) || '';
+      const bAcc = b.account_name || (state.accounts.find(acc => acc.id === b.account_id)?.name) || '';
+      const cmp = aAcc.localeCompare(bAcc, 'es', { sensitivity: 'base' });
+      return sortContactos.dir === 'asc' ? cmp : -cmp;
+    }
+    if (sortContactos.campo === 'whatsapp') {
+      const aHasWa = !!(a.whatsapp && a.whatsapp !== '-');
+      const bHasWa = !!(b.whatsapp && b.whatsapp !== '-');
+      if (aHasWa && !bHasWa) return -1;
+      if (!aHasWa && bHasWa) return 1;
+      const cmp = (a.whatsapp || '').localeCompare(b.whatsapp || '');
+      return sortContactos.dir === 'asc' ? cmp : -cmp;
+    }
+    return 0;
+  });
+
+  const sub = document.getElementById('contactosSub');
+  if (sub) {
+    sub.textContent = (filtroContactosTexto || filtroContactosTab !== 'todos')
+      ? (list.length + ' de ' + contacts.length + ' contactos')
+      : (contacts.length + ' contactos registrados');
+  }
+
+  body.innerHTML = list.length === 0
+    ? '<tr><td colspan="6" class="p-6 text-center text-slate-500 text-sm">No se encontraron contactos que coincidan con la búsqueda o filtro.</td></tr>'
+    : list.map(c => {
         const acc = state.accounts.find(a => a.id === c.account_id);
         const cuentaNombre = c.account_name || (acc ? acc.name : (c.account_id ? 'Cuenta ' + c.account_id.slice(0,8) : '-'));
         return \`
