@@ -404,38 +404,49 @@ tailwind.config = {
           <button onclick="alternarOrdenContactos('name')" class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors ml-1" title="Ordenar A-Z / Z-A">
             <i data-lucide="arrow-down-a-z" class="w-3.5 h-3.5"></i> <span id="lblOrdenContactos">A-Z</span>
           </button>
+          <div class="flex items-center gap-1 bg-slate-800/90 p-0.5 rounded-lg border border-slate-700/80 ml-1">
+            <button type="button" onclick="scrollTablaContactos(-280)" class="p-1 rounded hover:bg-slate-700 text-slate-300 hover:text-white transition-colors" title="Desplazar tabla a la izquierda (◀)">
+              <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+            </button>
+            <span class="text-[10px] text-slate-400 font-mono px-1 select-none">Scroll</span>
+            <button type="button" onclick="scrollTablaContactos(280)" class="p-1 rounded hover:bg-slate-700 text-slate-300 hover:text-white transition-colors" title="Desplazar tabla a la derecha (▶)">
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider select-none">
-              <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors" onclick="alternarOrdenContactos('name')">
-                <div class="flex items-center gap-1.5">
-                  <span>Nombre</span>
-                  <span id="sortIconName" class="text-ark-blue_hi font-bold">▲</span>
-                </div>
-              </th>
-              <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors" onclick="alternarOrdenContactos('account_name')">
-                <div class="flex items-center gap-1.5">
-                  <span>Cuenta / Empresa</span>
-                  <span id="sortIconAccount" class="text-slate-600">⇅</span>
-                </div>
-              </th>
-              <th class="px-4 py-3">Email</th>
-              <th class="px-4 py-3">Teléfono</th>
-              <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors" onclick="alternarOrdenContactos('whatsapp')">
-                <div class="flex items-center gap-1.5">
-                  <span>WhatsApp</span>
-                  <span id="sortIconWhatsapp" class="text-slate-600">⇅</span>
-                </div>
-              </th>
-              <th class="px-4 py-3 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="contactosBody" class="divide-y divide-slate-800/50"></tbody>
-        </table>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg relative">
+        <div id="contactosTableScrollContainer" class="overflow-x-auto w-full scroll-smooth">
+          <table class="w-full text-sm min-w-[980px]">
+            <thead>
+              <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider select-none bg-slate-900/90">
+                <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors min-w-[190px]" onclick="alternarOrdenContactos('name')">
+                  <div class="flex items-center gap-1.5">
+                    <span>Nombre</span>
+                    <span id="sortIconName" class="text-ark-blue_hi font-bold">▲</span>
+                  </div>
+                </th>
+                <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors min-w-[210px]" onclick="alternarOrdenContactos('account_name')">
+                  <div class="flex items-center gap-1.5">
+                    <span>Cuenta / Empresa</span>
+                    <span id="sortIconAccount" class="text-slate-600">⇅</span>
+                  </div>
+                </th>
+                <th class="px-4 py-3 min-w-[180px]">Email</th>
+                <th class="px-4 py-3 min-w-[120px]">Teléfono</th>
+                <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors min-w-[140px]" onclick="alternarOrdenContactos('whatsapp')">
+                  <div class="flex items-center gap-1.5">
+                    <span>WhatsApp</span>
+                    <span id="sortIconWhatsapp" class="text-slate-600">⇅</span>
+                  </div>
+                </th>
+                <th class="px-4 py-3 text-right sticky right-0 bg-slate-900/95 backdrop-blur-sm border-l border-slate-800/80 shadow-[-8px_0_12px_rgba(0,0,0,0.5)] z-10 min-w-[200px]">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="contactosBody" class="divide-y divide-slate-800/50"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -1594,6 +1605,11 @@ function alternarOrdenContactos(campo) {
   renderContactos();
 }
 
+function scrollTablaContactos(offset) {
+  const el = document.getElementById('contactosTableScrollContainer');
+  if (el) el.scrollBy({ left: offset, behavior: 'smooth' });
+}
+
 async function renderContactos() {
   if (!state.contacts.length) await loadContacts();
   const body = document.getElementById('contactosBody');
@@ -1701,7 +1717,7 @@ async function renderContactos() {
                 </button>\`
               : '<span class="text-xs text-slate-600 font-mono">-</span>'}
           </td>
-          <td class="px-4 py-3 text-right">
+          <td class="px-4 py-3 text-right whitespace-nowrap sticky right-0 bg-slate-900/95 backdrop-blur-sm border-l border-slate-800/80 shadow-[-8px_0_12px_rgba(0,0,0,0.5)] z-10">
             <div class="flex items-center justify-end gap-1.5">
               \${c.whatsapp && c.whatsapp !== '-'
                 ? \`<button onclick="accionWhatsApp('\${c.whatsapp}')" class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors" title="Abrir WhatsApp Web"><i data-lucide="message-circle" class="w-4 h-4"></i></button>\`
