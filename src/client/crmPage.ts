@@ -441,7 +441,7 @@ tailwind.config = {
 
       <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg relative">
         <div id="contactosTableScrollContainer" class="overflow-x-auto w-full scroll-smooth">
-          <table class="w-full text-sm min-w-[980px]">
+          <table class="w-full text-sm min-w-[1140px]">
             <thead>
               <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider select-none bg-slate-900/90">
                 <th class="px-3 py-3 w-10 text-center select-none sticky left-0 bg-slate-900/95 backdrop-blur-sm z-10 border-r border-slate-800/80">
@@ -465,6 +465,12 @@ tailwind.config = {
                   <div class="flex items-center gap-1.5">
                     <span>WhatsApp</span>
                     <span id="sortIconWhatsapp" class="text-slate-600">⇅</span>
+                  </div>
+                </th>
+                <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors min-w-[170px]" onclick="alternarOrdenContactos('title')">
+                  <div class="flex items-center gap-1.5">
+                    <span>Especialidad / Cargo</span>
+                    <span id="sortIconTitle" class="text-slate-600">⇅</span>
                   </div>
                 </th>
                 <th class="px-4 py-3 text-right sticky right-0 bg-slate-900/95 backdrop-blur-sm border-l border-slate-800/80 shadow-[-8px_0_12px_rgba(0,0,0,0.5)] z-10 min-w-[200px]">Acciones</th>
@@ -1828,6 +1834,11 @@ async function renderContactos() {
     icoWa.textContent = sortContactos.campo === 'whatsapp' ? (sortContactos.dir === 'asc' ? '▲' : '▼') : '⇅';
     icoWa.className = sortContactos.campo === 'whatsapp' ? 'text-ark-blue_hi font-bold' : 'text-slate-600';
   }
+  const icoTitle = document.getElementById('sortIconTitle');
+  if (icoTitle) {
+    icoTitle.textContent = sortContactos.campo === 'title' ? (sortContactos.dir === 'asc' ? '▲' : '▼') : '⇅';
+    icoTitle.className = sortContactos.campo === 'title' ? 'text-ark-blue_hi font-bold' : 'text-slate-600';
+  }
 
   // Filtrado
   let list = contacts.slice();
@@ -1852,7 +1863,8 @@ async function renderContactos() {
       const email = (c.email || '').toLowerCase();
       const phone = (c.phone || '').toLowerCase();
       const wa = (c.whatsapp || '').toLowerCase();
-      return name.includes(q) || accName.includes(q) || email.includes(q) || phone.includes(q) || wa.includes(q);
+      const title = (c.title || '').toLowerCase();
+      return name.includes(q) || accName.includes(q) || email.includes(q) || phone.includes(q) || wa.includes(q) || title.includes(q);
     });
   }
 
@@ -1878,6 +1890,14 @@ async function renderContactos() {
       if (aHasWa && !bHasWa) return -1;
       if (!aHasWa && bHasWa) return 1;
       const cmp = (a.whatsapp || '').localeCompare(b.whatsapp || '');
+      return sortContactos.dir === 'asc' ? cmp : -cmp;
+    }
+    if (sortContactos.campo === 'title') {
+      const aHasTitle = !!(a.title && a.title !== '-');
+      const bHasTitle = !!(b.title && b.title !== '-');
+      if (aHasTitle && !bHasTitle) return -1;
+      if (!aHasTitle && bHasTitle) return 1;
+      const cmp = (a.title || '').localeCompare(b.title || '', 'es', { sensitivity: 'base' });
       return sortContactos.dir === 'asc' ? cmp : -cmp;
     }
     return 0;
@@ -1943,7 +1963,7 @@ async function renderContactos() {
   }
 
   body.innerHTML = itemsPagina.length === 0
-    ? '<tr><td colspan="7" class="p-6 text-center text-slate-500 text-sm">No se encontraron contactos que coincidan con la búsqueda o filtro.</td></tr>'
+    ? '<tr><td colspan="8" class="p-6 text-center text-slate-500 text-sm">No se encontraron contactos que coincidan con la búsqueda o filtro.</td></tr>'
     : itemsPagina.map(c => {
         const acc = state.accounts.find(a => a.id === c.account_id);
         const cuentaNombre = c.account_name || (acc ? acc.name : (c.account_id ? 'Cuenta ' + c.account_id.slice(0,8) : '-'));
@@ -1961,6 +1981,11 @@ async function renderContactos() {
               ? \`<button onclick="accionWhatsApp('\${c.whatsapp}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-mono transition-colors" title="Abrir chat de WhatsApp">
                   <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> \${c.whatsapp}
                 </button>\`
+              : '<span class="text-xs text-slate-600 font-mono">-</span>'}
+          </td>
+          <td class="px-4 py-3">
+            \${c.title && c.title !== '-'
+              ? \`<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-ark-blue/10 text-ark-blue_hi border border-ark-blue/25 max-w-[200px] truncate" title="\${c.title}">\${c.title}</span>\`
               : '<span class="text-xs text-slate-600 font-mono">-</span>'}
           </td>
           <td class="px-4 py-3 text-right whitespace-nowrap sticky right-0 bg-slate-900/95 backdrop-blur-sm border-l border-slate-800/80 shadow-[-8px_0_12px_rgba(0,0,0,0.5)] z-10">
