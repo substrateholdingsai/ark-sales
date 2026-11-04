@@ -315,10 +315,28 @@ export const WIDGET_JS_SOURCE = `
       <input type="text" id="ark-lead-despacho" placeholder="Tu Despacho..." value="\${leadData.despacho}">
       <input type="email" id="ark-lead-email" placeholder="correo@ejemplo.com" value="\${leadData.email}">
     </div>
+    <div class="ark-video-bar" id="ark-video-bar" style="background:#090d16; border-bottom:1px solid #1e293b; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="font-size:13px;">🎬</span>
+        <span style="font-size:11px; color:#cbd5e1; font-weight:600;">Presentación con Avatar IA</span>
+      </div>
+      <button id="ark-toggle-video-btn" style="background:rgba(37,99,235,0.25); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); border-radius:6px; padding:3px 8px; font-size:11px; font-weight:600; cursor:pointer; transition:all 0.2s;">
+        ▶ Ver Video (1m)
+      </button>
+    </div>
+    <div id="ark-video-drawer" style="display:none; background:#020617; border-bottom:1px solid #1e293b; padding:8px;">
+      <div style="position:relative; width:100%; padding-top:56.25%; border-radius:8px; overflow:hidden; background:#000;">
+        <iframe id="ark-video-iframe" src="" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" allow="encrypted-media; fullscreen;" allowfullscreen></iframe>
+      </div>
+    </div>
     <div class="ark-body" id="ark-body">
       <div class="ark-msg assistant">
         Hola. Soy <strong>El Triador</strong> de ARK Systems. Infraestructura agéntica de cobranza multicanal (Ark Angel) y blindaje fiscal DOF (Ark Ledger) en México.
-        <br><br>
+        <div style="margin: 10px 0;">
+          <button id="ark-inline-video-btn" style="display:inline-flex; align-items:center; gap:6px; background:linear-gradient(to right, #2563eb, #4f46e5); color:#fff; border:none; border-radius:8px; padding:6px 12px; font-size:11px; font-weight:600; cursor:pointer; box-shadow:0 2px 8px rgba(37,99,235,0.3);">
+            <span>▶️</span> Ver presentación del Avatar AI (1 min)
+          </button>
+        </div>
         ¿En qué operación necesitas acelerar recuperación de cartera o blindar cumplimiento hoy?
         <div class="ark-quick-replies" id="ark-quick-replies">
           <button class="ark-quick-btn" data-pain="Cobranza masiva para despacho o call center BPO con guion CONDUSEF y softphone">🏢 Cobranza BPO / Call Center</button>
@@ -348,6 +366,28 @@ export const WIDGET_JS_SOURCE = `
   // Event Listeners
   fab.addEventListener("click", () => modal.classList.toggle("open"));
   closeBtn.addEventListener("click", () => modal.classList.remove("open"));
+
+  const videoToggleBtn = modal.querySelector("#ark-toggle-video-btn");
+  const inlineVideoBtn = modal.querySelector("#ark-inline-video-btn");
+  const videoDrawer = modal.querySelector("#ark-video-drawer");
+  const videoIframe = modal.querySelector("#ark-video-iframe");
+
+  function toggleVideo(forceOpen = false) {
+    if (!videoDrawer || !videoIframe || !videoToggleBtn) return;
+    const isVisible = videoDrawer.style.display !== "none";
+    if (isVisible && !forceOpen) {
+      videoDrawer.style.display = "none";
+      videoIframe.src = "";
+      videoToggleBtn.textContent = "▶ Ver Video (1m)";
+    } else {
+      videoDrawer.style.display = "block";
+      videoIframe.src = "https://app.heygen.com/embeds/5420955633ed46e88671a30fbe611f49";
+      videoToggleBtn.textContent = "✕ Ocultar";
+    }
+  }
+
+  if (videoToggleBtn) videoToggleBtn.addEventListener("click", () => toggleVideo());
+  if (inlineVideoBtn) inlineVideoBtn.addEventListener("click", () => toggleVideo(true));
 
   despachoInput.addEventListener("change", (e) => {
     leadData.despacho = e.target.value.trim();

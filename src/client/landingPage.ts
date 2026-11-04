@@ -159,6 +159,60 @@ export function renderPublicLandingHtml(): string {
             </div>
         </div>
 
+        <!-- SECCIÓN: PRESENTACIÓN EN VIDEO CON AVATAR IA (HEYGEN) -->
+        <section id="avatar-video" class="max-w-4xl mx-auto my-14 w-full">
+            <div class="relative rounded-3xl p-[2px] bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400 shadow-[0_0_50px_rgba(37,99,235,0.25)]">
+                <div class="relative bg-slate-950/95 rounded-[22px] p-6 sm:p-8 backdrop-blur-2xl border border-slate-800/80">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-400/30 text-blue-300 font-mono text-[11px] uppercase tracking-wider mb-2">
+                                <i data-lucide="video" class="w-3.5 h-3.5 text-blue-400"></i>
+                                <span>Avatar Oficial de Inteligencia Artificial</span>
+                            </div>
+                            <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                                Infraestructura de cobranza con IA y blindaje fiscal
+                            </h2>
+                            <p class="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
+                                Descubre en 1 minuto cómo los agentes autónomos de ARK Systems aceleran la recuperación de cartera y blindan a tu empresa ante el SAT.
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                Reproductor HD HeyGen
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Video Iframe 16:9 Responsive Container -->
+                    <div class="relative w-full rounded-2xl overflow-hidden bg-slate-900 border border-slate-800/80 shadow-2xl" style="padding-top: 56.25%;">
+                        <iframe 
+                            src="https://app.heygen.com/embeds/5420955633ed46e88671a30fbe611f49" 
+                            title="Infraestructura de cobranza con IA y blindaje fiscal - ARK Systems" 
+                            class="absolute inset-0 w-full h-full border-0 rounded-2xl"
+                            allow="encrypted-media; fullscreen;" 
+                            allowfullscreen>
+                        </iframe>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-850 text-xs text-slate-300">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="check-circle-2" class="w-4 h-4 text-blue-400 shrink-0"></i>
+                            <span>Orquestación de cobros SPEI STP</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="check-circle-2" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+                            <span>Campañas de voz y correo automáticas</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                            <span>Cumplimiento estricto SAT y CONDUSEF</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- SECCIÓN: LOS 3 PILARES -->
         <section id="pilares" class="mb-20">
             <div class="text-center mb-10">
