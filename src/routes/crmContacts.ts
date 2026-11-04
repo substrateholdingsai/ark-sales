@@ -225,3 +225,42 @@ crmContactsRouter.delete("/:id", requireRole("write"), async (c) => {
     return c.json({ error: err.message || "Error eliminando contacto" }, 400);
   }
 });
+
+// Bulk Delete contacts (Batch / Multiple Selection)
+crmContactsRouter.post("/bulk-delete", requireRole("write"), async (c) => {
+  try {
+    const body = await c.req.json<{ ids?: string[] }>();
+    const ids = body?.ids;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return c.json({ error: "Se requiere un arreglo 'ids' con al menos 1 ID." }, 400);
+    }
+
+    // Process in chunks of 100 for SQL binding safety
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      chunks.push(ids.slice(i, i + 100));
+    }
+
+    for (const chunk of chunks) {
+      const placeholders = chunk.map(() => "?").join(",");
+      await c.env.DB.prepare(`UPDATE sales_leads SET contact_id = NULL WHERE contact_id IN (${placeholders})`).bind(...chunk).run();
+      await c.env.DB.prepare(`UPDATE sales_opportunities SET contact_id = NULL WHERE contact_id IN (${placeholders})`).bind(...chunk).run();
+      await c.env.DB.prepare(`UPDATE sales_activities SET contact_id = NULL WHERE contact_id IN (${placeholders})`).bind(...chunk).run();
+      await c.env.DB.prepare(`DELETE FROM sales_contacts WHERE id IN (${placeholders})`).bind(...chunk).run();
+    }
+
+    const audit = new AuditService(c.env.DB);
+    await audit.record({
+      actor_user_id: c.get("user")!.sub,
+      actor_email: c.get("user")!.email,
+      action: "crm.contacts_bulk_deleted",
+      entity_type: "contact",
+      metadata: { count: ids.length, ids_preview: ids.slice(0, 5) },
+      ip: clientIp(c),
+    });
+
+    return c.json({ success: true, count: ids.length, message: `${ids.length} contactos eliminados exitosamente.` });
+  } catch (err: any) {
+    return c.json({ error: err.message || "Error en eliminación masiva de contactos." }, 400);
+  }
+});

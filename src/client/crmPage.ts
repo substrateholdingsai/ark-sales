@@ -416,11 +416,37 @@ tailwind.config = {
         </div>
       </div>
 
+      <!-- Barra Flotante de Acciones Masivas (Estilo Gmail) -->
+      <div id="bulkContactosToolbar" class="hidden items-center justify-between bg-slate-800/95 border border-ark-blue/40 rounded-xl px-4 py-2.5 text-xs text-white shadow-lg backdrop-blur-sm transition-all mb-1">
+        <div class="flex items-center gap-3">
+          <span class="font-bold text-ark-blue_hi flex items-center gap-1.5">
+            <i data-lucide="check-square" class="w-4 h-4 text-ark-blue"></i>
+            <span id="bulkContactosCount">0</span> seleccionados
+          </span>
+          <span class="text-slate-600">|</span>
+          <button type="button" onclick="seleccionarTodosContactosVisibles()" class="text-slate-300 hover:text-white underline text-[11px]">
+            Seleccionar todos los visibles (<span id="bulkTotalVisibleCount">0</span>)
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="ejecutarBulkDeleteContactos()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 font-semibold transition-colors" title="Eliminar los contactos seleccionados">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span>Eliminar seleccionados</span>
+          </button>
+          <button type="button" onclick="deseleccionarTodosContactos()" class="p-1 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors" title="Cancelar selección">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
       <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg relative">
         <div id="contactosTableScrollContainer" class="overflow-x-auto w-full scroll-smooth">
           <table class="w-full text-sm min-w-[980px]">
             <thead>
               <tr class="border-b border-slate-800 text-left text-slate-400 font-mono text-xs uppercase tracking-wider select-none bg-slate-900/90">
+                <th class="px-3 py-3 w-10 text-center select-none sticky left-0 bg-slate-900/95 backdrop-blur-sm z-10 border-r border-slate-800/80">
+                  <input type="checkbox" id="selectAllContactosCheckbox" onchange="toggleSelectAllContactos(event)" class="rounded border-slate-700 bg-slate-800 text-ark-blue focus:ring-0 cursor-pointer" title="Seleccionar todos">
+                </th>
                 <th class="px-4 py-3 cursor-pointer hover:text-white transition-colors min-w-[190px]" onclick="alternarOrdenContactos('name')">
                   <div class="flex items-center gap-1.5">
                     <span>Nombre</span>
@@ -1610,6 +1636,115 @@ function scrollTablaContactos(offset) {
   if (el) el.scrollBy({ left: offset, behavior: 'smooth' });
 }
 
+// ── SELECCIÓN MASIVA ESTILO GMAIL ──
+const selectedContactIds = new Set();
+
+function actualizarBulkToolbar() {
+  const toolbar = document.getElementById('bulkContactosToolbar');
+  const countEl = document.getElementById('bulkContactosCount');
+  const masterBox = document.getElementById('selectAllContactosCheckbox');
+  const totalVisibleEl = document.getElementById('bulkTotalVisibleCount');
+  
+  const allRowBoxes = document.querySelectorAll('.ct-row-checkbox');
+  const totalVisible = allRowBoxes.length;
+  if (totalVisibleEl) totalVisibleEl.textContent = totalVisible;
+
+  const count = selectedContactIds.size;
+  if (countEl) countEl.textContent = count;
+
+  if (count > 0) {
+    if (toolbar) {
+      toolbar.classList.remove('hidden');
+      toolbar.classList.add('flex');
+    }
+  } else {
+    if (toolbar) {
+      toolbar.classList.add('hidden');
+      toolbar.classList.remove('flex');
+    }
+  }
+
+  if (masterBox) {
+    if (count === 0) {
+      masterBox.checked = false;
+      masterBox.indeterminate = false;
+    } else if (count >= totalVisible && totalVisible > 0) {
+      masterBox.checked = true;
+      masterBox.indeterminate = false;
+    } else {
+      masterBox.checked = false;
+      masterBox.indeterminate = true;
+    }
+  }
+}
+
+function onSelectContactoChange(e, id) {
+  if (e.target.checked) {
+    selectedContactIds.add(id);
+  } else {
+    selectedContactIds.delete(id);
+  }
+  actualizarBulkToolbar();
+}
+
+function toggleSelectAllContactos(e) {
+  const check = e.target.checked;
+  const allRowBoxes = document.querySelectorAll('.ct-row-checkbox');
+  allRowBoxes.forEach(box => {
+    box.checked = check;
+    const id = box.dataset.contactId;
+    if (check && id) {
+      selectedContactIds.add(id);
+    } else if (id) {
+      selectedContactIds.delete(id);
+    }
+  });
+  actualizarBulkToolbar();
+}
+
+function seleccionarTodosContactosVisibles() {
+  const allRowBoxes = document.querySelectorAll('.ct-row-checkbox');
+  allRowBoxes.forEach(box => {
+    box.checked = true;
+    const id = box.dataset.contactId;
+    if (id) selectedContactIds.add(id);
+  });
+  actualizarBulkToolbar();
+}
+
+function deseleccionarTodosContactos() {
+  selectedContactIds.clear();
+  const allRowBoxes = document.querySelectorAll('.ct-row-checkbox');
+  allRowBoxes.forEach(box => { box.checked = false; });
+  actualizarBulkToolbar();
+}
+
+async function ejecutarBulkDeleteContactos() {
+  const ids = Array.from(selectedContactIds);
+  if (!ids.length) return;
+  abrirConfirmacion(
+    '¿Eliminar ' + ids.length + ' contactos seleccionados?',
+    'Esta acción eliminará ' + ids.length + ' contactos seleccionados de forma permanente.',
+    async () => {
+      try {
+        toast('⏳ Eliminando ' + ids.length + ' contactos...');
+        const res = await apiCall('/api/crm/contacts/bulk-delete', 'POST', { ids });
+        if (res && res.success) {
+          state.contacts = state.contacts.filter(c => !selectedContactIds.has(c.id));
+          selectedContactIds.clear();
+          actualizarBulkToolbar();
+          renderContactos();
+          toast('✅ ' + ids.length + ' contactos eliminados con éxito.');
+        } else {
+          toast('Error al eliminar contactos: ' + (res?.error || 'Error'));
+        }
+      } catch(err) {
+        toast('Error al eliminar: ' + (err.message || 'Error de red'));
+      }
+    }
+  );
+}
+
 async function renderContactos() {
   if (!state.contacts.length) await loadContacts();
   const body = document.getElementById('contactosBody');
@@ -1700,12 +1835,15 @@ async function renderContactos() {
   }
 
   body.innerHTML = list.length === 0
-    ? '<tr><td colspan="6" class="p-6 text-center text-slate-500 text-sm">No se encontraron contactos que coincidan con la búsqueda o filtro.</td></tr>'
+    ? '<tr><td colspan="7" class="p-6 text-center text-slate-500 text-sm">No se encontraron contactos que coincidan con la búsqueda o filtro.</td></tr>'
     : list.map(c => {
         const acc = state.accounts.find(a => a.id === c.account_id);
         const cuentaNombre = c.account_name || (acc ? acc.name : (c.account_id ? 'Cuenta ' + c.account_id.slice(0,8) : '-'));
         return \`
         <tr class="hover:bg-slate-800/30 transition-colors">
+          <td class="px-3 py-3 text-center sticky left-0 bg-slate-900/90 backdrop-blur-sm z-10 border-r border-slate-800/80">
+            <input type="checkbox" data-contact-id="\${c.id}" \${selectedContactIds.has(c.id) ? 'checked' : ''} onchange="onSelectContactoChange(event, '\${c.id}')" class="ct-row-checkbox rounded border-slate-700 bg-slate-800 text-ark-blue focus:ring-0 cursor-pointer">
+          </td>
           <td class="px-4 py-3 font-medium text-white">\${c.name || 'Sin nombre'}</td>
           <td class="px-4 py-3 text-slate-400">\${cuentaNombre}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.email || '-'}</td>

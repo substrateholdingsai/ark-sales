@@ -52,6 +52,13 @@ function createMockDb() {
             if (idx !== -1) contacts.splice(idx, 1);
             return { success: true };
           }
+          if (s.includes("delete from sales_contacts where id in")) {
+            for (const id of args) {
+              const idx = contacts.findIndex(c => c.id === id);
+              if (idx !== -1) contacts.splice(idx, 1);
+            }
+            return { success: true };
+          }
           if (s.startsWith("delete from sales_contacts where account_id = ?")) {
             for (let i = contacts.length - 1; i >= 0; i--) {
               if (contacts[i].account_id === args[0]) contacts.splice(i, 1);
@@ -184,5 +191,31 @@ describe("CRM Delete & Contact Export Endpoints", () => {
     expect(body.contact.email).toBe("yair.baas@oncologia.com");
     expect(body.contact.phone).toBe("+52 999 555 4321");
     expect(body.contact.whatsapp).toBe("+52 999 888 7766");
+  });
+
+  it("deletes multiple contacts in batch via POST /api/crm/contacts/bulk-delete", async () => {
+    const db = createMockDb();
+    db.contacts.push(
+      { id: "ct_2", account_id: "acc_1", name: "Contacto 2", email: "c2@test.com" },
+      { id: "ct_3", account_id: "acc_1", name: "Contacto 3", email: "c3@test.com" }
+    );
+    const env = { DB: db, CRM_JWT_SECRET: secret } as any;
+    const token = await signJwt({ sub: "usr_1", email: "admin@ark.test", role: "admin", name: "Admin" }, secret);
+
+    const res = await app.fetch(new Request("http://localhost/api/crm/contacts/bulk-delete", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ ids: ["ct_1", "ct_2"] })
+    }), env);
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as any;
+    expect(body.success).toBe(true);
+    expect(body.count).toBe(2);
+    expect(db.contacts.length).toBe(1);
+    expect(db.contacts[0].id).toBe("ct_3");
   });
 });
