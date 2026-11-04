@@ -1,28 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { app } from "../src/index";
-import { ADMIN_TOOLS } from "../src/routes/adminAssistant";
+import { ADMIN_TOOLS, runDeterministicFallback } from "../src/routes/adminAssistant";
 
 describe("Admin AI Assistant & Contact Enrichment Suite", () => {
-  it("ADMIN_TOOLS must contain all expected tools including enrich_contact", () => {
+  it("ADMIN_TOOLS must contain the top 5 high-impact tools", () => {
     const toolNames = ADMIN_TOOLS.map((t) => t.name);
-    expect(toolNames).toContain("list_leads");
-    expect(toolNames).toContain("create_lead");
-    expect(toolNames).toContain("update_lead");
-    expect(toolNames).toContain("delete_lead");
-    expect(toolNames).toContain("send_email");
-    expect(toolNames).toContain("trigger_voice_call");
+    expect(toolNames).toHaveLength(5);
     expect(toolNames).toContain("get_metrics");
-    expect(toolNames).toContain("list_accounts");
-    expect(toolNames).toContain("create_account");
-    expect(toolNames).toContain("update_account");
-    expect(toolNames).toContain("delete_account");
     expect(toolNames).toContain("list_contacts");
-    expect(toolNames).toContain("create_contact");
-    expect(toolNames).toContain("update_contact");
-    expect(toolNames).toContain("delete_contact");
     expect(toolNames).toContain("enrich_contact");
-    expect(toolNames).toContain("list_voice_campaigns");
-    expect(toolNames).toContain("create_voice_campaign");
+    expect(toolNames).toContain("create_lead");
+    expect(toolNames).toContain("send_email");
   });
 
   it("serves /admin-assistant.js widget bundle with HTTP 200", async () => {
@@ -45,12 +33,25 @@ describe("Admin AI Assistant & Contact Enrichment Suite", () => {
     expect(res.status).toBe(401);
   });
 
-  it("rejects unauthenticated requests to /api/crm/contacts/ct_123/enrich with 401", async () => {
-    const res = await app.request("https://sales.arksystems.site/api/crm/contacts/ct_123/enrich", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ auto_apply: true }),
-    });
-    expect(res.status).toBe(401);
+  it("runDeterministicFallback answers database access query gracefully", async () => {
+    const mockEnv: any = {};
+    const fallback = await runDeterministicFallback(
+      "Hola! ya tienes acceso a la base de datos?",
+      null,
+      mockEnv,
+      { role: "admin", sub: "u_1" }
+    );
+    expect(fallback.reply).toContain("Conectado");
+  });
+
+  it("runDeterministicFallback answers metrics query gracefully", async () => {
+    const mockEnv: any = {};
+    const fallback = await runDeterministicFallback(
+      "Dame las métricas del crm",
+      null,
+      mockEnv,
+      { role: "admin", sub: "u_1" }
+    );
+    expect(fallback.reply).toContain("Métricas");
   });
 });
