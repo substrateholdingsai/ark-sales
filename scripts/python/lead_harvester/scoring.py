@@ -120,7 +120,9 @@ def rule_score(lead: RawLead) -> int:
             score += w
     if lead.telefono:
         score += 10
-    if lead.email:
+    if lead.email and not lead.email.endswith("@harvest.arksystems.local") and not lead.email.startswith("lead_"):
+        score += 20
+    elif lead.email:
         score += 5
     return min(score, 100)
 

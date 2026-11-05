@@ -20,6 +20,7 @@ async def run_pipeline(
     profile: str = "ark",
     plaza: Optional[str] = None,
     query: Optional[str] = None,
+    require_email: bool = False,
 ) -> HarvestResult:
     if source != "denue":
         raise ValueError(f"Unsupported source: {source}")
@@ -33,12 +34,26 @@ async def run_pipeline(
     stream = harvester.harvest_and_enrich() if enrich else harvester.harvest()
     seen_ids: set[str] = set()
     count = 0
+    enforce_email = require_email or (profile == "ark_ledger")
     async for lead in stream:
         if limit is not None and count >= limit:
             break
         if lead.lead_id in seen_ids or (lead.email and lead.email in seen_ids):
             result.deduped += 1
             continue
+
+        # Si se exige email (campañas de mailing como Ark Ledger), asegurar email real antes de contabilizarlo
+        if enforce_email:
+            has_real_email = bool(
+                lead.email
+                and "@" in lead.email
+                and not lead.email.endswith("@harvest.arksystems.local")
+                and not lead.email.startswith("lead_")
+                and "example.com" not in lead.email
+            )
+            if not has_real_email:
+                continue
+
         seen_ids.add(lead.lead_id)
         if lead.email:
             seen_ids.add(lead.email)

@@ -135,6 +135,48 @@ ARK_LEDGER_GEO_CLUSTERS = [
     {"query": "despacho contable", "coords": "19.0300,-98.2350", "radio": 5000, "scian_default": "541211"},
 ]
 
+# Clusters de alta densidad para Ark Ledger en CDMX y Zona Metropolitana
+CDMX_LEDGER_GEO_CLUSTERS = [
+    # 1. Benito Juárez — Insurgentes Sur / Del Valle / Nápoles / San José Insurgentes (Corredor Contable #1)
+    {"query": "despacho contable", "coords": "19.3850,-99.1750", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores", "coords": "19.3732,-99.1793", "radio": 5000, "scian_default": "541211"},
+    {"query": "asesoria fiscal", "coords": "19.3850,-99.1750", "radio": 5000, "scian_default": "541110"},
+    {"query": "auditoria fiscal", "coords": "19.3850,-99.1750", "radio": 5000, "scian_default": "541212"},
+    {"query": "contabilidad", "coords": "19.3900,-99.1650", "radio": 5000, "scian_default": "541211"},
+
+    # 2. Cuauhtémoc — Paseo de la Reforma / Juárez / Roma Norte / Condesa (Firmas Corporativas)
+    {"query": "despacho contable", "coords": "19.4285,-99.1600", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores", "coords": "19.4285,-99.1600", "radio": 5000, "scian_default": "541211"},
+    {"query": "auditoria fiscal", "coords": "19.4326,-99.1550", "radio": 5000, "scian_default": "541212"},
+    {"query": "asesoria fiscal", "coords": "19.4250,-99.1650", "radio": 5000, "scian_default": "541110"},
+
+    # 3. Miguel Hidalgo — Polanco / Anzures / Lomas de Chapultepec (Boutiques Fiscales & Auditoría)
+    {"query": "despacho contable", "coords": "19.4335,-99.1950", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores publicos", "coords": "19.4335,-99.1950", "radio": 5000, "scian_default": "541211"},
+    {"query": "auditoria", "coords": "19.4335,-99.1950", "radio": 5000, "scian_default": "541212"},
+    {"query": "asesoria fiscal", "coords": "19.4335,-99.1950", "radio": 5000, "scian_default": "541110"},
+
+    # 4. Santa Fe & Cuajimalpa — Centro Financiero / Bosques de las Lomas
+    {"query": "despacho contable", "coords": "19.3620,-99.2600", "radio": 5000, "scian_default": "541211"},
+    {"query": "consultoria fiscal", "coords": "19.3620,-99.2600", "radio": 5000, "scian_default": "541110"},
+    {"query": "contadores", "coords": "19.3620,-99.2600", "radio": 5000, "scian_default": "541211"},
+
+    # 5. Coyoacán & Álvaro Obregón Sur — San Ángel / Perisur / Pedregal
+    {"query": "despacho contable", "coords": "19.3450,-99.1900", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores", "coords": "19.3450,-99.1900", "radio": 5000, "scian_default": "541211"},
+    {"query": "asesoria fiscal", "coords": "19.3450,-99.1900", "radio": 5000, "scian_default": "541110"},
+
+    # 6. Naucalpan & Satélite (Edomex Metropolitana Poniente)
+    {"query": "despacho contable", "coords": "19.5050,-99.2350", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores", "coords": "19.5050,-99.2350", "radio": 5000, "scian_default": "541211"},
+    {"query": "asesoria fiscal", "coords": "19.5050,-99.2350", "radio": 5000, "scian_default": "541110"},
+
+    # 7. Tlalnepantla & Vallejo (Edomex Metropolitana Norte)
+    {"query": "despacho contable", "coords": "19.5350,-99.1950", "radio": 5000, "scian_default": "541211"},
+    {"query": "contadores", "coords": "19.5350,-99.1950", "radio": 5000, "scian_default": "541211"},
+    {"query": "nomina", "coords": "19.5350,-99.1950", "radio": 5000, "scian_default": "561490"},
+]
+
 
 def parse_ubicacion(item: dict) -> tuple[Optional[str], Optional[str]]:
     municipio = (item.get("Municipio") or item.get("ciudad") or "").strip()
@@ -228,9 +270,11 @@ class DenueHarvester(BaseHarvester):
                 # Consulta geográfica con endpoints probados y optimizados
                 if self.plaza == "campeche":
                     clusters = list(CAMPECHE_GEO_CLUSTERS)
+                elif self.plaza == "cdmx" and self.profile == "ark_ledger":
+                    clusters = list(CDMX_LEDGER_GEO_CLUSTERS)
                 else:
                     clusters = list(FUTURA_GEO_CLUSTERS if self.profile == "futura_capital" else ARK_LEDGER_GEO_CLUSTERS)
-                if self.plaza and self.plaza not in ("all", "campeche"):
+                if self.plaza and self.plaza not in ("all", "campeche", "cdmx"):
                     if self.plaza == "riviera_maya":
                         clusters = [c for c in clusters if any(k in str(c).lower() for k in ("tulum", "playa", "cozumel", "-87.", "-86.9"))]
                     elif self.plaza == "cancun":

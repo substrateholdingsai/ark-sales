@@ -53,6 +53,7 @@ async def main(argv=None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--plaza", default=None)
     parser.add_argument("--query", default=None)
+    parser.add_argument("--require-email", action="store_true", help="Descartar prospectos sin correo electrónico corporativo")
     args = parser.parse_args(argv)
 
     base_url = args.base_url or os.getenv("ARK_SALES_BASE_URL")
@@ -97,6 +98,7 @@ async def main(argv=None) -> int:
             profile=args.profile,
             plaza=args.plaza,
             query=args.query,
+            require_email=args.require_email,
         )
         metrics["leads_discovered"] = result.total + result.deduped
         metrics["leads_ingested"] = result.ingested

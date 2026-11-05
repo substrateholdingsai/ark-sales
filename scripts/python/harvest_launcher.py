@@ -73,8 +73,8 @@ PLAZAS = {
     },
     "4": {
         "id": "cdmx",
-        "name": "CDMX (Insurgentes Sur / Reforma / Polanco)",
-        "coords": ["cdmx_sur", "cdmx_centro"],
+        "name": "CDMX & Zona Metropolitana (Insurgentes / Reforma / Polanco / Naucalpan)",
+        "coords": ["cdmx_sur", "cdmx_centro", "cdmx_poniente", "naucalpan"],
     },
     "5": {
         "id": "monterrey",
