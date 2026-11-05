@@ -180,15 +180,17 @@ webhookRouter.post("/", async (c) => {
         try {
           const signalCode = hLead.investorType === "accredited" ? "SENAL_INVERSION_PATRIMONIAL_US" : "SENAL_NEARSHORING_LOGISTICO_US";
           await c.env.DB.prepare(`
-            INSERT OR REPLACE INTO sales_observations (id, account_id, signal_code, observation_value, observed_at)
+            INSERT OR REPLACE INTO sales_observations (id, account_id, signal_code, value_text, observed_at)
             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
           `).bind(
             `obs_hermes_${finalLeadId}`,
             targetAccountId,
             signalCode,
             JSON.stringify({ state: hLead.state, equityDollars: hLead.equityDollars, marketValueDollars: hLead.marketValueDollars })
-          ).run();
-        } catch {}
+).run();
+        } catch (obsErr) {
+          console.warn("[webhooks:hermes] Error registrando observación:", obsErr);
+        }
       }
     }
 

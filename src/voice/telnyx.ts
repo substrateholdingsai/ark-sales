@@ -108,7 +108,7 @@ export async function dispararLlamadaCortesia(
     if (env.DB && (params.leadId || params.accountId)) {
       try {
         await env.DB.prepare(`
-          INSERT INTO sales_activities (id, account_id, contact_id, lead_id, type, details)
+          INSERT INTO sales_activities (id, account_id, contact_id, lead_id, type, content)
           VALUES (?, ?, ?, ?, 'call', ?)
         `).bind(
           `act_${crypto.randomUUID()}`,
@@ -199,7 +199,7 @@ export async function dispararLlamadaCortesia(
         `).bind(phoneE164, params.leadId).run();
 
         await env.DB.prepare(`
-          INSERT INTO sales_activities (id, account_id, contact_id, lead_id, type, details)
+          INSERT INTO sales_activities (id, account_id, contact_id, lead_id, type, content)
           VALUES (?, ?, ?, ?, 'call', ?)
         `).bind(
           `act_${crypto.randomUUID()}`,
@@ -338,7 +338,7 @@ export async function procesarEventoTelnyx(
         `).bind(clientState.leadId).run();
 
         await env.DB.prepare(`
-          INSERT INTO sales_activities (id, account_id, contact_id, lead_id, type, details)
+          INSERT INTO sales_activities (id, account_id, contact_id, lead_id, type, content)
           VALUES (?, ?, ?, ?, 'call', ?)
         `).bind(
           `act_${crypto.randomUUID()}`,

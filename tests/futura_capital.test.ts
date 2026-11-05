@@ -1,11 +1,15 @@
 import { describe, it, expect } from "vitest";
+// @ts-ignore -- node builtins available in Vitest runtime
 import { readFileSync } from "node:fs";
+// @ts-ignore
 import { join } from "node:path";
 import { PreSendGate } from "../src/services/gate";
 import { interpolateTemplate } from "../src/routes/superadmin";
 import { ToolExecutor } from "../src/tools";
 import { SYSTEM_PROMPTS, AGENT_GUARDRAILS } from "../src/agents/prompts";
 import app from "../src/index";
+
+declare const process: { cwd: () => string };
 
 describe("Tenant Onboarding: Futura Capital Partners (0014_tenant_futura_capital.sql)", () => {
   const sqlPath = join(process.cwd(), "migrations", "0014_tenant_futura_capital.sql");

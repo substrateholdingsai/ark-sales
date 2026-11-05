@@ -10,7 +10,7 @@ export class OutboxProcessor {
 
   /**
    * Reintenta entregar leads pendientes o con errores en la tabla sales_pending_ingest.
-   * Ejecutado por el Cron Trigger cada 15 minutos.
+   * Ejecutado por el Cron Trigger 2 veces al día (08:00 y 20:00 CDMX).
    */
   async processOutbox(): Promise<{ processed: number; succeeded: number; failed: number }> {
     if (!this.env.DB) {
@@ -26,7 +26,7 @@ export class OutboxProcessor {
       // Buscar leads pendientes con menos de 5 reintentos
       const { results } = await this.env.DB.prepare(`
         SELECT * FROM sales_pending_ingest
-        WHERE status = 'pending' AND retries < 5
+        WHERE (status = 'pending' OR status = 'failed') AND retries < 5
         ORDER BY created_at ASC
         LIMIT 20
       `).all<PendingIngestRecord>();
@@ -58,7 +58,7 @@ export class OutboxProcessor {
           succeeded++;
           await this.env.DB.prepare(`
             UPDATE sales_pending_ingest
-            SET status = 'delivered', retries = retries + 1, last_error = NULL, updated_at = CURRENT_TIMESTAMP
+            SET status = 'delivered', last_error = NULL, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
           `).bind(row.id).run();
         } else {

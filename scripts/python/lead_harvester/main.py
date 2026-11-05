@@ -112,11 +112,15 @@ async def main(argv=None) -> int:
             pass
         return 0
     except Exception as e:
+        # Incluir el tipo de excepción: httpx.ReadTimeout y similares tienen str(e) vacío
+        err_msg = f"{type(e).__name__}: {e}"
         try:
-            await _finish_run(run_id, "failed", metrics, str(e))
+            await _finish_run(run_id, "failed", metrics, err_msg)
         except Exception:
             pass
-        print(f"ERROR: {e}", file=__import__("sys").stderr)
+        import traceback
+        traceback.print_exc()
+        print(f"ERROR: {err_msg}", file=__import__("sys").stderr)
         return 1
 
 

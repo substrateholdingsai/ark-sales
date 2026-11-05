@@ -96,9 +96,25 @@ export class AgentOrchestrator {
             })
           );
 
-          for (const settled of results) {
-            if (settled.status !== 'fulfilled') continue;
-            const { call, toolName, args, toolResult } = settled.value;
+          for (let i = 0; i < results.length; i++) {
+            const settled = results[i];
+            const { call, toolName, args } = parsedCalls[i];
+            if (settled.status === "rejected") {
+              const errResult = { status: "error", error: String(settled.reason?.message || settled.reason || "tool_execution_failed") };
+              toolsCalled.push({ name: toolName, args, result: errResult });
+              messages.push({
+                role: "assistant",
+                content: null,
+                tool_calls: [call],
+              });
+              messages.push({
+                role: "tool",
+                name: toolName,
+                content: JSON.stringify(errResult),
+              });
+              continue;
+            }
+            const { toolResult } = settled.value;
             toolsCalled.push({ name: toolName, args, result: toolResult });
 
             if (toolName === 'diagnosticar_despacho' && toolResult?.especialista_asignado) {

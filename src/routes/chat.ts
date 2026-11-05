@@ -74,7 +74,7 @@ chatRouter.post("/", async (c) => {
       }
     }
 
-    // Conectar con el Durable Object SalesAgent asignado al lead_id
+    if (!c.env.SALES_AGENT) return c.json({ error: "SalesAgent DO no disponible." }, 503);
     const doId = c.env.SALES_AGENT.idFromName(effectiveLeadId);
     const stub = c.env.SALES_AGENT.get(doId);
 

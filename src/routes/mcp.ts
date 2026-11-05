@@ -197,7 +197,7 @@ async function consultarLeadsD1(env: Env, args: any, tenantRestringido?: string)
   // Filtro de Tenant flexible
   if (tenant) {
     const rawTenant = tenant.replace(/^acc_/, "");
-    sql += " AND (a.origin LIKE ? OR a.origin LIKE ? OR a.id = ? OR 1=1)";
+    sql += " AND (a.origin LIKE ? OR a.origin LIKE ? OR a.id = ?)";
     params.push(`%${tenant}%`, `%${rawTenant}%`, tenant);
   }
 

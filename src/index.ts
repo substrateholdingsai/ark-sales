@@ -42,7 +42,7 @@ app.use("*", cors({
       origin === "https://arksystems.site" ||
       origin.endsWith(".futuracapital.mx") ||
       origin === "https://futuracapital.mx" ||
-      origin.includes("localhost")
+      /^https?:\/\/localhost(:\d+)?$/.test(origin)
     ) {
       return origin;
     }
@@ -248,7 +248,7 @@ export default {
     await consumer.processBatch(batch);
   },
 
-  // Manejador de Cron Triggers (Outbox Pattern Retry - */15 * * * *)
+  // Manejador de Cron Triggers (Outbox Pattern Retry - 0 2,14 * * * → 2 veces al día)
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     console.log(`[ark-sales cron] Ejecutando outbox retry programado (${event.cron})...`);
     const outbox = new OutboxProcessor(env);

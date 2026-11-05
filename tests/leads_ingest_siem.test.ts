@@ -64,7 +64,7 @@ describe("Endpoint POST /api/internal/leads/ingest · Altas SIEM CANACO & SalesA
 
     const res = await app.fetch(req, env);
     expect(res.status).toBe(401);
-    const json = await res.json();
+    const json = (await res.json()) as any;
     expect(json.error).toContain("Unauthorized");
   });
 
@@ -84,7 +84,7 @@ describe("Endpoint POST /api/internal/leads/ingest · Altas SIEM CANACO & SalesA
 
     const res = await app.fetch(req, env);
     expect(res.status).toBe(400);
-    const json = await res.json();
+    const json = (await res.json()) as any;
     expect(json.error).toContain("email");
   });
 
@@ -115,7 +115,7 @@ describe("Endpoint POST /api/internal/leads/ingest · Altas SIEM CANACO & SalesA
 
     const res = await app.fetch(req, env);
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = (await res.json()) as any;
 
     expect(json.success).toBe(true);
     expect(json.lead_id).toBe("lead_siem_yucatan_789");
@@ -161,7 +161,7 @@ describe("Endpoint POST /api/internal/leads/ingest · Altas SIEM CANACO & SalesA
 
     const res = await app.fetch(req, env);
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = (await res.json()) as any;
 
     expect(json.success).toBe(true);
     expect(json.lead_id).toBe("lead_fed_999");

@@ -351,7 +351,7 @@ export class ToolExecutor {
       source_worker: "ark-sales",
       destination,
       vertical: verticalMap[destination] || "bundle",
-      score: Math.max(0, Math.min(100, Math.round(score))),
+      score: Math.max(0, Math.min(100, Math.round(Number.isFinite(Number(score)) ? Number(score) : 0))),
       conversation_summary: summary,
       account_context: {
         despacho_nombre: despachoNombre,
@@ -629,15 +629,15 @@ export class ToolExecutor {
 
     if (isBundle || (!productoKey && isBundle !== false)) {
       const bundleItem = cat.products?.["bundle"];
-      precioMxn = bundleItem?.price_mxn ?? 10000;
+      precioMxn = Number(bundleItem?.price_mxn) || 10000;
       productName = bundleItem?.name || "Paquete Enterprise ARK (Ark Angel + Ark Ledger)";
     } else if (productoKey && cat.products?.[productoKey]) {
       const prod = cat.products[productoKey];
-      precioMxn = prod.price_mxn;
+      precioMxn = Number(prod.price_mxn) || precioMxn;
       productName = prod.name;
     } else {
       const ledgerItem = cat.products?.["ledger"];
-      precioMxn = ledgerItem?.price_mxn ?? 6000;
+      precioMxn = Number(ledgerItem?.price_mxn) || 6000;
       productName = ledgerItem?.name || "Ark Ledger";
     }
 

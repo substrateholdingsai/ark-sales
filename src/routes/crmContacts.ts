@@ -156,7 +156,7 @@ crmContactsRouter.post("/:id/enrich", requireRole("write"), async (c) => {
   try {
     const id = c.req.param("id");
     const existing: any = await c.env.DB.prepare(`
-      SELECT c.*, a.name AS account_name, a.city AS account_city
+SELECT c.*, a.name AS account_name, a.city AS account_city, a.scian_code AS account_scian
       FROM sales_contacts c
       LEFT JOIN sales_accounts a ON c.account_id = a.id
       WHERE c.id = ?
@@ -186,9 +186,9 @@ crmContactsRouter.post("/:id/enrich", requireRole("write"), async (c) => {
 
       await c.env.DB.prepare(`
         UPDATE sales_contacts
-        SET name = ?, phone = ?, whatsapp = ?, email = COALESCE(?, email), title = ?, updated_at = CURRENT_TIMESTAMP
+        SET name = ?, phone = COALESCE(?, phone), whatsapp = COALESCE(?, whatsapp), email = COALESCE(?, email), title = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(newName, newPhone, newWhatsapp, newEmail, newTitle, id).run();
+      `).bind(newName, enrichment.phone || null, enrichment.whatsapp || null, newEmail, newTitle, id).run();
 
       const audit = new AuditService(c.env.DB);
       await audit.record({

@@ -38,12 +38,16 @@ class BaseHarvester(ABC):
         token = os.getenv("INTERNAL_API_TOKEN")
         if not token:
             return
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            await client.post(
-                f"{base}/api/internal/observations/batch",
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                json={"account_id": account_id, "observaciones": observaciones},
-            )
+        # Best-effort: un timeout/fallo de red al guardar observaciones no debe abortar todo el harvest
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                await client.post(
+                    f"{base}/api/internal/observations/batch",
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    json={"account_id": account_id, "observaciones": observaciones},
+                )
+        except Exception as exc:
+            print(f"[observations error] {account_id}: {type(exc).__name__}: {exc}", file=__import__("sys").stderr)
 
     async def harvest_and_enrich(self) -> AsyncIterator[RawLead]:
         profiler = HTTPProfiler()

@@ -33,7 +33,8 @@ tag = "v1"
 new_sqlite_classes = ["SalesAgent"]
 
 [triggers]
-crons = ["*/15 * * * *"]
+# Reintento de outbox 2 veces al día: 08:00 y 20:00 hora CDMX (UTC-6) = 14:00 y 02:00 UTC
+crons = ["0 2,14 * * *"]
 
 [[routes]]
 pattern = "sales.arksystems.site/*"

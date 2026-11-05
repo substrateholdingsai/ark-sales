@@ -76,7 +76,8 @@ export async function syncEmailDispatchToPipeline(
     } catch {}
 
     let oppId: string;
-    if (opp) {
+    const isClosed = opp && (opp.stage === "ganado" || opp.stage === "perdido");
+    if (opp && !isClosed) {
       oppId = opp.id;
       const products = (!opp.products_interest_json || opp.products_interest_json === "[]" || opp.products_interest_json === '""')
         ? '["ledger_pro"]'

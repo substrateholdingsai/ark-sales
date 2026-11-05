@@ -41,6 +41,7 @@ describe("Validate Client HTML Output", () => {
       } catch (e: any) {
         console.error("SuperAdmin error message:", e.message);
         // Let's find error location using vm
+        // @ts-ignore -- node:vm available in Vitest/node runtime
         const vm = require("node:vm");
         try {
           new vm.Script(code, { filename: "superadmin_inline.js" });

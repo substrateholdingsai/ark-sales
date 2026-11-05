@@ -204,7 +204,7 @@ export class ConektaService {
         await this.env.DB.prepare(`
           INSERT INTO sales_activities (
             id, account_id, contact_id, opportunity_id, lead_id,
-            type, author_user_id, content, metadata, created_at
+type, author_user_id, content, metadata_json, created_at
           ) VALUES (?, ?, ?, ?, ?, 'note', 'system', ?, ?, CURRENT_TIMESTAMP)
         `).bind(
           actId,
@@ -257,7 +257,7 @@ export class ConektaService {
     const eventType: string = payload.type;
     console.log(`[ConektaWebhook] Procesando evento '${eventType}'...`);
 
-    const expectedSecret = (this.env as any).CONEKTA_WEBHOOK_SECRET;
+    const expectedSecret = (this.env as any).CONEKTA_WEBHOOK_SECRET || (this.env as any).WEBHOOK_SECRET;
     if (expectedSecret && signatureHeader !== "__INTERNAL_SIMULATE__" && signatureHeader !== expectedSecret) {
       return { success: false, error: "Firma de webhook Conekta inválida" };
     }
@@ -327,7 +327,7 @@ export class ConektaService {
       await this.env.DB.prepare(`
         INSERT INTO sales_activities (
           id, account_id, contact_id, opportunity_id, lead_id,
-          type, author_user_id, content, metadata, created_at
+          type, author_user_id, content, metadata_json, created_at
         ) VALUES (?, ?, ?, ?, ?, 'stage_change', 'system', ?, ?, CURRENT_TIMESTAMP)
       `).bind(
         actId,

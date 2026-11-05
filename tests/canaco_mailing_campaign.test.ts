@@ -141,7 +141,7 @@ describe("Campaña de Mailing CANACO (1,200 socios) · Resend Free Tier & Domini
 
     const res = await app.fetch(req, mockEnv);
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = (await res.json()) as any;
 
     expect(json.success).toBe(true);
     expect(json.campaign.total_subscribers).toBe(1200);
@@ -167,7 +167,7 @@ describe("Campaña de Mailing CANACO (1,200 socios) · Resend Free Tier & Domini
 
     const res = await app.fetch(req, mockEnv);
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = (await res.json()) as any;
 
     expect(json.success).toBe(true);
     expect(json.batch_dispatched).toBe(100);
@@ -192,7 +192,7 @@ describe("Campaña de Mailing CANACO (1,200 socios) · Resend Free Tier & Domini
 
     const res = await app.fetch(req, mockEnv);
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = (await res.json()) as any;
 
     expect(json.success).toBe(true);
     expect(json.billing_status).toBe("facturado");

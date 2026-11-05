@@ -95,13 +95,14 @@ export class QueueConsumer {
       await this.env.DB.prepare(`
         UPDATE sales_pending_ingest
         SET status = ?,
-            retries = retries + 1,
+            retries = CASE WHEN ? = 'delivered' THEN retries ELSE retries + 1 END,
             last_error = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE lead_id = ?
-      `).bind(status, error, leadId).run();
+      `).bind(status, status, error, leadId).run();
     } catch (dbErr) {
       console.error("[QueueConsumer] Error actualizando outbox en D1:", dbErr);
     }
   }
 }
+

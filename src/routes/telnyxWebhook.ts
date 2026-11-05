@@ -33,6 +33,10 @@ function hasValidInternalOrWebhookSecret(c: any): boolean {
 telnyxRouter.post("/", async (c) => {
   try {
     const bodyText = await c.req.text();
+    const isProd = (c.env.ENVIRONMENT || "").toLowerCase() === "production";
+    if (isProd && !c.env.TELNYX_PUBLIC_KEY) {
+      return c.json({ error: "TELNYX_PUBLIC_KEY requerida en producción." }, 503);
+    }
     if (c.env.TELNYX_PUBLIC_KEY) {
       const signature = c.req.header("telnyx-signature-ed25519") || "";
       const timestamp = c.req.header("telnyx-timestamp") || "";
