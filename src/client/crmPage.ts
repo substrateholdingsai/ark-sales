@@ -352,11 +352,8 @@ tailwind.config = {
           <option value="acc_ark_ledger">Ark Ledger</option>
           <option value="acc_futura_capital">Futura Capital</option>
         </select>
-        <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue" id="filtroCiudad" onchange="filtrarCuentas()">
-          <option value="">Ciudad (todas)</option>
-          <option value="cancun">Cancún / Quintana Roo</option>
-          <option value="merida">Mérida / Yucatán</option>
-          <option value="otra">Otras plazas</option>
+        <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue font-medium cursor-pointer" id="filtroCiudad" onchange="filtrarCuentas()">
+          <option value="">Ciudad (Todas)</option>
         </select>
       </div>
 
@@ -406,10 +403,6 @@ tailwind.config = {
         <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           <select id="filtroContactosCiudad" onchange="cambiarFiltroCiudadContactos(event)" class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-ark-blue font-medium cursor-pointer">
             <option value="">📍 Ciudad (Todas)</option>
-            <option value="cancun">🌴 Cancún / Q. Roo</option>
-            <option value="playa">🌊 Riviera Maya / Tulum</option>
-            <option value="merida">🏛️ Mérida / Yucatán</option>
-            <option value="otra">Otras plazas</option>
           </select>
           <button data-ct-tab="todos" onclick="cambiarTabContactos('todos')" class="ct-tab-btn active text-xs font-semibold px-3 py-1.5 rounded-full bg-ark-blue/15 text-ark-blue_hi border border-ark-blue/30">Todos</button>
           <button data-ct-tab="con_whatsapp" onclick="cambiarTabContactos('con_whatsapp')" class="ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-emerald-400">🟢 Con WhatsApp</button>
@@ -1264,6 +1257,7 @@ async function loadAccounts() {
       if (offset > 10000) break;
     }
     state.accounts = all;
+    actualizarOpcionesFiltroCiudades();
   } catch (e) { console.error('loadAccounts error:', e); }
 }
 
@@ -1288,6 +1282,7 @@ async function loadContacts() {
       if (offset > 20000) break;
     }
     state.contacts = all;
+    actualizarOpcionesFiltroCiudades();
   } catch (e) { console.error('loadContacts error:', e); }
 }
 
@@ -1521,10 +1516,8 @@ function filtrarCuentas() {
   if (tenant) list = list.filter(a => getAccountTenant(a) === tenant);
   if (ciudad) {
     list = list.filter(a => {
-      const c = (a.city || '').toLowerCase();
-      if (ciudad === 'cancun') return c.includes('cancún') || c.includes('cancun') || c.includes('benito') || c.includes('quintana');
-      if (ciudad === 'merida') return c.includes('mérida') || c.includes('merida') || c.includes('yucatán') || c.includes('yucatan');
-      return !c.includes('cancun') && !c.includes('cancún') && !c.includes('merida') && !c.includes('mérida');
+      const plaza = resolverPlaza(a.city || '', a.phone || '', a.email || '');
+      return plaza.key === ciudad;
     });
   }
 
@@ -1536,6 +1529,10 @@ function filtrarCuentas() {
     : list.map(a => {
         const tid = getAccountTenant(a);
         const isFutura = tid === 'acc_futura_capital';
+        const plaza = resolverPlaza(a.city || '', a.phone || '', a.email || '');
+        const cityBadge = plaza.key !== 'sin_ciudad'
+          ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ' + plaza.badgeClass + ' border whitespace-nowrap" title="' + (a.city || plaza.label) + '">' + plaza.badgeText + '</span>'
+          : '<span class="text-slate-600 font-mono text-xs">-</span>';
         return \`
     <tr class="hover:bg-slate-800/30 cursor-pointer transition-colors" onclick="abrirModalCuenta('\${a.id}')">
       <td class="px-4 py-3 font-medium text-white">\${a.name || '-'}</td>
@@ -1543,7 +1540,7 @@ function filtrarCuentas() {
       <td class="px-4 py-3"><span class="badge badge-ambar">\${a.size || a.employee_count_range || '1-5'}</span></td>
       <td class="px-4 py-3 font-mono text-xs text-slate-400">\${a.harvest_source || a.origin || 'denue'}</td>
       <td class="px-4 py-3"><span class="badge \${isFutura ? 'badge-indigo' : 'badge-azul'}">\${isFutura ? 'Futura Capital' : 'Ark Ledger'}</span></td>
-      <td class="px-4 py-3 text-xs text-slate-400">\${a.city || 'Mérida'}</td>
+      <td class="px-4 py-3 text-xs">\${cityBadge}</td>
       <td class="px-4 py-3 text-right" onclick="event.stopPropagation()">
         <div class="flex items-center justify-end gap-1">
           <button onclick="eliminarCuentaRow(event, '\${a.id}')" class="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" title="Eliminar cuenta">
@@ -1667,6 +1664,204 @@ async function abrirModalCuenta(id) {
 
 function cerrarModalCuenta() {
   document.getElementById('modalCuenta').classList.add('hidden');
+}
+
+// ── NORMALIZADOR DINÁMICO DE PLAZAS Y CIUDADES ──
+function resolverPlaza(rawCity = '', phone = '', email = '') {
+  const cityLower = (rawCity || '').toLowerCase().trim();
+  const phoneLower = (phone || '').toLowerCase();
+  const emailLower = (email || '').toLowerCase();
+
+  // 1. Cancún / Q. Roo
+  if (
+    cityLower.includes('cancún') || cityLower.includes('cancun') || 
+    cityLower.includes('benito juárez') || cityLower.includes('benito juarez') ||
+    cityLower.includes('isla mujeres') ||
+    (cityLower.includes('quintana') && !cityLower.includes('tulum') && !cityLower.includes('playa') && !cityLower.includes('cozumel') && !cityLower.includes('solidaridad')) ||
+    phoneLower.includes('998') || emailLower.includes('cancun') || emailLower.includes('caribe')
+  ) {
+    return {
+      key: 'cancun',
+      label: '🌴 Cancún / Q. Roo',
+      badgeText: '🌴 Cancún, Q.R.',
+      badgeClass: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/25'
+    };
+  }
+
+  // 2. Riviera Maya / Tulum / Playa del Carmen / Cozumel
+  if (
+    cityLower.includes('playa') || cityLower.includes('solidaridad') || 
+    cityLower.includes('tulum') || cityLower.includes('cozumel') || 
+    phoneLower.includes('984') || phoneLower.includes('987')
+  ) {
+    return {
+      key: 'playa',
+      label: '🌊 Riviera Maya / Tulum',
+      badgeText: '🌊 Riviera Maya',
+      badgeClass: 'bg-teal-500/10 text-teal-400 border-teal-500/25'
+    };
+  }
+
+  // 3. Mérida / Yucatán
+  if (
+    cityLower.includes('mérida') || cityLower.includes('merida') || 
+    cityLower.includes('progreso') || cityLower.includes('valladolid') || 
+    cityLower.includes('yucatán') || cityLower.includes('yucatan') || 
+    (phoneLower.includes('999') && !phoneLower.includes('998'))
+  ) {
+    return {
+      key: 'merida',
+      label: '🏛️ Mérida / Yucatán',
+      badgeText: '🏛️ Mérida, Yuc.',
+      badgeClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+    };
+  }
+
+  // 4. Campeche & Ciudad del Carmen
+  if (
+    cityLower.includes('campeche') || cityLower.includes('carmen') || 
+    phoneLower.includes('981') || phoneLower.includes('938')
+  ) {
+    return {
+      key: 'campeche',
+      label: '🏰 Campeche & Cd. Carmen',
+      badgeText: '🏰 Campeche',
+      badgeClass: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/25'
+    };
+  }
+
+  // 5. CDMX / Metropolitana
+  if (
+    cityLower.includes('cdmx') || cityLower.includes('ciudad de méxico') || 
+    cityLower.includes('ciudad de mexico') || cityLower.includes('distrito federal') ||
+    cityLower.includes('polanco') || cityLower.includes('reforma') || cityLower.includes('insurgentes') ||
+    phoneLower.includes('55 ') || phoneLower.includes('+5255')
+  ) {
+    return {
+      key: 'cdmx',
+      label: '🏙️ CDMX / Metropolitana',
+      badgeText: '🏙️ CDMX',
+      badgeClass: 'bg-purple-500/10 text-purple-400 border-purple-500/25'
+    };
+  }
+
+  // 6. Monterrey / San Pedro / N.L.
+  if (
+    cityLower.includes('monterrey') || cityLower.includes('san pedro') || 
+    cityLower.includes('nuevo león') || cityLower.includes('nuevo leon') ||
+    phoneLower.includes('81 ') || phoneLower.includes('+5281')
+  ) {
+    return {
+      key: 'monterrey',
+      label: '⛰️ Monterrey / N.L.',
+      badgeText: '⛰️ Monterrey',
+      badgeClass: 'bg-blue-500/10 text-blue-400 border-blue-500/25'
+    };
+  }
+
+  // 7. Guadalajara / Zapopan / Jalisco
+  if (
+    cityLower.includes('guadalajara') || cityLower.includes('zapopan') || 
+    cityLower.includes('jalisco') || phoneLower.includes('33 ') || phoneLower.includes('+5233')
+  ) {
+    return {
+      key: 'guadalajara',
+      label: '☀️ Guadalajara / Zapopan',
+      badgeText: '☀️ Guadalajara',
+      badgeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/25'
+    };
+  }
+
+  // 8. Auto-descubrimiento dinámico para cualquier otra ciudad registrada en D1
+  if (rawCity) {
+    const slug = cityLower.replace(/[^a-z0-9]/g, '_').slice(0, 24);
+    const displayLabel = rawCity.split(',')[0].trim();
+    return {
+      key: 'auto_' + slug,
+      label: '📍 ' + displayLabel,
+      badgeText: '📍 ' + displayLabel,
+      badgeClass: 'bg-slate-800 text-slate-300 border-slate-700'
+    };
+  }
+
+  return {
+    key: 'sin_ciudad',
+    label: 'Sin ciudad especificada',
+    badgeText: '-',
+    badgeClass: 'text-slate-600'
+  };
+}
+
+function resolverPlazaContacto(c) {
+  const acc = state.accounts.find(a => a.id === c.account_id);
+  const rawCity = c.account_city || acc?.city || '';
+  const phone = c.phone || c.whatsapp || '';
+  const email = c.email || '';
+  return resolverPlaza(rawCity, phone, email);
+}
+
+function actualizarOpcionesFiltroCiudades() {
+  const selectContactos = document.getElementById('filtroContactosCiudad');
+  const selectCuentas = document.getElementById('filtroCiudad');
+
+  // Actualizar selector de Contactos
+  if (selectContactos) {
+    const currentVal = filtroContactosCiudad;
+    const plazasCount = {};
+    (state.contacts || []).forEach(c => {
+      const plaza = resolverPlazaContacto(c);
+      if (plaza.key !== 'sin_ciudad') {
+        if (!plazasCount[plaza.key]) {
+          plazasCount[plaza.key] = { label: plaza.label, count: 0 };
+        }
+        plazasCount[plaza.key].count++;
+      }
+    });
+
+    const totalContactos = (state.contacts || []).length;
+    let html = '<option value="">📍 Ciudad (Todas - ' + totalContactos + ')</option>';
+    const sortedKeys = Object.keys(plazasCount).sort((a, b) => plazasCount[b].count - plazasCount[a].count);
+    for (const k of sortedKeys) {
+      const p = plazasCount[k];
+      html += '<option value="' + k + '">' + p.label + ' (' + p.count + ')</option>';
+    }
+    selectContactos.innerHTML = html;
+    if (currentVal && plazasCount[currentVal]) {
+      selectContactos.value = currentVal;
+    } else {
+      selectContactos.value = '';
+      filtroContactosCiudad = '';
+    }
+  }
+
+  // Actualizar selector de Cuentas
+  if (selectCuentas) {
+    const currentVal = selectCuentas.value || '';
+    const cuentasCount = {};
+    (state.accounts || []).forEach(a => {
+      const plaza = resolverPlaza(a.city || '', a.phone || '', a.email || '');
+      if (plaza.key !== 'sin_ciudad') {
+        if (!cuentasCount[plaza.key]) {
+          cuentasCount[plaza.key] = { label: plaza.label, count: 0 };
+        }
+        cuentasCount[plaza.key].count++;
+      }
+    });
+
+    const totalCuentas = (state.accounts || []).length;
+    let html = '<option value="">Ciudad (Todas - ' + totalCuentas + ')</option>';
+    const sortedKeys = Object.keys(cuentasCount).sort((a, b) => cuentasCount[b].count - cuentasCount[a].count);
+    for (const k of sortedKeys) {
+      const p = cuentasCount[k];
+      html += '<option value="' + k + '">' + p.label + ' (' + p.count + ')</option>';
+    }
+    selectCuentas.innerHTML = html;
+    if (currentVal && cuentasCount[currentVal]) {
+      selectCuentas.value = currentVal;
+    } else {
+      selectCuentas.value = '';
+    }
+  }
 }
 
 // ── CONTACTOS ──
@@ -1840,6 +2035,7 @@ async function ejecutarBulkDeleteContactos() {
           state.contacts = state.contacts.filter(c => !selectedContactIds.has(c.id));
           selectedContactIds.clear();
           actualizarBulkToolbar();
+          actualizarOpcionesFiltroCiudades();
           renderContactos();
           toast('✅ ' + ids.length + ' contactos eliminados con éxito.');
         } else {
@@ -1856,6 +2052,11 @@ async function renderContactos() {
   if (!state.contacts.length) await loadContacts();
   const body = document.getElementById('contactosBody');
   const contacts = state.contacts || [];
+
+  const selContactos = document.getElementById('filtroContactosCiudad');
+  if (selContactos && selContactos.options.length <= 1 && contacts.length > 0) {
+    actualizarOpcionesFiltroCiudades();
+  }
 
   // Actualizar indicadores visuales de ordenamiento
   const lblBtn = document.getElementById('lblOrdenContactos');
@@ -1906,24 +2107,8 @@ async function renderContactos() {
 
   if (filtroContactosCiudad) {
     list = list.filter(c => {
-      const acc = state.accounts.find(a => a.id === c.account_id);
-      const rawCity = c.account_city || acc?.city || '';
-      const city = rawCity.toLowerCase();
-      const phone = (c.phone || c.whatsapp || '').toLowerCase();
-      const email = (c.email || '').toLowerCase();
-      if (filtroContactosCiudad === 'cancun') {
-        return city.includes('cancún') || city.includes('cancun') || city.includes('benito') || city.includes('quintana') || phone.includes('998') || email.includes('cancun') || email.includes('caribe');
-      }
-      if (filtroContactosCiudad === 'playa') {
-        return city.includes('playa') || city.includes('solidaridad') || city.includes('tulum') || city.includes('cozumel');
-      }
-      if (filtroContactosCiudad === 'merida') {
-        return city.includes('mérida') || city.includes('merida') || city.includes('yucatán') || city.includes('yucatan') || (phone.includes('999') && !phone.includes('998'));
-      }
-      if (filtroContactosCiudad === 'otra') {
-        return !city.includes('cancun') && !city.includes('cancún') && !city.includes('merida') && !city.includes('mérida') && !city.includes('playa') && !phone.includes('998') && !phone.includes('999');
-      }
-      return true;
+      const plaza = resolverPlazaContacto(c);
+      return plaza.key === filtroContactosCiudad;
     });
   }
 
@@ -2047,19 +2232,10 @@ async function renderContactos() {
     : itemsPagina.map(c => {
         const acc = state.accounts.find(a => a.id === c.account_id);
         const cuentaNombre = c.account_name || (acc ? acc.name : (c.account_id ? 'Cuenta ' + c.account_id.slice(0,8) : '-'));
-        const cityRaw = c.account_city || acc?.city || '';
-        const cityLower = cityRaw.toLowerCase();
-        const phone = (c.phone || c.whatsapp || '').toLowerCase();
-        const email = (c.email || '').toLowerCase();
+        const plaza = resolverPlazaContacto(c);
         let cityBadge = '<span class="text-slate-600 font-mono text-xs">-</span>';
-        if (cityLower.includes('cancún') || cityLower.includes('cancun') || cityLower.includes('benito') || cityLower.includes('quintana') || phone.includes('998') || email.includes('cancun') || email.includes('caribe')) {
-          cityBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 whitespace-nowrap">🌴 Cancún, Q.R.</span>';
-        } else if (cityLower.includes('playa') || cityLower.includes('solidaridad') || cityLower.includes('tulum') || cityLower.includes('cozumel')) {
-          cityBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-teal-500/10 text-teal-400 border border-teal-500/25 whitespace-nowrap">🌊 Riviera Maya</span>';
-        } else if (cityLower.includes('mérida') || cityLower.includes('merida') || cityLower.includes('yucatán') || cityLower.includes('yucatan') || phone.includes('999')) {
-          cityBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 whitespace-nowrap">🏛️ Mérida, Yuc.</span>';
-        } else if (cityRaw) {
-          cityBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap max-w-[140px] truncate" title="' + cityRaw + '">' + cityRaw + '</span>';
+        if (plaza.key !== 'sin_ciudad') {
+          cityBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ' + plaza.badgeClass + ' border whitespace-nowrap max-w-[140px] truncate" title="' + (c.account_city || (acc ? acc.city : '') || plaza.label) + '">' + plaza.badgeText + '</span>';
         }
         return \`
         <tr class="hover:bg-slate-800/30 transition-colors">
@@ -2548,6 +2724,7 @@ function confirmarEliminarContacto(id, nombre, modalAccountId) {
       try {
         await apiCall('/api/crm/contacts/' + id, 'DELETE');
         state.contacts = state.contacts.filter(c => c.id !== id);
+        actualizarOpcionesFiltroCiudades();
         renderContactos();
         if (modalAccountId) {
           abrirModalCuenta(modalAccountId);

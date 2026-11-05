@@ -17,6 +17,15 @@ describe("Validate Client HTML Output", () => {
     }
   });
 
+  it("renderCrmHtml must contain dynamic city and plaza resolver functions", () => {
+    const html = renderCrmHtml();
+    expect(html).toContain("resolverPlaza");
+    expect(html).toContain("resolverPlazaContacto");
+    expect(html).toContain("actualizarOpcionesFiltroCiudades");
+    expect(html).toContain("campeche");
+    expect(html).toContain("🏰 Campeche");
+  });
+
   it("renderSuperAdminHtml must contain valid JavaScript in all script tags", () => {
     const html = renderSuperAdminHtml();
     expect(html).toContain("<!DOCTYPE html>");
