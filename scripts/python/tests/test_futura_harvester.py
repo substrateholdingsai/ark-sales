@@ -138,3 +138,12 @@ def test_futura_clusters_target_only_quintana_roo():
         # Ensure longitude is in Quintana Roo (~ -86.8 to -87.5) and NOT Merida (~ -89.6)
         assert lon > -88.0, f"Found non-Quintana Roo cluster: {c}"
 
+
+def test_campeche_clusters_and_entidades():
+    from lead_harvester.denue import CAMPECHE_GEO_CLUSTERS, PROFILES_ENTIDADES
+    assert "04" in PROFILES_ENTIDADES["futura_capital"]
+    assert len(CAMPECHE_GEO_CLUSTERS) >= 10
+    for c in CAMPECHE_GEO_CLUSTERS:
+        assert any(term in c["query"] for term in ("clinica", "medico", "hospital", "dental", "laboratorio", "cirugia"))
+
+

@@ -27,7 +27,7 @@ on:
           - ark
           - ark_ledger
       plaza:
-        description: 'Target plaza filter (riviera_maya, cancun, merida, cdmx, monterrey, guadalajara, all)'
+        description: 'Target plaza filter (riviera_maya, cancun, merida, cdmx, monterrey, guadalajara, campeche, all)'
         required: false
         default: 'all'
         type: string

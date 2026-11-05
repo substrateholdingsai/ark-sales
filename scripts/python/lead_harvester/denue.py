@@ -32,7 +32,7 @@ PROFILES_SCIAN: dict[str, list[str]] = {
 
 PROFILES_ENTIDADES: dict[str, list[str]] = {
     "ark": ["0"],
-    "futura_capital": ["31", "09", "19", "14", "23"],
+    "futura_capital": ["31", "09", "19", "14", "23", "04"],
     "ark_ledger": ["0"],
 }
 
@@ -69,6 +69,24 @@ FUTURA_GEO_CLUSTERS = [
     {"query": "plastic surgery", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "621112"},
     {"query": "medical center", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "622111"},
     {"query": "estetica", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "621399"},
+]
+
+# Palabras clave y coordenadas estratégicas para Campeche (Área Médica y Hospitalaria)
+CAMPECHE_GEO_CLUSTERS = [
+    # 1. San Francisco de Campeche — Zona Médica, Hospital General & Clínicas
+    {"query": "clinica", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "621111"},
+    {"query": "medico", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "621111"},
+    {"query": "hospital", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "622111"},
+    {"query": "dental", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "621211"},
+    {"query": "laboratorio", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "621511"},
+    {"query": "cirugia", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "621112"},
+
+    # 2. Ciudad del Carmen — Zona Centro, Médica & Privada
+    {"query": "clinica", "coords": "18.6445,-91.8173", "radio": 10000, "scian_default": "621111"},
+    {"query": "medico", "coords": "18.6445,-91.8173", "radio": 10000, "scian_default": "621111"},
+    {"query": "hospital", "coords": "18.6445,-91.8173", "radio": 10000, "scian_default": "622111"},
+    {"query": "dental", "coords": "18.6445,-91.8173", "radio": 10000, "scian_default": "621211"},
+    {"query": "laboratorio", "coords": "18.6445,-91.8173", "radio": 10000, "scian_default": "621511"},
 ]
 
 # Palabras clave y coordenadas estratégicas para Ark Ledger (Despachos Contables y Fiscalistas)
@@ -136,6 +154,10 @@ def parse_ubicacion(item: dict) -> tuple[Optional[str], Optional[str]]:
         return "Progreso", "Yucatán"
     if "VALLADOLID" in raw_ubi:
         return "Valladolid", "Yucatán"
+    if "CAMPECHE" in raw_ubi:
+        return "San Francisco de Campeche", "Campeche"
+    if "CIUDAD DEL CARMEN" in raw_ubi or "DEL CARMEN" in raw_ubi:
+        return "Ciudad del Carmen", "Campeche"
 
     parts = [p.strip() for p in raw_ubi.split(",") if p.strip()]
     if len(parts) >= 2:
@@ -193,8 +215,11 @@ class DenueHarvester(BaseHarvester):
         async with httpx.AsyncClient(timeout=30.0) as client:
             if self.profile in ("futura_capital", "ark_ledger"):
                 # Consulta geográfica con endpoints probados y optimizados
-                clusters = list(FUTURA_GEO_CLUSTERS if self.profile == "futura_capital" else ARK_LEDGER_GEO_CLUSTERS)
-                if self.plaza and self.plaza != "all":
+                if self.plaza == "campeche":
+                    clusters = list(CAMPECHE_GEO_CLUSTERS)
+                else:
+                    clusters = list(FUTURA_GEO_CLUSTERS if self.profile == "futura_capital" else ARK_LEDGER_GEO_CLUSTERS)
+                if self.plaza and self.plaza not in ("all", "campeche"):
                     if self.plaza == "riviera_maya":
                         clusters = [c for c in clusters if any(k in str(c).lower() for k in ("tulum", "playa", "cozumel", "-87.", "-86.9"))]
                     elif self.plaza == "cancun":

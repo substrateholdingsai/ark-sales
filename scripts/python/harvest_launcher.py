@@ -39,7 +39,7 @@ TENANTS = {
         "id": "futura_capital",
         "name": "Futura Capital Partners",
         "vertical": "Clínicas, Turismo Médico, Bienes Raíces",
-        "default_query": "medicina especializada & turismo médico",
+        "default_query": "medicina especializada y turismo médico",
     },
     "2": {
         "id": "ark_ledger",
@@ -87,6 +87,11 @@ PLAZAS = {
         "coords": ["guadalajara"],
     },
     "7": {
+        "id": "campeche",
+        "name": "Campeche (San Fco. de Campeche & Cd. del Carmen)",
+        "coords": ["campeche_capital", "ciudad_carmen"],
+    },
+    "8": {
         "id": "all",
         "name": "Todas las plazas del perfil",
         "coords": ["all"],
@@ -95,16 +100,18 @@ PLAZAS = {
 
 # Matriz de coordenadas estratégicas (para inyección geoespacial)
 COORD_MATRIX = {
-    "tulum":        {"name": "Tulum (Aldea Zamá / Centro)",                 "lat": 20.2100, "lon": -87.4650, "radius": 5000},
-    "playa":        {"name": "Playa del Carmen (Corredor Turístico)",       "lat": 20.6350, "lon": -87.0750, "radius": 5000},
-    "cozumel":      {"name": "Cozumel (San Miguel / Costamed)",             "lat": 20.5050, "lon": -86.9500, "radius": 4000},
-    "cancun":       {"name": "Cancún (Hospital Galenia / Bonampak)",        "lat": 21.1450, "lon": -86.8250, "radius": 5000},
-    "merida_norte": {"name": "Mérida (Altabrisa / Temozón)",                "lat": 21.0185, "lon": -89.5850, "radius": 5000},
-    "merida_centro":{"name": "Mérida (Paseo Montejo / García Ginerés)",     "lat": 20.9850, "lon": -89.6180, "radius": 5000},
-    "cdmx_sur":     {"name": "CDMX (Insurgentes Sur / Del Valle)",          "lat": 19.3850, "lon": -99.1650, "radius": 5000},
-    "cdmx_centro":  {"name": "CDMX (Reforma / Polanco)",                    "lat": 19.4326, "lon": -99.1550, "radius": 5000},
-    "monterrey":    {"name": "Monterrey (Valle Oriente / San Pedro)",       "lat": 25.6513, "lon": -100.2876, "radius": 6000},
-    "guadalajara":  {"name": "Guadalajara (Andares / Providencia)",         "lat": 20.7167, "lon": -103.3833, "radius": 6000},
+    "tulum":            {"name": "Tulum (Aldea Zamá / Centro)",                 "lat": 20.2100, "lon": -87.4650, "radius": 5000},
+    "playa":            {"name": "Playa del Carmen (Corredor Turístico)",       "lat": 20.6350, "lon": -87.0750, "radius": 5000},
+    "cozumel":          {"name": "Cozumel (San Miguel / Costamed)",             "lat": 20.5050, "lon": -86.9500, "radius": 4000},
+    "cancun":           {"name": "Cancún (Hospital Galenia / Bonampak)",        "lat": 21.1450, "lon": -86.8250, "radius": 5000},
+    "merida_norte":     {"name": "Mérida (Altabrisa / Temozón)",                "lat": 21.0185, "lon": -89.5850, "radius": 5000},
+    "merida_centro":    {"name": "Mérida (Paseo Montejo / García Ginerés)",     "lat": 20.9850, "lon": -89.6180, "radius": 5000},
+    "cdmx_sur":         {"name": "CDMX (Insurgentes Sur / Del Valle)",          "lat": 19.3850, "lon": -99.1650, "radius": 5000},
+    "cdmx_centro":      {"name": "CDMX (Reforma / Polanco)",                    "lat": 19.4326, "lon": -99.1550, "radius": 5000},
+    "monterrey":        {"name": "Monterrey (Valle Oriente / San Pedro)",       "lat": 25.6513, "lon": -100.2876, "radius": 6000},
+    "guadalajara":      {"name": "Guadalajara (Andares / Providencia)",         "lat": 20.7167, "lon": -103.3833, "radius": 6000},
+    "campeche_capital": {"name": "Campeche (Centro / Malecón)",                 "lat": 19.8438, "lon": -90.5255, "radius": 10000},
+    "ciudad_carmen":    {"name": "Ciudad del Carmen (Centro / Industrial)",      "lat": 18.6445, "lon": -91.8173, "radius": 10000},
 }
 
 # ============================================================================
@@ -168,9 +175,9 @@ def divider() -> None:
 # ============================================================================
 
 def validate_query(query: str) -> str:
-    """Valida que el query no esté vacío ni contenga caracteres peligrosos."""
+    """Valida que el query no contenga caracteres peligrosos."""
     if not query or not query.strip():
-        raise ValueError("El término de búsqueda no puede estar vacío.")
+        return ""
     # Bloquear inyección de shell
     if re.search(r"[;&|`$(){}]", query):
         raise ValueError("El query contiene caracteres inválidos. Usa solo texto alfanumérico.")
@@ -275,14 +282,14 @@ def interactive_mode() -> HarvestConfig:
 
     # 3. Especialidad
     print(f"\n{Colors.BOLD}{Colors.BLUE}Especialidad / Término de búsqueda:{Colors.RESET}")
-    print(f"  {Colors.CYAN}[1]{Colors.RESET} Predeterminada del Tenant ({tenant['default_query']})")
-    print(f"  {Colors.CYAN}[2]{Colors.RESET} Búsqueda personalizada")
+    print(f"  {Colors.CYAN}[1]{Colors.RESET} Estrategia multicluster ({tenant['default_query']}) [Recomendado]")
+    print(f"  {Colors.CYAN}[2]{Colors.RESET} Búsqueda personalizada por palabra clave")
     q_choice = input(f"{Colors.BOLD}  → {Colors.RESET}").strip()
     if q_choice == "2":
-        query = input(f"{Colors.BOLD}  Término:{Colors.RESET} ").strip()
+        query_raw = input(f"{Colors.BOLD}  Término:{Colors.RESET} ").strip()
+        query = validate_query(query_raw)
     else:
-        query = tenant["default_query"]
-    query = validate_query(query)
+        query = ""
 
     # 4. Límite
     print(f"\n{Colors.BOLD}{Colors.BLUE}Límite de Prospectos:{Colors.RESET}")
@@ -296,7 +303,7 @@ def interactive_mode() -> HarvestConfig:
     divider()
     info("Tenant", tenant["name"])
     info("Plaza objetivo", plaza["name"])
-    info("Especialidad", query)
+    info("Especialidad", query if query else f"Multicluster ({tenant['default_query']})")
     info("Tamaño de lote", f"{limit} prospectos")
     divider()
 
@@ -380,13 +387,12 @@ def cli_mode(args: argparse.Namespace) -> HarvestConfig:
     tenant = next(t for t in TENANTS.values() if t["id"] == tenant_id)
     plaza = next(p for p in PLAZAS.values() if p["id"] == plaza_id)
 
-    query_raw = args.query or tenant["default_query"]
-    query = validate_query(query_raw)
+    query = validate_query(args.query) if args.query else ""
     limit = validate_limit(args.limit)
 
     info("Tenant", tenant["name"])
     info("Plaza objetivo", plaza["name"])
-    info("Especialidad", query)
+    info("Especialidad", query if query else f"Multicluster ({tenant['default_query']})")
     info("Tamaño de lote", f"{limit} prospectos")
     divider()
 
