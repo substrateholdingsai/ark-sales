@@ -26,6 +26,16 @@ on:
           - futura_capital
           - ark
           - ark_ledger
+      plaza:
+        description: 'Target plaza filter (riviera_maya, cancun, merida, cdmx, monterrey, guadalajara, all)'
+        required: false
+        default: 'all'
+        type: string
+      query:
+        description: 'Custom search term override (e.g. dental, cirugia plastica, asesoria fiscal)'
+        required: false
+        default: ''
+        type: string
       limit:
         description: 'Max leads to process'
         required: false
@@ -70,6 +80,8 @@ jobs:
         run: |
           cd scripts/python
           ARGS="--source ${{ inputs.source || 'denue' }} --profile ${{ inputs.profile || 'futura_capital' }} --limit ${{ inputs.limit || '1000' }}"
+          if [ -n "${{ inputs.plaza }}" ] && [ "${{ inputs.plaza }}" != "all" ]; then ARGS="$ARGS --plaza ${{ inputs.plaza }}"; fi
+          if [ -n "${{ inputs.query }}" ]; then ARGS="$ARGS --query '${{ inputs.query }}'"; fi
           if [ "${{ inputs.skip_enrich }}" = "true" ]; then ARGS="$ARGS --skip-enrich"; fi
           if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
           python -m lead_harvester.main $ARGS

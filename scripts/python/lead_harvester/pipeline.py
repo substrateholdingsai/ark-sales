@@ -18,10 +18,17 @@ async def run_pipeline(
     fixture_path: Optional[str] = None,
     base_url: Optional[str] = None,
     profile: str = "ark",
+    plaza: Optional[str] = None,
+    query: Optional[str] = None,
 ) -> HarvestResult:
     if source != "denue":
         raise ValueError(f"Unsupported source: {source}")
-    harvester = DenueHarvester(fixture_path=fixture_path, profile=profile)
+    harvester = DenueHarvester(
+        fixture_path=fixture_path,
+        profile=profile,
+        plaza=plaza,
+        custom_query=query,
+    )
     result = HarvestResult(source=source)
     stream = harvester.harvest_and_enrich() if enrich else harvester.harvest()
     seen_ids: set[str] = set()

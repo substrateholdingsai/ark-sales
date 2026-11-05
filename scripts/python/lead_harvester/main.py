@@ -51,6 +51,8 @@ async def main(argv=None) -> int:
     parser.add_argument("--base-url", default=None)
     parser.add_argument("--skip-enrich", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--plaza", default=None)
+    parser.add_argument("--query", default=None)
     args = parser.parse_args(argv)
 
     base_url = args.base_url or os.getenv("ARK_SALES_BASE_URL")
@@ -93,6 +95,8 @@ async def main(argv=None) -> int:
             fixture_path=args.fixture,
             base_url=base_url,
             profile=args.profile,
+            plaza=args.plaza,
+            query=args.query,
         )
         metrics["leads_discovered"] = result.total + result.deduped
         metrics["leads_ingested"] = result.ingested

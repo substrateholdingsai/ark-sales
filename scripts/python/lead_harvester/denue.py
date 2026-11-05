@@ -156,6 +156,8 @@ class DenueHarvester(BaseHarvester):
         profile: str = "ark",
         entidades: Optional[list[str]] = None,
         page_size: int = 100,
+        plaza: Optional[str] = None,
+        custom_query: Optional[str] = None,
     ) -> None:
         super().__init__()
         self.token = token or os.getenv("INEGI_TOKEN", "")
@@ -163,6 +165,8 @@ class DenueHarvester(BaseHarvester):
         self.profile = profile if profile in PROFILES_SCIAN else "ark"
         self.entidades = entidades or PROFILES_ENTIDADES.get(self.profile, ["0"])
         self.page_size = max(1, page_size)
+        self.plaza = (plaza or "").lower().strip()
+        self.custom_query = (custom_query or "").strip()
 
     async def health_check(self) -> bool:
         if self.fixture_path:
@@ -189,11 +193,25 @@ class DenueHarvester(BaseHarvester):
         async with httpx.AsyncClient(timeout=30.0) as client:
             if self.profile in ("futura_capital", "ark_ledger"):
                 # Consulta geográfica con endpoints probados y optimizados
-                clusters = FUTURA_GEO_CLUSTERS if self.profile == "futura_capital" else ARK_LEDGER_GEO_CLUSTERS
+                clusters = list(FUTURA_GEO_CLUSTERS if self.profile == "futura_capital" else ARK_LEDGER_GEO_CLUSTERS)
+                if self.plaza and self.plaza != "all":
+                    if self.plaza == "riviera_maya":
+                        clusters = [c for c in clusters if any(k in str(c).lower() for k in ("tulum", "playa", "cozumel", "-87.", "-86.9"))]
+                    elif self.plaza == "cancun":
+                        clusters = [c for c in clusters if any(k in str(c).lower() for k in ("cancun", "-86.8"))]
+                    elif self.plaza == "merida":
+                        clusters = [c for c in clusters if any(k in str(c).lower() for k in ("merida", "-89."))]
+                    elif self.plaza == "cdmx":
+                        clusters = [c for c in clusters if any(k in str(c).lower() for k in ("cdmx", "-99.1"))]
+                    elif self.plaza in ("monterrey", "mty"):
+                        clusters = [c for c in clusters if any(k in str(c).lower() for k in ("monterrey", "-100."))]
+                    elif self.plaza in ("guadalajara", "gdl"):
+                        clusters = [c for c in clusters if any(k in str(c).lower() for k in ("guadalajara", "zapopan", "-103."))]
+
                 seen_ids: set[str] = set()
                 for cluster in clusters:
                     await self._throttle()
-                    q = cluster["query"]
+                    q = self.custom_query if self.custom_query else cluster["query"]
                     coords = cluster["coords"]
                     radio = cluster["radio"]
                     scian_def = cluster["scian_default"]
