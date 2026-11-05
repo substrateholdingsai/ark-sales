@@ -1,8 +1,9 @@
 name: Lead Harvesting
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'  # Cada 6 horas
+  # Desactivada la cosecha automática periódica por cron (se usa solo manual / bajo demanda)
+  # schedule:
+  #   - cron: '0 */6 * * *'
   workflow_dispatch:        # Manual trigger (switch)
     inputs:
       enabled:

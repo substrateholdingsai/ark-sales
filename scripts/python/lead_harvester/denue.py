@@ -71,6 +71,53 @@ FUTURA_GEO_CLUSTERS = [
     {"query": "estetica", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "621399"},
 ]
 
+# Futura Capital — CDMX y Zona Metropolitana: médicos high ticket (cirugía plástica/estética y bariatría)
+# en los polos hospitalarios privados premium. Orden "por especialidad" (todas las zonas para la 1a
+# especialidad, luego la 2a...) + tope por cluster para repartir el --limit entre zonas.
+CDMX_FUTURA_ZONAS = [
+    ("Polanco", "19.4330,-99.1950"),
+    ("Lomas de Chapultepec", "19.4230,-99.2160"),
+    ("Santa Fe (ABC Santa Fe)", "19.3600,-99.2700"),
+    ("Interlomas (Hospital Ángeles Lomas)", "19.3990,-99.2820"),
+    ("Pedregal (Hospital Ángeles Pedregal)", "19.3060,-99.2080"),
+    ("Tlalpan (Médica Sur)", "19.2940,-99.1570"),
+    ("Del Valle / Nápoles", "19.3850,-99.1700"),
+    ("Roma / Condesa", "19.4170,-99.1640"),
+    ("Satélite (Naucalpan)", "19.5100,-99.2370"),
+]
+CDMX_FUTURA_QUERIES = [
+    ("cirugia plastica", "621112"),
+    ("bariatrica", "621112"),
+    ("cirugia estetica", "621112"),
+    ("obesidad", "621112"),
+]
+CDMX_FUTURA_GEO_CLUSTERS = [
+    {
+        "query": q,
+        "coords": coords,
+        "radio": 3000,
+        "scian_default": scian,
+        "zona": zona,
+        "cap": 2,                 # máx. leads nuevos por cluster
+        "require_private": True,  # solo "sector privado" (excluye IMSS/ISSSTE/SSA y salones de belleza)
+    }
+    for q, scian in CDMX_FUTURA_QUERIES
+    for zona, coords in CDMX_FUTURA_ZONAS
+]
+
+# Señales de sector público a excluir por nombre
+PUBLIC_SECTOR_MARKERS = ("IMSS", "ISSSTE", "SEDENA", "PEMEX", "SECRETARIA DE SALUD", "SECRETARÍA DE SALUD", "CENTRO DE SALUD", "DIF ")
+
+
+def is_private_medical(item: dict) -> bool:
+    """True si DENUE clasifica el establecimiento como servicio médico del sector privado."""
+    clase = str(item.get("Clase_actividad") or item.get("Actividad") or "").lower()
+    if "sector privado" not in clase:
+        return False
+    nombre = f" {str(item.get('Nombre') or '').upper()} {str(item.get('Razon_social') or '').upper()} "
+    return not any(m in nombre for m in PUBLIC_SECTOR_MARKERS)
+
+
 # Palabras clave y coordenadas estratégicas para Campeche (Área Médica y Hospitalaria)
 CAMPECHE_GEO_CLUSTERS = [
     # 1. San Francisco de Campeche — Centro, Malecón & Zona Médica
@@ -272,6 +319,8 @@ class DenueHarvester(BaseHarvester):
                     clusters = list(CAMPECHE_GEO_CLUSTERS)
                 elif self.plaza == "cdmx" and self.profile == "ark_ledger":
                     clusters = list(CDMX_LEDGER_GEO_CLUSTERS)
+                elif self.plaza == "cdmx" and self.profile == "futura_capital":
+                    clusters = list(CDMX_FUTURA_GEO_CLUSTERS)
                 else:
                     clusters = list(FUTURA_GEO_CLUSTERS if self.profile == "futura_capital" else ARK_LEDGER_GEO_CLUSTERS)
                 if self.plaza and self.plaza not in ("all", "campeche", "cdmx"):
@@ -307,13 +356,26 @@ class DenueHarvester(BaseHarvester):
                         if not isinstance(payload, list):
                             print(f"[DENUE] Non-list response for '{q}' @ {coords}: {str(payload)[:120]}", file=__import__("sys").stderr)
                             continue
-                        print(f"[DENUE] Found {len(payload)} leads for '{q}' @ {coords} ({radio}m)")
+                        zona = cluster.get("zona", "")
+                        cap = cluster.get("cap")
+                        require_private = cluster.get("require_private", False)
+                        print(f"[DENUE] Found {len(payload)} leads for '{q}' @ {coords} ({radio}m) {zona}".rstrip())
+                        taken = 0
+                        skipped_public = 0
                         for item in payload:
+                            if cap is not None and taken >= cap:
+                                break
+                            if require_private and not is_private_medical(item):
+                                skipped_public += 1
+                                continue
                             lead_key = item.get("CLEE") or item.get("Id") or f"{item.get('Nombre')}_{item.get('Telefono')}"
                             if lead_key in seen_ids:
                                 continue
                             seen_ids.add(lead_key)
+                            taken += 1
                             yield self._normalize(item, scian_def)
+                        if require_private or cap is not None:
+                            print(f"[DENUE]   -> tomados {taken}, descartados (no privado/no médico) {skipped_public}")
                     except Exception as e:
                         print(f"[DENUE error] '{q}' @ {coords}: {e}", file=__import__("sys").stderr)
                         continue
@@ -366,14 +428,15 @@ class DenueHarvester(BaseHarvester):
             **lead_id_kwargs,
             razon_social=nombre,
             rfc=item.get("RFC"),
-            actividad=item.get("Actividad") or item.get("actividad") or item.get("Nombre_Act") or "",
+            actividad=item.get("Actividad") or item.get("actividad") or item.get("Nombre_Act") or item.get("Clase_actividad") or "",
             scian_code=code,
             empleados_rango=item.get("Estrato") or item.get("empleados_rango"),
             ciudad=ciudad_norm,
             estado=estado_norm,
             lat=float(item["Latitud"]) if item.get("Latitud") else item.get("lat"),
             lon=float(item["Longitud"]) if item.get("Longitud") else item.get("lon"),
-            sitio_web=item.get("Sitio_Web") or item.get("sitio_web"),
+            # La API real de DENUE devuelve "Sitio_internet"; "Sitio_Web" se mantiene por los fixtures
+            sitio_web=(item.get("Sitio_Web") or item.get("Sitio_internet") or item.get("sitio_web") or "").strip() or None,
             telefono=raw_tel,
             email=raw_email,
             tenant_id=tenant_id,
