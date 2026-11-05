@@ -73,20 +73,31 @@ FUTURA_GEO_CLUSTERS = [
 
 # Palabras clave y coordenadas estratégicas para Campeche (Área Médica y Hospitalaria)
 CAMPECHE_GEO_CLUSTERS = [
-    # 1. San Francisco de Campeche — Zona Médica, Hospital General & Clínicas
-    {"query": "clinica", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "621111"},
-    {"query": "medico", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "621111"},
-    {"query": "hospital", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "622111"},
-    {"query": "dental", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "621211"},
-    {"query": "laboratorio", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "621511"},
-    {"query": "cirugia", "coords": "19.8438,-90.5255", "radio": 10000, "scian_default": "621112"},
+    # 1. San Francisco de Campeche — Centro, Malecón & Zona Médica
+    {"query": "clinica", "coords": "19.8438,-90.5255", "radio": 5000, "scian_default": "621111"},
+    {"query": "medico", "coords": "19.8438,-90.5255", "radio": 5000, "scian_default": "621111"},
+    {"query": "hospital", "coords": "19.8438,-90.5255", "radio": 5000, "scian_default": "622111"},
+    {"query": "dental", "coords": "19.8438,-90.5255", "radio": 5000, "scian_default": "621211"},
+    {"query": "laboratorio", "coords": "19.8438,-90.5255", "radio": 5000, "scian_default": "621511"},
+    {"query": "cirugia", "coords": "19.8438,-90.5255", "radio": 5000, "scian_default": "621112"},
+    {"query": "salud", "coords": "19.8438,-90.5255", "radio": 5000, "scian_default": "621111"},
 
-    # 2. Ciudad del Carmen — Zona Centro, Médica & Privada
-    {"query": "clinica", "coords": "18.6445,-91.8173", "radio": 10000, "scian_default": "621111"},
-    {"query": "medico", "coords": "18.6445,-91.8173", "radio": 10000, "scian_default": "621111"},
-    {"query": "hospital", "coords": "18.6445,-91.8173", "radio": 10000, "scian_default": "622111"},
-    {"query": "dental", "coords": "18.6445,-91.8173", "radio": 10000, "scian_default": "621211"},
-    {"query": "laboratorio", "coords": "18.6445,-91.8173", "radio": 10000, "scian_default": "621511"},
+    # 2. San Francisco de Campeche — Sur / Santa Lucía / Siglo XXI
+    {"query": "clinica", "coords": "19.8150,-90.5350", "radio": 5000, "scian_default": "621111"},
+    {"query": "medico", "coords": "19.8150,-90.5350", "radio": 5000, "scian_default": "621111"},
+    {"query": "dental", "coords": "19.8150,-90.5350", "radio": 5000, "scian_default": "621211"},
+
+    # 3. Ciudad del Carmen — Zona Centro, Médica & Puerto
+    {"query": "clinica", "coords": "18.6445,-91.8173", "radio": 5000, "scian_default": "621111"},
+    {"query": "medico", "coords": "18.6445,-91.8173", "radio": 5000, "scian_default": "621111"},
+    {"query": "hospital", "coords": "18.6445,-91.8173", "radio": 5000, "scian_default": "622111"},
+    {"query": "dental", "coords": "18.6445,-91.8173", "radio": 5000, "scian_default": "621211"},
+    {"query": "laboratorio", "coords": "18.6445,-91.8173", "radio": 5000, "scian_default": "621511"},
+
+    # 4. Ciudad del Carmen — Zona Oriente / Concordia / Industrial
+    {"query": "clinica", "coords": "18.6400,-91.7950", "radio": 5000, "scian_default": "621111"},
+    {"query": "medico", "coords": "18.6400,-91.7950", "radio": 5000, "scian_default": "621111"},
+    {"query": "dental", "coords": "18.6400,-91.7950", "radio": 5000, "scian_default": "621211"},
 ]
 
 # Palabras clave y coordenadas estratégicas para Ark Ledger (Despachos Contables y Fiscalistas)
@@ -240,21 +251,27 @@ class DenueHarvester(BaseHarvester):
                     coords = cluster["coords"]
                     radio = cluster["radio"]
                     scian_def = cluster["scian_default"]
-                    url = f"{BASE_URL}Buscar/{q}/{coords}/{radio}/{self.token}"
+                    import urllib.parse
+                    q_enc = urllib.parse.quote(q)
+                    url = f"{BASE_URL}Buscar/{q_enc}/{coords}/{radio}/{self.token}"
                     try:
                         resp = await client.get(url)
                         if resp.status_code != 200:
+                            print(f"[DENUE] HTTP {resp.status_code} for '{q}' @ {coords}: {resp.text[:120]}", file=__import__("sys").stderr)
                             continue
                         payload = resp.json()
                         if not isinstance(payload, list):
+                            print(f"[DENUE] Non-list response for '{q}' @ {coords}: {str(payload)[:120]}", file=__import__("sys").stderr)
                             continue
+                        print(f"[DENUE] Found {len(payload)} leads for '{q}' @ {coords} ({radio}m)")
                         for item in payload:
                             lead_key = item.get("CLEE") or item.get("Id") or f"{item.get('Nombre')}_{item.get('Telefono')}"
                             if lead_key in seen_ids:
                                 continue
                             seen_ids.add(lead_key)
                             yield self._normalize(item, scian_def)
-                    except Exception:
+                    except Exception as e:
+                        print(f"[DENUE error] '{q}' @ {coords}: {e}", file=__import__("sys").stderr)
                         continue
             else:
                 target_scians = PROFILES_SCIAN.get(self.profile, PROFILES_SCIAN["ark"])

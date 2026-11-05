@@ -144,6 +144,6 @@ def test_campeche_clusters_and_entidades():
     assert "04" in PROFILES_ENTIDADES["futura_capital"]
     assert len(CAMPECHE_GEO_CLUSTERS) >= 10
     for c in CAMPECHE_GEO_CLUSTERS:
-        assert any(term in c["query"] for term in ("clinica", "medico", "hospital", "dental", "laboratorio", "cirugia"))
+        assert any(term in c["query"] for term in ("clinica", "medico", "hospital", "dental", "laboratorio", "cirugia", "salud"))
 
 
