@@ -3,7 +3,7 @@ import { Env } from "../types";
 import { AuthVariables } from "../auth/middleware";
 import { requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
-import { enrichDoctorLead } from "../services/contactEnrichment";
+import { enrichLeadByVertical } from "../services/contactEnrichment";
 
 export const crmContactsRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 crmContactsRouter.use("*", requireAuth());
@@ -163,25 +163,28 @@ crmContactsRouter.post("/:id/enrich", requireRole("write"), async (c) => {
     try { body = await c.req.json(); } catch {}
     const autoApply = body?.auto_apply !== false;
 
-    const enrichment = await enrichDoctorLead({
+    const enrichment = await enrichLeadByVertical({
       name: existing.name,
       accountName: existing.account_name,
       city: existing.account_city,
+      scian: existing.account_scian,
     });
 
     let updatedContact = existing;
     if (autoApply && enrichment.found) {
+      const titularName = (enrichment as any).titular_name || (enrichment as any).doctor_name || (enrichment as any).contact_name;
       const isPlaceholder = !existing.name || existing.name === "Sin nombre" || existing.name.toLowerCase().includes("contacto corporativo");
-      const newName = (isPlaceholder && enrichment.doctor_name) ? enrichment.doctor_name : existing.name;
+      const newName = (isPlaceholder && titularName) ? titularName : (titularName || existing.name);
       const newPhone = enrichment.phone || existing.phone;
       const newWhatsapp = enrichment.whatsapp || existing.whatsapp;
-      const newTitle = enrichment.title || existing.title;
+      const newTitle = (enrichment as any).title || existing.title;
+      const newEmail = (enrichment as any).email || existing.email;
 
       await c.env.DB.prepare(`
         UPDATE sales_contacts
-        SET name = ?, phone = ?, whatsapp = ?, title = ?, updated_at = CURRENT_TIMESTAMP
+        SET name = ?, phone = ?, whatsapp = ?, email = COALESCE(?, email), title = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(newName, newPhone, newWhatsapp, newTitle, id).run();
+      `).bind(newName, newPhone, newWhatsapp, newEmail, newTitle, id).run();
 
       const audit = new AuditService(c.env.DB);
       await audit.record({

@@ -1543,6 +1543,9 @@ function filtrarCuentas() {
       <td class="px-4 py-3 text-xs">\${cityBadge}</td>
       <td class="px-4 py-3 text-right" onclick="event.stopPropagation()">
         <div class="flex items-center justify-end gap-1">
+          <button onclick="enriquecerCuentaRow(event, '\${a.id}')" class="p-1.5 rounded-lg text-slate-500 hover:text-purple-400 hover:bg-purple-500/10 transition-colors" title="Enriquecer Titular / Despacho">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+          </button>
           <button onclick="eliminarCuentaRow(event, '\${a.id}')" class="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" title="Eliminar cuenta">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
           </button>
@@ -1578,6 +1581,9 @@ async function abrirModalCuenta(id) {
           <span class="text-xs font-mono text-slate-500">\${account.id}</span>
         </div>
         <div class="flex items-center gap-2">
+          <button onclick="autoEnriquecerModalCuenta('\${account.id}')" id="btnAutoEnriquecerCuenta" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-xs font-semibold transition-colors" title="Buscar titular y datos en la web abierta">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Enriquecer Titular
+          </button>
           <button onclick="confirmarEliminarCuenta('\${account.id}', '\${(account.name||'').replace(/'/g, '\\\\\\'')}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold transition-colors" title="Eliminar cuenta">
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Eliminar
           </button>
@@ -2834,6 +2840,77 @@ function abrirBusquedaDoctoraliaModal() {
   const acc = c ? state.accounts.find(a => a.id === c.account_id) : null;
   const q = (c && c.name && c.name !== 'Sin nombre') ? c.name : (acc && acc.name ? acc.name : '');
   window.open('https://www.doctoralia.com.mx/buscar?q=' + encodeURIComponent(q.trim()), '_blank');
+}
+
+async function enriquecerCuentaRow(event, id) {
+  if (event) event.stopPropagation();
+  const acc = (state.accounts || []).find(a => a.id === id);
+  const nameToSearch = acc && acc.name ? acc.name : 'Cuenta';
+
+  toast('🔍 Buscando titular / socio director para ' + nameToSearch + '…');
+  try {
+    const res = await apiCall('/api/crm/accounts/' + id + '/enrich', 'POST', { auto_apply: true });
+    if (res && res.success) {
+      if (res.enrichment && res.enrichment.found) {
+        const titular = res.enrichment.titular_name || res.enrichment.doctor_name || res.enrichment.contact_name || 'Titular detectado';
+        const contact = res.contact;
+        if (contact) {
+          const idx = (state.contacts || []).findIndex(x => x.id === contact.id);
+          if (idx !== -1) {
+            state.contacts[idx] = { ...state.contacts[idx], ...contact };
+          } else if (state.contacts) {
+            state.contacts.unshift(contact);
+          }
+          if (currentView === 'contactos') renderContactos();
+        }
+        toast('✨ ¡Titular detectado! ' + titular);
+      } else {
+        toast('No se halló titular público automático para ' + nameToSearch + '.');
+        if (res.enrichment && res.enrichment.google_search_url) {
+          window.open(res.enrichment.google_search_url, '_blank');
+        }
+      }
+    } else {
+      toast('Error al consultar motor de enriquecimiento.');
+    }
+  } catch(err) {
+    toast('Error: ' + (err.message || 'Error de red'));
+  }
+}
+
+async function autoEnriquecerModalCuenta(id) {
+  if (!id) return;
+  const btn = document.getElementById('btnAutoEnriquecerCuenta');
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Buscando…';
+    lucide.createIcons();
+  }
+  toast('🔍 Rastreando titular, socios y redes de la firma…');
+
+  try {
+    const res = await apiCall('/api/crm/accounts/' + id + '/enrich', 'POST', { auto_apply: true });
+    if (res && res.success) {
+      if (res.enrichment && res.enrichment.found) {
+        const e = res.enrichment;
+        const titular = e.titular_name || e.doctor_name || e.contact_name || 'Titular';
+        toast('✨ ¡Titular detectado! ' + titular);
+        abrirModalCuenta(id);
+      } else {
+        toast('No se encontró titular público automático.');
+        if (res.enrichment && res.enrichment.google_search_url) {
+          window.open(res.enrichment.google_search_url, '_blank');
+        }
+      }
+    }
+  } catch(err) {
+    toast('Error: ' + (err.message || 'Error de red'));
+  } finally {
+    if (btn) {
+      btn.innerHTML = originalText;
+      lucide.createIcons();
+    }
+  }
 }
 
 // ── EDICIÓN DE CONTACTO ──

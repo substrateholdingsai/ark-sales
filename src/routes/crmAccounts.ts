@@ -3,6 +3,7 @@ import { Env } from "../types";
 import { AuthVariables } from "../auth/middleware";
 import { requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
+import { enrichLeadByVertical } from "../services/contactEnrichment";
 
 export const crmAccountsRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 crmAccountsRouter.use("*", requireAuth());
@@ -281,6 +282,97 @@ crmAccountsRouter.post("/:id/merge", requireRole("admin"), async (c) => {
     return c.json({ success: true, source_id: sourceId, target_id: targetId });
   } catch (err: any) {
     return c.json({ error: err.message || "Error fusionando cuentas" }, 400);
+  }
+});
+
+// Enriquecimiento Nivel 2 de Titular / Despacho / Cuenta
+crmAccountsRouter.post("/:id/enrich", requireRole("write"), async (c) => {
+  try {
+    const id = c.req.param("id");
+    const existing: any = await c.env.DB.prepare("SELECT * FROM sales_accounts WHERE id = ?").bind(id).first();
+    if (!existing) return c.json({ error: "Cuenta no encontrada." }, 404);
+
+    let body: any = {};
+    try { body = await c.req.json(); } catch {}
+    const autoApply = body?.auto_apply !== false;
+
+    // Buscar si ya tiene contactos asociados
+    const { results: contacts } = await c.env.DB.prepare(
+      "SELECT * FROM sales_contacts WHERE account_id = ? ORDER BY created_at ASC"
+    ).bind(id).all();
+
+    const primaryContact: any = contacts && contacts.length > 0 ? contacts[0] : null;
+
+    const enrichment = await enrichLeadByVertical({
+      name: primaryContact?.name,
+      accountName: existing.name,
+      city: existing.city,
+      scian: existing.scian_code,
+      vertical: resolveTenantId(existing) === "acc_ark_ledger" ? "fiscal" : undefined,
+    });
+
+    let updatedContact = primaryContact;
+
+    if (autoApply && enrichment.found) {
+      const titularName = (enrichment as any).titular_name || (enrichment as any).doctor_name || (enrichment as any).contact_name;
+      const title = (enrichment as any).title || "Socio Director / Titular";
+      const phone = enrichment.phone || primaryContact?.phone || null;
+      const whatsapp = enrichment.whatsapp || primaryContact?.whatsapp || null;
+      const email = (enrichment as any).email || primaryContact?.email || null;
+
+      if (primaryContact) {
+        const isPlaceholder = !primaryContact.name || primaryContact.name === "Sin nombre" || primaryContact.name.toLowerCase().includes("contacto corporativo");
+        const newName = (isPlaceholder && titularName) ? titularName : (titularName || primaryContact.name);
+        const newTitle = title || primaryContact.title;
+
+        await c.env.DB.prepare(`
+          UPDATE sales_contacts
+          SET name = ?, phone = COALESCE(?, phone), whatsapp = COALESCE(?, whatsapp), email = COALESCE(?, email), title = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(newName, phone, whatsapp, email, newTitle, primaryContact.id).run();
+
+        updatedContact = await c.env.DB.prepare("SELECT * FROM sales_contacts WHERE id = ?").bind(primaryContact.id).first();
+      } else if (titularName || phone || email) {
+        // Crear contacto titular para la cuenta si no existía ninguno
+        const newContactId = `ct_${crypto.randomUUID()}`;
+        await c.env.DB.prepare(`
+          INSERT INTO sales_contacts (id, account_id, name, email, phone, whatsapp, title, consent_status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `).bind(newContactId, id, titularName || "Titular", email, phone, whatsapp, title).run();
+
+        updatedContact = await c.env.DB.prepare("SELECT * FROM sales_contacts WHERE id = ?").bind(newContactId).first();
+      }
+
+      await c.env.DB.prepare("UPDATE sales_accounts SET last_enriched_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
+
+      const audit = new AuditService(c.env.DB);
+      await audit.record({
+        actor_user_id: c.get("user")!.sub,
+        actor_email: c.get("user")!.email,
+        action: "crm.account_enriched",
+        entity_type: "account",
+        entity_id: id,
+        metadata: {
+          account_name: existing.name,
+          titular_found: titularName,
+          title,
+          phone,
+          whatsapp,
+          email,
+          source_url: enrichment.source_url,
+        },
+        ip: clientIp(c),
+      });
+    }
+
+    return c.json({
+      success: true,
+      enrichment,
+      account: { ...existing, last_enriched_at: new Date().toISOString() },
+      contact: updatedContact,
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message || "Error enriqueciendo cuenta" }, 400);
   }
 });
 
