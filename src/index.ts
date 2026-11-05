@@ -29,6 +29,7 @@ import { renderAltumPage } from "./client/altumPage";
 import { adminAssistantRouter } from "./routes/adminAssistant";
 import { ADMIN_ASSISTANT_WIDGET_JS_SOURCE } from "./client/adminAssistantWidget";
 import { getAltumAsset } from "./client/altumAssets";
+import { mcpRouter } from "./routes/mcp";
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
@@ -186,6 +187,7 @@ app.route("/api/crm/contacts", crmContactsRouter);
 app.route("/api/crm/opportunities", crmOpportunitiesRouter);
 app.route("/api/crm/activities", crmActivitiesRouter);
 app.route("/api/crm/tasks", crmTasksRouter);
+app.route("/mcp", mcpRouter);
 app.route("/api/superadmin", superadminRouter);
 app.route("/api/admin/assistant", adminAssistantRouter);
 app.route("/api/superadmin/assistant", adminAssistantRouter);
