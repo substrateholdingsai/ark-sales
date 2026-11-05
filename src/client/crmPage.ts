@@ -1302,18 +1302,9 @@ async function loadMetrics() {
 
 async function loadAccounts() {
   try {
-    const all = [];
-    let offset = 0;
-    const pageSize = 500;
-    while (true) {
-      const data = await apiCall(\`/api/crm/accounts?limit=\${pageSize}&offset=\${offset}\`);
-      const items = (data && data.items) || [];
-      all.push(...items);
-      if (items.length < pageSize) break;
-      offset += pageSize;
-      if (offset > 10000) break;
-    }
-    state.accounts = all;
+    // Paginación prudente para evitar agotar la cuota de lectura diaria de Cloudflare D1
+    const data = await apiCall('/api/crm/accounts?limit=100&offset=0');
+    state.accounts = (data && data.items) || [];
     actualizarOpcionesFiltroCiudades();
   } catch (e) { console.error('loadAccounts error:', e); }
 }
@@ -1327,18 +1318,8 @@ async function loadOpportunities() {
 
 async function loadContacts() {
   try {
-    const all = [];
-    let offset = 0;
-    const pageSize = 500;
-    while (true) {
-      const data = await apiCall(\`/api/crm/contacts?limit=\${pageSize}&offset=\${offset}\`);
-      const items = (data && data.items) || [];
-      all.push(...items);
-      if (items.length < pageSize) break;
-      offset += pageSize;
-      if (offset > 20000) break;
-    }
-    state.contacts = all;
+    const data = await apiCall('/api/crm/contacts?limit=100&offset=0');
+    state.contacts = (data && data.items) || [];
     actualizarOpcionesFiltroCiudades();
   } catch (e) { console.error('loadContacts error:', e); }
 }
