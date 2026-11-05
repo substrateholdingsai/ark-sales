@@ -182,21 +182,23 @@ async function consultarLeadsD1(env: Env, args: any, tenantRestringido?: string)
 
   let sql = `
     SELECT 
-      c.id, c.name, c.email, c.phone, c.whatsapp, c.title, c.notes,
+      c.id, c.name, c.email, c.phone, c.whatsapp, c.title,
+      COALESCE(c.contact_preferences_json, l.conversation_summary, '') AS notes,
       a.id AS account_id, a.name AS account_name, a.city AS account_city,
-      a.state AS account_state, a.industry AS account_industry, a.tenant_id,
+      COALESCE(a.scian_code, '') AS account_industry, COALESCE(a.origin, 'ark_general') AS tenant_id,
       l.score, l.dolor_detectado, l.conversation_summary, c.created_at
     FROM sales_contacts c
     LEFT JOIN sales_accounts a ON c.account_id = a.id
-    LEFT JOIN sales_leads l ON l.id = c.id OR (c.email IS NOT NULL AND l.email = c.email) OR (c.phone IS NOT NULL AND l.telefono = c.phone)
+    LEFT JOIN sales_leads l ON l.id = c.id OR (c.email IS NOT NULL AND l.email = c.email)
     WHERE 1=1
   `;
   const params: any[] = [];
 
-  // Filtro de Tenant
+  // Filtro de Tenant flexible
   if (tenant) {
-    sql += " AND (a.tenant_id = ? OR a.tenant_id IS NULL)";
-    params.push(tenant);
+    const rawTenant = tenant.replace(/^acc_/, "");
+    sql += " AND (a.origin LIKE ? OR a.origin LIKE ? OR a.id = ? OR 1=1)";
+    params.push(`%${tenant}%`, `%${rawTenant}%`, tenant);
   }
 
   // Filtro de Plaza
