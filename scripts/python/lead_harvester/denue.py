@@ -36,35 +36,39 @@ PROFILES_ENTIDADES: dict[str, list[str]] = {
     "ark_ledger": ["0"],
 }
 
-# Palabras clave y coordenadas estratégicas para Futura Capital en Quintana Roo y Riviera Maya (Turismo Médico & Médicos Americanos)
+# Palabras clave y coordenadas estratégicas para Futura Capital en Quintana Roo y Riviera Maya (Prioridad: Riviera Maya & Tulum)
 FUTURA_GEO_CLUSTERS = [
-    # 1. Cancún — Zona Médica Hospitalaria (Galenia / Amerimed / Hospiten / Av. Bonampak)
+    # 1. Tulum — Aldea Zamá / La Veleta / Wellness Corredor
+    {"query": "clinica", "coords": "20.2100,-87.4650", "radio": 5000, "scian_default": "621111"},
+    {"query": "wellness", "coords": "20.2100,-87.4650", "radio": 5000, "scian_default": "621399"},
+    {"query": "dental", "coords": "20.2100,-87.4650", "radio": 5000, "scian_default": "621211"},
+    {"query": "doctor", "coords": "20.2100,-87.4650", "radio": 5000, "scian_default": "621111"},
+    {"query": "cirugia", "coords": "20.2100,-87.4650", "radio": 5000, "scian_default": "621112"},
+
+    # 2. Playa del Carmen — Corredor Turístico & Hospiten Riviera Maya
+    {"query": "dental", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621211"},
+    {"query": "cirugia plastica", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621112"},
+    {"query": "clinica", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621111"},
+    {"query": "dermatologia", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621112"},
+    {"query": "plastic surgery", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621112"},
+    {"query": "medical center", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "622111"},
+
+    # 3. Cozumel — Zona San Miguel / Costamed
+    {"query": "clinica", "coords": "20.5050,-86.9500", "radio": 5000, "scian_default": "621111"},
+    {"query": "dental", "coords": "20.5050,-86.9500", "radio": 5000, "scian_default": "621211"},
+
+    # 4. Cancún — Zona Médica Hospitalaria (Galenia / Amerimed / Hospiten / Av. Bonampak)
     {"query": "cirugia plastica", "coords": "21.1450,-86.8250", "radio": 5000, "scian_default": "621112"},
     {"query": "clinica", "coords": "21.1450,-86.8250", "radio": 5000, "scian_default": "621111"},
     {"query": "dental", "coords": "21.1450,-86.8250", "radio": 5000, "scian_default": "621211"},
     {"query": "bariatrica", "coords": "21.1450,-86.8250", "radio": 5000, "scian_default": "621112"},
     {"query": "fertilidad", "coords": "21.1450,-86.8250", "radio": 5000, "scian_default": "621491"},
 
-    # 2. Cancún — Puerto Cancún & Zona Hotelera (Turismo Médico Internacional & Estética)
+    # 5. Cancún — Puerto Cancún & Zona Hotelera (Turismo Médico Internacional & Estética)
     {"query": "dental clinic", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "621211"},
     {"query": "plastic surgery", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "621112"},
     {"query": "medical center", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "622111"},
     {"query": "estetica", "coords": "21.1550,-86.8050", "radio": 5000, "scian_default": "621399"},
-
-    # 3. Playa del Carmen — Corredor Turístico & Hospiten Riviera Maya
-    {"query": "dental", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621211"},
-    {"query": "cirugia plastica", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621112"},
-    {"query": "clinica", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621111"},
-    {"query": "dermatologia", "coords": "20.6350,-87.0750", "radio": 5000, "scian_default": "621112"},
-
-    # 4. Tulum — Aldea Zamá / La Veleta / Wellness Corredor
-    {"query": "clinica", "coords": "20.2100,-87.4650", "radio": 4000, "scian_default": "621111"},
-    {"query": "wellness", "coords": "20.2100,-87.4650", "radio": 4000, "scian_default": "621399"},
-    {"query": "dental", "coords": "20.2100,-87.4650", "radio": 4000, "scian_default": "621211"},
-
-    # 5. Cozumel — Zona San Miguel / Costamed
-    {"query": "clinica", "coords": "20.5050,-86.9500", "radio": 4000, "scian_default": "621111"},
-    {"query": "dental", "coords": "20.5050,-86.9500", "radio": 4000, "scian_default": "621211"},
 ]
 
 # Palabras clave y coordenadas estratégicas para Ark Ledger (Despachos Contables y Fiscalistas)
