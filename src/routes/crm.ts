@@ -4,6 +4,7 @@ import { AuthVariables } from "../auth/middleware";
 import { requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
 import { UserService } from "../auth/users";
+import { handleSheetsImport } from "../services/sheetsImport";
 
 export const crmRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
@@ -25,6 +26,9 @@ crmRouter.get("/me", (c) => {
   const user = c.get("user");
   return c.json({ id: user!.sub, email: user!.email, role: user!.role, name: user!.name });
 });
+
+// Importador desde Google Sheets / CSV (Cuentas + Contactos + Pipeline)
+crmRouter.post("/import/sheets", requireRole("write"), handleSheetsImport);
 
 // Acción restringida: solo admin
 crmRouter.get("/admin/users", requireRole("admin"), async (c) => {

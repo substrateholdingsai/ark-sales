@@ -333,8 +333,8 @@ tailwind.config = {
           <button onclick="exportarCuentasCSV()" class="flex items-center gap-2 border border-slate-700 text-slate-300 text-sm px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">
             <i data-lucide="download" class="w-4 h-4"></i> CSV
           </button>
-          <button onclick="abrirModalImportar()" class="flex items-center gap-2 border border-slate-700 text-slate-300 text-sm px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">
-            <i data-lucide="upload" class="w-4 h-4"></i> Importar
+          <button onclick="abrirModalImportarSheets()" class="flex items-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-sm px-3 py-2 rounded-lg transition-colors font-medium">
+            <i data-lucide="sheet" class="w-4 h-4"></i> 📥 Importar Sheets
           </button>
         </div>
       </div>
@@ -388,6 +388,9 @@ tailwind.config = {
           </button>
           <button onclick="exportarContactosCSV()" class="flex items-center gap-2 border border-slate-700 text-slate-300 text-sm px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">
             <i data-lucide="download" class="w-4 h-4"></i> CSV
+          </button>
+          <button onclick="abrirModalImportarSheets()" class="flex items-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-sm px-3 py-2 rounded-lg transition-colors font-medium">
+            <i data-lucide="sheet" class="w-4 h-4"></i> 📥 Importar Sheets
           </button>
         </div>
       </div>
@@ -1062,20 +1065,74 @@ Equipo Comercial ARK Systems
   </div>
 </div>
 
-<!-- ═══════════════ MODAL IMPORTAR ═══════════════ -->
+<!-- ═══════════════ MODAL IMPORTAR SHEETS / CSV ═══════════════ -->
 <div id="modalImportar" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
-  <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalImportar()"></div>
-  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl z-10">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-lg font-bold text-white">Importar Cuentas</h3>
-      <button onclick="cerrarModalImportar()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+  <div class="modal-backdrop absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="cerrarModalImportarSheets()"></div>
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl p-6 shadow-2xl z-10 flex flex-col max-h-[90vh]">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+          <i data-lucide="sheet" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">Importador desde Google Sheets / CSV</h3>
+          <p class="text-xs text-slate-400">Pega directamente celdas copiadas de Google Sheets o Excel para crear Cuentas, Contactos y Pipeline</p>
+        </div>
+      </div>
+      <button onclick="cerrarModalImportarSheets()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
     </div>
-    <div class="space-y-4">
-      <p class="text-xs text-slate-400">Pega un listado de razones sociales o un JSON con formato <code class="text-ark-blue_hi">[{"name":"...", "city":"..."}]</code>:</p>
-      <textarea id="importarTextarea" rows="6" placeholder="Despacho Contable ABC, Mérida&#10;Consultores Fiscales Sureste, Cancún" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-white font-mono focus:border-ark-blue"></textarea>
-      <div class="flex justify-end gap-2">
-        <button onclick="cerrarModalImportar()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold">Cancelar</button>
-        <button onclick="procesarImportarCuentas()" class="px-4 py-2 bg-ark-blue text-white rounded-lg text-xs font-semibold hover:bg-ark-blue/80">Importar</button>
+
+    <div class="space-y-4 py-4 overflow-y-auto flex-1 pr-1">
+      <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs text-slate-400 space-y-1">
+        <div class="font-mono text-emerald-400 font-semibold flex items-center gap-1.5">
+          <i data-lucide="info" class="w-3.5 h-3.5"></i> Formato sugerido de columnas:
+        </div>
+        <p class="font-mono text-[11px] text-slate-300">Despacho | Titular | Email | Teléfono | Ciudad</p>
+        <p class="text-[11px] text-slate-500">Detecta tabuladores (<code class="text-slate-400">\t</code>), comas o punto y coma. Se creará la Cuenta (<code class="text-slate-400">acc_ark_ledger</code>), el Contacto (<code class="text-slate-400">Socio / Titular</code>) y la Oportunidad en etapa <code class="text-emerald-400">calificado</code>.</p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Pega aquí los datos copiados de Google Sheets:</label>
+        <textarea id="importarTextarea" rows="6" oninput="actualizarPreviewImportarSheets()" placeholder="Despacho Contable ABC&#9;Lic. Carlos Morales&#9;carlos@morales.com&#9;5512345678&#9;CDMX&#10;Consultores Fiscales Sureste&#9;C.P. Ana Ruiz&#9;ana@ruizfiscal.com&#9;9991234567&#9;Mérida" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-ark-blue focus:ring-0 leading-relaxed"></textarea>
+      </div>
+
+      <!-- Vista previa en vivo -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="eye" class="w-3.5 h-3.5 text-ark-blue"></i> Vista Previa (<span id="previewSheetsCount" class="text-ark-blue_hi font-bold">0</span> filas detectadas)
+          </span>
+          <span id="previewSheetsNotice" class="text-[11px] text-slate-500 font-mono"></span>
+        </div>
+        <div class="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60 max-h-48 overflow-y-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900/90 text-slate-400 font-mono text-[11px] uppercase border-b border-slate-800 sticky top-0">
+              <tr>
+                <th class="px-3 py-2 w-8">#</th>
+                <th class="px-3 py-2">Despacho / Empresa</th>
+                <th class="px-3 py-2">Titular</th>
+                <th class="px-3 py-2">Email</th>
+                <th class="px-3 py-2">Teléfono</th>
+                <th class="px-3 py-2">Ciudad</th>
+              </tr>
+            </thead>
+            <tbody id="previewSheetsBody" class="divide-y divide-slate-800/40 text-slate-300">
+              <tr>
+                <td colspan="6" class="p-4 text-center text-slate-500 italic">Pega contenido en el área superior para ver la previsualización.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+      <div id="importSheetsStatusMsg" class="text-xs font-mono text-slate-400"></div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="cerrarModalImportarSheets()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition-colors">Cancelar</button>
+        <button type="button" id="btnConfirmarImportarSheets" onclick="ejecutarImportarSheets()" disabled class="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold transition-colors shadow-md">
+          <i data-lucide="check" class="w-4 h-4"></i> Confirmar e Importar al CRM
+        </button>
       </div>
     </div>
   </div>
@@ -1533,9 +1590,21 @@ function filtrarCuentas() {
         const cityBadge = plaza.key !== 'sin_ciudad'
           ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ' + plaza.badgeClass + ' border whitespace-nowrap" title="' + (a.city || plaza.label) + '">' + plaza.badgeText + '</span>'
           : '<span class="text-slate-600 font-mono text-xs">-</span>';
+        const hasPropuesta = Boolean(
+          a.has_proposal_sent ||
+          (state.opportunities || []).some(o => o.account_id === a.id && o.stage === 'propuesta_enviada')
+        );
+        const propuestaBadge = hasPropuesta
+          ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap ml-2" title="Propuesta enviada"><i data-lucide="mail-check" class="w-3 h-3"></i> ✉️ Propuesta enviada</span>'
+          : '';
         return \`
     <tr class="hover:bg-slate-800/30 cursor-pointer transition-colors" onclick="abrirModalCuenta('\${a.id}')">
-      <td class="px-4 py-3 font-medium text-white">\${a.name || '-'}</td>
+      <td class="px-4 py-3 font-medium text-white">
+        <div class="flex items-center flex-wrap gap-1">
+          <span>\${a.name || '-'}</span>
+          \${propuestaBadge}
+        </div>
+      </td>
       <td class="px-4 py-3 font-mono text-xs text-slate-400">\${a.scian_code || '-'}</td>
       <td class="px-4 py-3"><span class="badge badge-ambar">\${a.size || a.employee_count_range || '1-5'}</span></td>
       <td class="px-4 py-3 font-mono text-xs text-slate-400">\${a.harvest_source || a.origin || 'denue'}</td>
@@ -2243,12 +2312,24 @@ async function renderContactos() {
         if (plaza.key !== 'sin_ciudad') {
           cityBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ' + plaza.badgeClass + ' border whitespace-nowrap max-w-[140px] truncate" title="' + (c.account_city || (acc ? acc.city : '') || plaza.label) + '">' + plaza.badgeText + '</span>';
         }
+        const hasPropuesta = Boolean(
+          c.has_proposal_sent ||
+          (state.opportunities || []).some(o => (o.contact_id === c.id || (o.account_id && o.account_id === c.account_id)) && o.stage === 'propuesta_enviada')
+        );
+        const propuestaBadge = hasPropuesta
+          ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap ml-1.5" title="Propuesta enviada"><i data-lucide="mail-check" class="w-2.5 h-2.5"></i> ✉️ Propuesta enviada</span>'
+          : '';
         return \`
         <tr class="hover:bg-slate-800/30 transition-colors">
           <td class="px-3 py-3 text-center sticky left-0 bg-slate-900/90 backdrop-blur-sm z-10 border-r border-slate-800/80">
             <input type="checkbox" data-contact-id="\${c.id}" \${selectedContactIds.has(c.id) ? 'checked' : ''} onchange="onSelectContactoChange(event, '\${c.id}')" class="ct-row-checkbox rounded border-slate-700 bg-slate-800 text-ark-blue focus:ring-0 cursor-pointer">
           </td>
-          <td class="px-4 py-3 font-medium text-white">\${c.name || 'Sin nombre'}</td>
+          <td class="px-4 py-3 font-medium text-white">
+            <div class="flex items-center flex-wrap gap-1">
+              <span>\${c.name || 'Sin nombre'}</span>
+              \${propuestaBadge}
+            </div>
+          </td>
           <td class="px-4 py-3 text-slate-400">\${cuentaNombre}</td>
           <td class="px-4 py-3">\${cityBadge}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.email || '-'}</td>
@@ -2566,32 +2647,196 @@ function abrirModalPlantilla() { document.getElementById('modalPlantilla').class
 function cerrarModalPlantilla() { document.getElementById('modalPlantilla').classList.add('hidden'); }
 
 // Importar Modal
-function abrirModalImportar() { document.getElementById('modalImportar').classList.remove('hidden'); lucide.createIcons(); }
-function cerrarModalImportar() { document.getElementById('modalImportar').classList.add('hidden'); }
+// ── IMPORTADOR DESDE GOOGLE SHEETS / CSV (Cuentas + Contactos + Pipeline) ──
+function abrirModalImportarSheets() {
+  const modal = document.getElementById('modalImportar');
+  if (modal) {
+    modal.classList.remove('hidden');
+    actualizarPreviewImportarSheets();
+    lucide.createIcons();
+  }
+}
 
-async function procesarImportarCuentas() {
-  const text = document.getElementById('importarTextarea').value.trim();
-  if (!text) return;
-  const items = [];
-  try {
-    if (text.startsWith('[')) {
-      items.push(...JSON.parse(text));
-    } else {
-      const lines = text.split('\\n');
-      for (const line of lines) {
-        const parts = line.split(',');
-        if (parts[0]) {
-          items.push({ name: parts[0].trim(), city: (parts[1] || 'Mérida').trim(), origin: 'csv_import' });
-        }
+function cerrarModalImportarSheets() {
+  const modal = document.getElementById('modalImportar');
+  if (modal) modal.classList.add('hidden');
+}
+
+// Aliases para compatibilidad
+function abrirModalImportar() { abrirModalImportarSheets(); }
+function cerrarModalImportar() { cerrarModalImportarSheets(); }
+
+function parseSheetsClientRows(rawText) {
+  if (!rawText || !rawText.trim()) return [];
+  const lines = rawText.split(/\\r?\\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+
+  const firstLine = lines[0].toLowerCase();
+  const hasEmail = lines[0].includes('@');
+  const hasHeader = !hasEmail && (firstLine.includes('despacho') || firstLine.includes('empresa') || firstLine.includes('titular') ||
+                    firstLine.includes('contacto') || firstLine.includes('correo') || firstLine.includes('email') ||
+                    firstLine.includes('telefono') || firstLine.includes('whatsapp') || firstLine.includes('ciudad'));
+
+  const startIdx = hasHeader ? 1 : 0;
+  let colMap = {};
+  if (hasHeader) {
+    const sep = lines[0].includes('\\t') ? '\\t' : (lines[0].includes(';') ? ';' : ',');
+    const cols = lines[0].split(sep).map(c => c.trim().toLowerCase().replace(/^["']|["']$/g, ''));
+    cols.forEach((col, idx) => {
+      if (col.includes('despacho') || col.includes('empresa') || col.includes('razon') || col === 'nombre') {
+        if (colMap.despacho === undefined) colMap.despacho = idx;
+      } else if (col.includes('titular') || col.includes('contacto') || col.includes('socio') || col.includes('persona')) {
+        colMap.titular = idx;
+      } else if (col.includes('email') || col.includes('correo')) {
+        colMap.email = idx;
+      } else if (col.includes('tel') || col.includes('whatsapp') || col.includes('celular') || col.includes('movil')) {
+        colMap.telefono = idx;
+      } else if (col.includes('ciudad') || col.includes('plaza') || col.includes('municipio') || col.includes('estado')) {
+        colMap.ciudad = idx;
       }
+    });
+  }
+
+  const items = [];
+  for (let i = startIdx; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
+    const sep = line.includes('\\t') ? '\\t' : (line.includes(';') ? ';' : ',');
+    const parts = line.split(sep).map(s => s.trim().replace(/^["']|["']$/g, ''));
+
+    let despacho = '';
+    let titular = '';
+    let email = '';
+    let telefono = '';
+    let ciudad = '';
+
+    if (hasHeader && Object.keys(colMap).length > 0) {
+      if (colMap.despacho !== undefined && parts[colMap.despacho]) despacho = parts[colMap.despacho];
+      if (colMap.titular !== undefined && parts[colMap.titular]) titular = parts[colMap.titular];
+      if (colMap.email !== undefined && parts[colMap.email]) email = parts[colMap.email];
+      if (colMap.telefono !== undefined && parts[colMap.telefono]) telefono = parts[colMap.telefono];
+      if (colMap.ciudad !== undefined && parts[colMap.ciudad]) ciudad = parts[colMap.ciudad];
+    } else {
+      despacho = parts[0] || '';
+      titular = parts[1] || '';
+      email = parts[2] || '';
+      telefono = parts[3] || '';
+      ciudad = parts[4] || '';
     }
-    const res = await apiCall('/api/crm/accounts/bulk', 'POST', { items });
-    toast(\`✅ \${res?.created || items.length} cuentas importadas\`);
-    cerrarModalImportar();
-    await loadAccounts();
+
+    if (despacho || titular || email) {
+      items.push({ despacho, titular, email, telefono, ciudad });
+    }
+  }
+  return items;
+}
+
+function actualizarPreviewImportarSheets() {
+  const textarea = document.getElementById('importarTextarea');
+  const countEl = document.getElementById('previewSheetsCount');
+  const noticeEl = document.getElementById('previewSheetsNotice');
+  const bodyEl = document.getElementById('previewSheetsBody');
+  const btn = document.getElementById('btnConfirmarImportarSheets');
+
+  if (!textarea || !bodyEl) return;
+  const raw = textarea.value;
+  const rows = parseSheetsClientRows(raw);
+
+  if (countEl) countEl.textContent = rows.length;
+  if (btn) btn.disabled = rows.length === 0;
+
+  if (rows.length === 0) {
+    if (noticeEl) noticeEl.textContent = '';
+    bodyEl.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-500 italic">Pega contenido en el área superior para ver la previsualización.</td></tr>';
+    return;
+  }
+
+  const maxPreview = 8;
+  const previewSlice = rows.slice(0, maxPreview);
+  if (noticeEl) {
+    noticeEl.textContent = rows.length > maxPreview ? ('(Mostrando primeras ' + maxPreview + ' de ' + rows.length + ' filas)') : '';
+  }
+
+  bodyEl.innerHTML = previewSlice.map((r, idx) => \`
+    <tr class="hover:bg-slate-900/60 font-mono text-xs">
+      <td class="px-3 py-1.5 text-slate-500">\${idx + 1}</td>
+      <td class="px-3 py-1.5 font-medium text-white">\${r.despacho || '<span class="text-slate-600 italic">Auto-generado</span>'}</td>
+      <td class="px-3 py-1.5 text-slate-300">\${r.titular || '<span class="text-slate-600">Socio / Titular</span>'}</td>
+      <td class="px-3 py-1.5 text-slate-400">\${r.email || '-'}</td>
+      <td class="px-3 py-1.5 text-slate-400">\${r.telefono || '-'}</td>
+      <td class="px-3 py-1.5 text-slate-400">\${r.ciudad || '-'}</td>
+    </tr>
+  \`).join('');
+}
+
+async function ejecutarImportarSheets() {
+  const textarea = document.getElementById('importarTextarea');
+  const btn = document.getElementById('btnConfirmarImportarSheets');
+  const statusMsg = document.getElementById('importSheetsStatusMsg');
+  const raw = textarea ? textarea.value.trim() : '';
+
+  if (!raw) {
+    toast('⚠️ No hay datos para importar.');
+    return;
+  }
+
+  const rows = parseSheetsClientRows(raw);
+  if (!rows.length) {
+    toast('⚠️ No se detectaron filas válidas.');
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Importando al CRM...';
+    lucide.createIcons();
+  }
+  if (statusMsg) statusMsg.textContent = 'Procesando ' + rows.length + ' registros...';
+
+  try {
+    const res = await apiCall('/api/crm/import/sheets', 'POST', {
+      raw: raw,
+      items: rows.map(r => ({
+        despacho_nombre: r.despacho,
+        titular_nombre: r.titular,
+        email: r.email,
+        telefono: r.telefono,
+        ciudad: r.ciudad,
+      }))
+    });
+
+    if (res && res.error) {
+      toast('⚠️ Error: ' + res.error);
+      if (statusMsg) statusMsg.textContent = res.error;
+      return;
+    }
+
+    const accs = res.imported_accounts !== undefined ? res.imported_accounts : 0;
+    const cts = res.imported_contacts !== undefined ? res.imported_contacts : 0;
+    const opps = res.imported_opportunities !== undefined ? res.imported_opportunities : 0;
+
+    toast(\`✅ Importados: \${accs} despachos, \${cts} contactos y \${opps} oportunidades al Pipeline\`);
+    cerrarModalImportarSheets();
+
+    if (textarea) textarea.value = '';
+    actualizarPreviewImportarSheets();
+
+    // Refrescar vistas en vivo
+    await Promise.all([loadAccounts(), loadContacts(), loadOpportunities()]);
     renderCuentas();
-  } catch(err) {
-    toast('Error en formato de importación');
+    renderContactos();
+    renderKanban();
+
+  } catch (err) {
+    console.error('Error importando sheets:', err);
+    toast('⚠️ Error al procesar importación');
+    if (statusMsg) statusMsg.textContent = 'Error de red o servidor al importar.';
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> Confirmar e Importar al CRM';
+      lucide.createIcons();
+    }
   }
 }
 

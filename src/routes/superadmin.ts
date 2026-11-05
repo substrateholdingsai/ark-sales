@@ -23,6 +23,98 @@ export function interpolateTemplate(text: string, variables: Record<string, any>
   });
 }
 
+// Sincronización automática de disparo de correos al pipeline (Kanban) y bitácora de actividades
+export async function syncEmailDispatchToPipeline(
+  db: any,
+  params: {
+    accountId?: string | null;
+    contactId?: string | null;
+    email?: string | null;
+    subject: string;
+    templateSlug?: string | null;
+    dispatchId?: string | null;
+    resendId?: string | null;
+    userId?: string | null;
+    status: "sent" | "simulated";
+  }
+) {
+  if (!db) return;
+  try {
+    let accId = params.accountId || null;
+    let ctId = params.contactId || null;
+
+    if ((!accId || !ctId) && params.email) {
+      try {
+        const foundContact: any = await db.prepare(
+          "SELECT id, account_id FROM sales_contacts WHERE email = ? LIMIT 1"
+        ).bind(params.email).first();
+        if (foundContact) {
+          if (!ctId) ctId = foundContact.id;
+          if (!accId) accId = foundContact.account_id;
+        }
+      } catch {}
+    }
+
+    if (!accId && !ctId) return;
+
+    // Localizar si existe una oportunidad en sales_opportunities para ese account_id o contact_id
+    let opp: any = null;
+    try {
+      if (accId && ctId) {
+        opp = await db.prepare(
+          "SELECT id, stage, products_interest_json FROM sales_opportunities WHERE account_id = ? OR contact_id = ? ORDER BY created_at DESC LIMIT 1"
+        ).bind(accId, ctId).first();
+      } else if (accId) {
+        opp = await db.prepare(
+          "SELECT id, stage, products_interest_json FROM sales_opportunities WHERE account_id = ? ORDER BY created_at DESC LIMIT 1"
+        ).bind(accId).first();
+      } else if (ctId) {
+        opp = await db.prepare(
+          "SELECT id, stage, products_interest_json FROM sales_opportunities WHERE contact_id = ? ORDER BY created_at DESC LIMIT 1"
+        ).bind(ctId).first();
+      }
+    } catch {}
+
+    let oppId: string;
+    if (opp) {
+      oppId = opp.id;
+      const products = (!opp.products_interest_json || opp.products_interest_json === "[]" || opp.products_interest_json === '""')
+        ? '["ledger_pro"]'
+        : opp.products_interest_json;
+      await db.prepare(`
+        UPDATE sales_opportunities
+        SET stage = 'propuesta_enviada',
+            products_interest_json = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(products, oppId).run();
+    } else {
+      oppId = `opp_${crypto.randomUUID().slice(0, 8)}`;
+      await db.prepare(`
+        INSERT INTO sales_opportunities (id, account_id, contact_id, stage, products_interest_json, estimated_value, currency, created_at, updated_at)
+        VALUES (?, ?, ?, 'propuesta_enviada', '["ledger_pro"]', 399.0, 'MXN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `).bind(oppId, accId, ctId).run();
+    }
+
+    // Registrar o actualizar en sales_activities el evento tipo email con asunto y fecha
+    const activityId = `act_${crypto.randomUUID().slice(0, 8)}`;
+    await db.prepare(`
+      INSERT INTO sales_activities (id, account_id, contact_id, opportunity_id, type, author_user_id, content, metadata_json, created_at)
+      VALUES (?, ?, ?, ?, 'email', ?, ?, ?, CURRENT_TIMESTAMP)
+    `).bind(
+      activityId,
+      accId,
+      ctId,
+      oppId,
+      params.userId || null,
+      `Correo enviado: ${params.subject} (Plantilla: ${params.templateSlug || "manual"})`,
+      JSON.stringify({ dispatch_id: params.dispatchId, resend_id: params.resendId, status: params.status, timestamp: new Date().toISOString() })
+    ).run();
+  } catch (err) {
+    console.warn("[syncEmailDispatchToPipeline] Error syncing to pipeline:", err);
+  }
+}
+
 // -------------------------------------------------------------
 // 1. Resend Status & Test Email
 // -------------------------------------------------------------
@@ -412,8 +504,20 @@ superadminRouter.post("/templates/:id/send", async (c) => {
           errorMessage
         ).run();
 
-        // Si hay account_id, registrar actividad en CRM
-        if (account_id) {
+        // Si el despacho fue exitoso o simulado, sincronizar al pipeline (oportunidad en propuesta_enviada) y bitácora de actividades
+        if (status === "sent" || status === "simulated") {
+          await syncEmailDispatchToPipeline(c.env.DB, {
+            accountId: account_id || null,
+            contactId: contact_id || null,
+            email: to,
+            subject: renderedSubject,
+            templateSlug: template.slug,
+            dispatchId,
+            resendId,
+            userId: c.get("user")?.sub || null,
+            status,
+          });
+        } else if (account_id) {
           await c.env.DB.prepare(`
             INSERT INTO sales_activities (id, account_id, contact_id, type, author_user_id, content, metadata_json, created_at)
             VALUES (?, ?, ?, 'email', ?, ?, ?, CURRENT_TIMESTAMP)
@@ -422,8 +526,8 @@ superadminRouter.post("/templates/:id/send", async (c) => {
             account_id,
             contact_id || null,
             c.get("user")?.sub || null,
-            `Correo enviado: ${renderedSubject} (Plantilla: ${template.slug})`,
-            JSON.stringify({ dispatch_id: dispatchId, resend_id: resendId, status })
+            `Fallo al enviar correo: ${renderedSubject} (Plantilla: ${template.slug})`,
+            JSON.stringify({ dispatch_id: dispatchId, resend_id: resendId, status, error: errorMessage })
           ).run();
         }
       } catch (dbErr) {
@@ -1335,6 +1439,21 @@ superadminRouter.post("/cohorts/:id/launch-email", async (c) => {
                 errorMessage
               )
               .run();
+
+            // Sincronizar al pipeline de oportunidades si el envío fue exitoso o simulado
+            if (status === "sent" || status === "simulated") {
+              await syncEmailDispatchToPipeline(c.env.DB, {
+                accountId: ct.account_id || null,
+                contactId: ct.id || null,
+                email: to,
+                subject,
+                templateSlug: template.slug,
+                dispatchId,
+                resendId,
+                userId: c.get("user")?.sub || null,
+                status,
+              });
+            }
           } catch {}
         }
 

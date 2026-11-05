@@ -4,6 +4,7 @@ import { AuthVariables } from "../auth/middleware";
 import { requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
 import { enrichLeadByVertical } from "../services/contactEnrichment";
+import { handleSheetsImport } from "../services/sheetsImport";
 
 export const crmAccountsRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 crmAccountsRouter.use("*", requireAuth());
@@ -56,7 +57,15 @@ crmAccountsRouter.get("/", async (c) => {
   const size = c.req.query("size");
   const duplicate = c.req.query("duplicate_review_status");
 
-  let sql = "SELECT * FROM sales_accounts WHERE 1=1";
+  let sql = `
+    SELECT sales_accounts.*,
+           CASE WHEN EXISTS (
+             SELECT 1 FROM sales_opportunities opp
+             WHERE opp.account_id = sales_accounts.id AND opp.stage = 'propuesta_enviada'
+           ) THEN 1 ELSE 0 END AS has_proposal_sent
+    FROM sales_accounts
+    WHERE 1=1
+  `;
   const params: any[] = [];
   if (q) {
     sql += " AND (name LIKE ? OR normalized_name LIKE ?)";
@@ -204,6 +213,9 @@ crmAccountsRouter.post("/bulk", requireRole("write"), async (c) => {
     return c.json({ error: err.message || "Error en importación masiva" }, 400);
   }
 });
+// Importador desde Google Sheets / CSV (Cuentas + Contactos + Pipeline)
+crmAccountsRouter.post("/import/sheets", requireRole("write"), handleSheetsImport);
+
 crmAccountsRouter.patch("/:id", requireRole("write"), async (c) => {
   try {
     const id = c.req.param("id");

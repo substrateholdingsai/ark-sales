@@ -20,7 +20,11 @@ crmContactsRouter.get("/", async (c) => {
   const city = (c.req.query("city") || "").trim();
   const q = (c.req.query("q") || "").trim();
   let sql = `
-    SELECT c.*, a.name AS account_name, a.city AS account_city, a.origin AS account_origin, a.scian_code AS account_scian
+    SELECT c.*, a.name AS account_name, a.city AS account_city, a.origin AS account_origin, a.scian_code AS account_scian,
+           CASE WHEN EXISTS (
+             SELECT 1 FROM sales_opportunities opp
+             WHERE (opp.contact_id = c.id OR opp.account_id = c.account_id) AND opp.stage = 'propuesta_enviada'
+           ) THEN 1 ELSE 0 END AS has_proposal_sent
     FROM sales_contacts c
     LEFT JOIN sales_accounts a ON c.account_id = a.id
     WHERE 1=1
