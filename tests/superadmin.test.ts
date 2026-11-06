@@ -129,6 +129,12 @@ function createMockSuperAdminDb() {
               }
               return { success: true };
             }
+            if (s.startsWith("delete from email_templates")) {
+              const target = args[0];
+              const idx = templates.findIndex((t) => t.id === target || t.slug === target);
+              if (idx !== -1) templates.splice(idx, 1);
+              return { success: true };
+            }
             if (s.includes("into email_dispatches")) {
               dispatches.push({
                 id: args[0],
@@ -327,6 +333,22 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
       expect(data.html).toContain("Lic. Roberto Garza");
       expect(data.html).toContain("Auditores del Norte S.C.");
       expect(data.html).toContain("$12,000 MXN/mes");
+    });
+
+    it("permite eliminar una plantilla existente vía DELETE /api/superadmin/templates/:id", async () => {
+      const res = await app.fetch(
+        new Request("http://localhost/api/superadmin/templates/propuesta_enterprise", {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+          },
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const data: any = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.deleted_id).toBe("tmpl_enterprise_proposal");
     });
 
     it("permite enviar correo de prueba en modo simulado registrando en email_dispatches", async () => {

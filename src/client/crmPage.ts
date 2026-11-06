@@ -673,7 +673,12 @@ tailwind.config = {
             <!-- Selector de Plantilla y Modo -->
             <div class="grid sm:grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-mono text-slate-400 mb-1">Plantilla de Campaña</label>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="block text-xs font-mono text-slate-400">Plantilla de Campaña</label>
+                  <button type="button" onclick="borrarPlantillaSeleccionada()" class="text-[11px] font-mono text-rose-400 hover:text-rose-300 hover:bg-rose-950/60 px-2 py-0.5 rounded border border-rose-900/40 flex items-center gap-1 transition-all" title="Eliminar la plantilla seleccionada">
+                    <i data-lucide="trash-2" class="w-3 h-3"></i> Borrar
+                  </button>
+                </div>
                 <select id="emailConsoleTemplateSelect" onchange="onTemplateSelectChange()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-ark-blue">
                   <option value="gancho_landing_30dias">🚀 Ark Commerce · Gancho 30 Días Gratis</option>
                   <option value="tmpl_ark_ledger_invitacion_despachos">⚖️ Ark Ledger · Despachos Contables</option>
@@ -3695,14 +3700,47 @@ async function loadTemplatesForConsole() {
     if (res && res.templates) {
       cachedTemplates = res.templates;
       const select = document.getElementById('emailConsoleTemplateSelect');
-      if (select && cachedTemplates.length) {
-        select.innerHTML = cachedTemplates.map(t => \`<option value="\${t.slug}">\${t.name}</option>\`).join('');
+      if (select) {
+        if (cachedTemplates.length) {
+          select.innerHTML = cachedTemplates.map(t => \`<option value="\${t.slug}">\${t.name}</option>\`).join('');
+        } else {
+          select.innerHTML = '<option value="">Sin plantillas disponibles</option>';
+        }
       }
     }
   } catch(e) {
     console.warn('Error loading templates:', e);
   }
   onTemplateSelectChange();
+}
+
+async function borrarPlantillaSeleccionada() {
+  const select = document.getElementById('emailConsoleTemplateSelect');
+  const slug = select ? select.value : '';
+  if (!slug) {
+    toast('⚠️ No hay ninguna plantilla seleccionada');
+    return;
+  }
+  const tmpl = (cachedTemplates || []).find(t => t.slug === slug || t.id === slug);
+  const nombre = tmpl ? tmpl.name : slug;
+  const templateId = tmpl ? tmpl.id : slug;
+
+  if (!confirm('¿Estás seguro de que deseas eliminar permanentemente la plantilla "' + nombre + '"?\\nEsta acción no se puede deshacer.')) {
+    return;
+  }
+
+  try {
+    const res = await apiCall('/api/superadmin/templates/' + encodeURIComponent(templateId), 'DELETE');
+    if (res && res.error) {
+      toast('⚠️ ' + (res.details || res.error));
+      return;
+    }
+    toast('🗑️ Plantilla "' + nombre + '" eliminada correctamente.');
+    await loadTemplatesForConsole();
+    lucide.createIcons();
+  } catch(e) {
+    toast('Error al eliminar la plantilla');
+  }
 }
 
 function onTemplateSelectChange() {

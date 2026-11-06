@@ -349,6 +349,47 @@ superadminRouter.put("/templates/:id", async (c) => {
   }
 });
 
+superadminRouter.delete("/templates/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+    if (!c.env.DB) {
+      return c.json({ error: "Base de datos D1 no disponible" }, 503);
+    }
+
+    const template: any = await c.env.DB.prepare(
+      "SELECT id, name, slug FROM email_templates WHERE id = ? OR slug = ?"
+    ).bind(id, id).first();
+
+    if (!template) {
+      return c.json({ error: "Plantilla no encontrada" }, 404);
+    }
+
+    await c.env.DB.prepare(
+      "DELETE FROM email_templates WHERE id = ? OR slug = ?"
+    ).bind(id, id).run();
+
+    try {
+      await new AuditService(c.env.DB).record({
+        actor_user_id: c.get("user")?.sub,
+        actor_email: c.get("user")?.email,
+        action: "template_delete",
+        entity_type: "email_template",
+        entity_id: template.id,
+        metadata: { slug: template.slug, name: template.name },
+        ip: clientIp(c),
+      });
+    } catch {}
+
+    return c.json({
+      success: true,
+      message: `Plantilla '${template.name}' (${template.slug}) eliminada correctamente.`,
+      deleted_id: template.id,
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message || "Error al eliminar plantilla" }, 500);
+  }
+});
+
 // Previsualización en vivo con variables dinámicas
 superadminRouter.post("/templates/:id/preview", async (c) => {
   try {
