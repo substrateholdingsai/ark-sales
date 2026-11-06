@@ -4,6 +4,7 @@ import { AuthVariables } from "../auth/middleware";
 import { requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
 import { enrichLeadByVertical } from "../services/contactEnrichment";
+import { resolveTenantId } from "./crmAccounts";
 
 export const crmContactsRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 crmContactsRouter.use("*", requireAuth());
@@ -19,8 +20,10 @@ crmContactsRouter.get("/", async (c) => {
   const accountId = c.req.query("account_id");
   const city = (c.req.query("city") || "").trim();
   const q = (c.req.query("q") || "").trim();
+  const tenantFilter = c.req.query("tenant") || c.req.query("tenant_id");
+
   let sql = `
-    SELECT c.*, a.name AS account_name, a.city AS account_city, a.origin AS account_origin, a.scian_code AS account_scian,
+    SELECT c.*, a.name AS account_name, a.city AS account_city, a.origin AS account_origin, a.scian_code AS account_scian, a.tenant_id AS account_tenant_id,
            CASE WHEN EXISTS (
              SELECT 1 FROM sales_opportunities opp
              WHERE (opp.contact_id = c.id OR opp.account_id = c.account_id) AND opp.stage = 'propuesta_enviada'
@@ -30,18 +33,6 @@ crmContactsRouter.get("/", async (c) => {
     WHERE 1=1
   `;
   const params: any[] = [];
-  if (accountId) { sql += " AND c.account_id = ?"; params.push(accountId); }
-  if (city) { sql += " AND a.city LIKE ?"; params.push(`%${city}%`); }
-  if (q) {
-    sql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.whatsapp LIKE ? OR a.name LIKE ? OR a.city LIKE ?)";
-    params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
-  }
-  sql += " ORDER BY c.created_at DESC LIMIT ? OFFSET ?";
-  params.push(limit, offset);
-  const stmt = c.env.DB.prepare(sql);
-  const bound = params.length ? stmt.bind(...params) : stmt;
-  const { results } = await bound.all();
-
   let countSql = `
     SELECT COUNT(*) as n
     FROM sales_contacts c
@@ -49,17 +40,80 @@ crmContactsRouter.get("/", async (c) => {
     WHERE 1=1
   `;
   const cparams: any[] = [];
-  if (accountId) { countSql += " AND c.account_id = ?"; cparams.push(accountId); }
-  if (city) { countSql += " AND a.city LIKE ?"; cparams.push(`%${city}%`); }
+
+  if (tenantFilter === "acc_futura_capital") {
+    const clause = ` AND (
+      a.tenant_id = 'acc_futura_capital' OR 
+      a.scian_code LIKE '62%' OR 
+      a.scian_code IN ('531210', '531311', '523920', '484111', '484121', '493111', '488511', '721111', '721190', '531110', '551110', '621111', '621112', '621211', '621399', '621511', '622111') OR
+      a.id LIKE '%futura%' OR
+      a.name LIKE '%futura capital%' OR
+      a.origin LIKE '%futura%' OR
+      a.origin LIKE '%proptech%' OR
+      a.origin LIKE '%inmobiliaria%' OR
+      a.harvest_source LIKE '%hermes%' OR
+      a.harvest_source LIKE '%vektor%'
+    )`;
+    sql += clause;
+    countSql += clause;
+  } else if (tenantFilter === "acc_ark_ledger") {
+    const clause = ` AND (
+      (a.tenant_id = 'acc_ark_ledger' OR a.tenant_id IS NULL) AND
+      (a.scian_code NOT LIKE '62%' OR a.scian_code IS NULL) AND
+      (a.scian_code NOT IN ('531210', '531311', '523920', '484111', '484121', '493111', '488511', '721111', '721190', '531110', '551110') OR a.scian_code IS NULL) AND
+      a.id NOT LIKE '%futura%' AND
+      a.name NOT LIKE '%futura capital%' AND
+      a.origin NOT LIKE '%futura%' AND
+      a.harvest_source NOT LIKE '%hermes%' AND
+      a.harvest_source NOT LIKE '%vektor%'
+    )`;
+    sql += clause;
+    countSql += clause;
+  } else if (tenantFilter) {
+    sql += " AND a.tenant_id = ?";
+    params.push(tenantFilter);
+    countSql += " AND a.tenant_id = ?";
+    cparams.push(tenantFilter);
+  }
+
+  if (accountId) {
+    sql += " AND c.account_id = ?"; params.push(accountId);
+    countSql += " AND c.account_id = ?"; cparams.push(accountId);
+  }
+  if (city) {
+    sql += " AND a.city LIKE ?"; params.push(`%${city}%`);
+    countSql += " AND a.city LIKE ?"; cparams.push(`%${city}%`);
+  }
   if (q) {
+    sql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.whatsapp LIKE ? OR a.name LIKE ? OR a.city LIKE ?)";
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
     countSql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.whatsapp LIKE ? OR a.name LIKE ? OR a.city LIKE ?)";
     cparams.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
+
+  sql += " ORDER BY c.created_at DESC LIMIT ? OFFSET ?";
+  params.push(limit, offset);
+
+  const stmt = c.env.DB.prepare(sql);
+  const bound = params.length ? stmt.bind(...params) : stmt;
+  const { results } = await bound.all();
+
   const countStmt = c.env.DB.prepare(countSql);
   const countBound = cparams.length ? countStmt.bind(...cparams) : countStmt;
   const countRow: any = await countBound.first();
 
-  return c.json({ items: results || [], total: countRow?.n ?? (results?.length ?? 0), limit, offset });
+  const items = (results || []).map((row: any) => ({
+    ...row,
+    tenant_id: resolveTenantId({
+      id: row.account_id,
+      name: row.account_name,
+      tenant_id: row.account_tenant_id,
+      scian_code: row.account_scian,
+      origin: row.account_origin
+    })
+  }));
+
+  return c.json({ items, total: countRow?.n ?? (results?.length ?? 0), limit, offset });
 });
 
 crmContactsRouter.get("/:id", async (c) => {

@@ -11,19 +11,20 @@ crmAccountsRouter.use("*", requireAuth());
 
 const FUTURA_SCIANS = new Set([
   "531210", "531311", "523920",
-  "621111", "621112", "621211", "621511", "622111",
+  "621111", "621112", "621113", "621211", "621399", "621410", "621420", "621490", "621511", "621990", "622111", "622110", "622210", "622310",
   "484111", "484121", "493111", "488511",
   "721111", "721190", "531110", "551110"
 ]);
 
-export function resolveTenantId(a: any): string {
-  if (a.tenant_id) return a.tenant_id;
+export function isFuturaAccount(a: any): boolean {
+  if (!a) return false;
+  if (a.tenant_id === "acc_futura_capital") return true;
+  const scian = String(a.scian_code || "").trim();
+  if (scian.startsWith("62") || FUTURA_SCIANS.has(scian)) return true;
   const id = String(a.id || "").toLowerCase();
   const name = String(a.name || "").toLowerCase();
   const origin = String(a.origin || "").toLowerCase();
   const source = String(a.harvest_source || a.origin || "").toLowerCase();
-  const scian = String(a.scian_code || "").trim();
-
   if (
     id.includes("futura") ||
     name.includes("futura capital") ||
@@ -33,13 +34,14 @@ export function resolveTenantId(a: any): string {
     source.includes("hermes") ||
     source.includes("vektor")
   ) {
-    return "acc_futura_capital";
+    return true;
   }
+  return false;
+}
 
-  if (scian && FUTURA_SCIANS.has(scian)) {
-    return "acc_futura_capital";
-  }
-
+export function resolveTenantId(a: any): string {
+  if (isFuturaAccount(a)) return "acc_futura_capital";
+  if (a.tenant_id) return a.tenant_id;
   return "acc_ark_ledger";
 }
 
@@ -56,6 +58,7 @@ crmAccountsRouter.get("/", async (c) => {
   const origin = c.req.query("origin");
   const size = c.req.query("size");
   const duplicate = c.req.query("duplicate_review_status");
+  const tenantFilter = c.req.query("tenant") || c.req.query("tenant_id");
 
   let sql = `
     SELECT sales_accounts.*,
@@ -67,13 +70,63 @@ crmAccountsRouter.get("/", async (c) => {
     WHERE 1=1
   `;
   const params: any[] = [];
+  let countSql = "SELECT COUNT(*) as n FROM sales_accounts WHERE 1=1";
+  const cparams: any[] = [];
+
+  if (tenantFilter === "acc_futura_capital") {
+    const clause = ` AND (
+      sales_accounts.tenant_id = 'acc_futura_capital' OR 
+      sales_accounts.scian_code LIKE '62%' OR 
+      sales_accounts.scian_code IN ('531210', '531311', '523920', '484111', '484121', '493111', '488511', '721111', '721190', '531110', '551110', '621111', '621112', '621211', '621399', '621511', '622111') OR
+      sales_accounts.id LIKE '%futura%' OR
+      sales_accounts.name LIKE '%futura capital%' OR
+      sales_accounts.origin LIKE '%futura%' OR
+      sales_accounts.origin LIKE '%proptech%' OR
+      sales_accounts.origin LIKE '%inmobiliaria%' OR
+      sales_accounts.harvest_source LIKE '%hermes%' OR
+      sales_accounts.harvest_source LIKE '%vektor%'
+    )`;
+    sql += clause;
+    countSql += clause;
+  } else if (tenantFilter === "acc_ark_ledger") {
+    const clause = ` AND (
+      (sales_accounts.tenant_id = 'acc_ark_ledger' OR sales_accounts.tenant_id IS NULL) AND
+      (sales_accounts.scian_code NOT LIKE '62%' OR sales_accounts.scian_code IS NULL) AND
+      (sales_accounts.scian_code NOT IN ('531210', '531311', '523920', '484111', '484121', '493111', '488511', '721111', '721190', '531110', '551110') OR sales_accounts.scian_code IS NULL) AND
+      sales_accounts.id NOT LIKE '%futura%' AND
+      sales_accounts.name NOT LIKE '%futura capital%' AND
+      sales_accounts.origin NOT LIKE '%futura%' AND
+      sales_accounts.harvest_source NOT LIKE '%hermes%' AND
+      sales_accounts.harvest_source NOT LIKE '%vektor%'
+    )`;
+    sql += clause;
+    countSql += clause;
+  } else if (tenantFilter) {
+    sql += " AND sales_accounts.tenant_id = ?";
+    params.push(tenantFilter);
+    countSql += " AND sales_accounts.tenant_id = ?";
+    cparams.push(tenantFilter);
+  }
+
   if (q) {
     sql += " AND (name LIKE ? OR normalized_name LIKE ?)";
     params.push(`%${q}%`, `%${q.toLowerCase()}%`);
+    countSql += " AND (name LIKE ? OR normalized_name LIKE ?)";
+    cparams.push(`%${q}%`, `%${q.toLowerCase()}%`);
   }
-  if (origin) { sql += " AND origin = ?"; params.push(origin); }
-  if (size) { sql += " AND size = ?"; params.push(size); }
-  if (duplicate) { sql += " AND duplicate_review_status = ?"; params.push(duplicate); }
+  if (origin) {
+    sql += " AND origin = ?"; params.push(origin);
+    countSql += " AND origin = ?"; cparams.push(origin);
+  }
+  if (size) {
+    sql += " AND size = ?"; params.push(size);
+    countSql += " AND size = ?"; cparams.push(size);
+  }
+  if (duplicate) {
+    sql += " AND duplicate_review_status = ?"; params.push(duplicate);
+    countSql += " AND duplicate_review_status = ?"; cparams.push(duplicate);
+  }
+
   sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
 
@@ -81,13 +134,6 @@ crmAccountsRouter.get("/", async (c) => {
   const bound = params.length ? stmt.bind(...params) : stmt;
   const { results } = await bound.all();
 
-  // total count
-  let countSql = "SELECT COUNT(*) as n FROM sales_accounts WHERE 1=1";
-  const cparams: any[] = [];
-  if (q) { countSql += " AND (name LIKE ? OR normalized_name LIKE ?)"; cparams.push(`%${q}%`, `%${q.toLowerCase()}%`); }
-  if (origin) { countSql += " AND origin = ?"; cparams.push(origin); }
-  if (size) { countSql += " AND size = ?"; cparams.push(size); }
-  if (duplicate) { countSql += " AND duplicate_review_status = ?"; cparams.push(duplicate); }
   const countStmt = c.env.DB.prepare(countSql);
   const countBound = cparams.length ? countStmt.bind(...cparams) : countStmt;
   const countRow: any = await countBound.first();
@@ -97,7 +143,6 @@ crmAccountsRouter.get("/", async (c) => {
     tenant_id: resolveTenantId(row)
   }));
 
-  const tenantFilter = c.req.query("tenant") || c.req.query("tenant_id");
   if (tenantFilter) {
     items = items.filter((row: any) => row.tenant_id === tenantFilter);
   }

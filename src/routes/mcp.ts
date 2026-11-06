@@ -197,8 +197,15 @@ async function consultarLeadsD1(env: Env, args: any, tenantRestringido?: string)
   // Filtro de Tenant flexible
   if (tenant) {
     const rawTenant = tenant.replace(/^acc_/, "");
-    sql += " AND (a.origin LIKE ? OR a.origin LIKE ? OR a.id = ?)";
-    params.push(`%${tenant}%`, `%${rawTenant}%`, tenant);
+    if (tenant === "acc_futura_capital" || rawTenant === "futura_capital") {
+      sql += " AND (a.tenant_id = 'acc_futura_capital' OR a.scian_code LIKE '62%' OR a.origin LIKE '%futura%' OR a.id = ?)";
+      params.push(tenant);
+    } else if (tenant === "acc_ark_ledger" || rawTenant === "ark_ledger") {
+      sql += " AND (a.tenant_id = 'acc_ark_ledger' AND (a.scian_code NOT LIKE '62%' OR a.scian_code IS NULL))";
+    } else {
+      sql += " AND (a.tenant_id = ? OR a.origin LIKE ? OR a.origin LIKE ? OR a.id = ?)";
+      params.push(tenant, `%${tenant}%`, `%${rawTenant}%`, tenant);
+    }
   }
 
   // Filtro de Plaza

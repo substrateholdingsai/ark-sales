@@ -347,7 +347,7 @@ tailwind.config = {
           <option value="21-50">21-50 empleados</option>
           <option value="50+">50+ empleados</option>
         </select>
-        <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue" id="filtroTenant" onchange="filtrarCuentas()">
+        <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue" id="filtroTenant" onchange="cambiarFiltroTenant(this.value)">
           <option value="">Tenant (todos)</option>
           <option value="acc_ark_ledger">Ark Ledger</option>
           <option value="acc_futura_capital">Futura Capital</option>
@@ -404,6 +404,11 @@ tailwind.config = {
           </div>
         </div>
         <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          <select id="filtroContactosTenant" onchange="cambiarFiltroTenantContactos(event)" class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-ark-blue font-medium cursor-pointer">
+            <option value="">🏢 Tenant (Todos)</option>
+            <option value="acc_ark_ledger">Ark Ledger</option>
+            <option value="acc_futura_capital">Futura Capital</option>
+          </select>
           <select id="filtroContactosCiudad" onchange="cambiarFiltroCiudadContactos(event)" class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-ark-blue font-medium cursor-pointer">
             <option value="">📍 Ciudad (Todas)</option>
           </select>
@@ -1335,11 +1340,15 @@ async function loadMetrics() {
   } catch (e) { console.error('loadMetrics error:', e); }
 }
 
-async function loadAccounts() {
+async function loadAccounts(tenant = '') {
   try {
-    // Paginación prudente para evitar agotar la cuota de lectura diaria de Cloudflare D1
-    const data = await apiCall('/api/crm/accounts?limit=100&offset=0');
+    const tVal = tenant || document.getElementById('filtroTenant')?.value || '';
+    const url = tVal 
+      ? '/api/crm/accounts?limit=100&offset=0&tenant=' + encodeURIComponent(tVal)
+      : '/api/crm/accounts?limit=100&offset=0';
+    const data = await apiCall(url);
     state.accounts = (data && data.items) || [];
+    state.accountsTotal = data?.total ?? state.accounts.length;
     actualizarOpcionesFiltroCiudades();
   } catch (e) { console.error('loadAccounts error:', e); }
 }
@@ -1351,10 +1360,15 @@ async function loadOpportunities() {
   } catch (e) { console.error('loadOpportunities error:', e); }
 }
 
-async function loadContacts() {
+async function loadContacts(tenant = '') {
   try {
-    const data = await apiCall('/api/crm/contacts?limit=100&offset=0');
+    const tVal = tenant || filtroContactosTenant || '';
+    const url = tVal 
+      ? '/api/crm/contacts?limit=100&offset=0&tenant=' + encodeURIComponent(tVal)
+      : '/api/crm/contacts?limit=100&offset=0';
+    const data = await apiCall(url);
     state.contacts = (data && data.items) || [];
+    state.contactsTotal = data?.total ?? state.contacts.length;
     actualizarOpcionesFiltroCiudades();
   } catch (e) { console.error('loadContacts error:', e); }
 }
@@ -1548,21 +1562,30 @@ async function renderCuentas() {
   filtrarCuentas();
 }
 
+async function cambiarFiltroTenant(val) {
+  await loadAccounts(val);
+  filtrarCuentas();
+}
+
 const FUTURA_SCIANS = new Set([
   '531210', '531311', '523920',
-  '621111', '621112', '621211', '621511', '622111',
+  '621111', '621112', '621113', '621211', '621399', '621410', '621420', '621490', '621511', '621990', '622111', '622110', '622210', '622310',
   '484111', '484121', '493111', '488511',
   '721111', '721190', '531110', '551110'
 ]);
 
 function getAccountTenant(a) {
-  if (a && a.tenant_id) return a.tenant_id;
   if (!a) return 'acc_ark_ledger';
+  if (a.tenant_id === 'acc_futura_capital') return 'acc_futura_capital';
+  const scian = String(a.scian_code || '').trim();
+  if (scian.startsWith('62') || FUTURA_SCIANS.has(scian)) {
+    return 'acc_futura_capital';
+  }
+  if (a.tenant_id && a.tenant_id !== 'acc_ark_ledger') return a.tenant_id;
   const id = String(a.id || '').toLowerCase();
   const name = String(a.name || '').toLowerCase();
   const origin = String(a.origin || '').toLowerCase();
   const source = String(a.harvest_source || '').toLowerCase();
-  const scian = String(a.scian_code || '').trim();
 
   if (
     id.includes('futura') ||
@@ -1571,8 +1594,7 @@ function getAccountTenant(a) {
     origin.includes('proptech') ||
     origin.includes('inmobiliaria') ||
     source.includes('hermes') ||
-    source.includes('vektor') ||
-    FUTURA_SCIANS.has(scian)
+    source.includes('vektor')
   ) {
     return 'acc_futura_capital';
   }
@@ -1594,7 +1616,8 @@ function filtrarCuentas() {
     });
   }
 
-  document.getElementById('cuentasSub').textContent = \`\${list.length} de \${state.accounts.length} cuentas registradas en D1\`;
+  const totalNum = state.accountsTotal || state.accounts.length;
+  document.getElementById('cuentasSub').textContent = \`\${list.length} mostrados (de \${totalNum} registrados en D1)\`;
 
   const body = document.getElementById('cuentasBody');
   body.innerHTML = list.length === 0
@@ -2137,6 +2160,14 @@ let sortContactos = { campo: 'name', dir: 'asc' };
 let filtroContactosTexto = '';
 let filtroContactosTab = 'todos';
 let filtroContactosCiudad = '';
+let filtroContactosTenant = '';
+
+async function cambiarFiltroTenantContactos(e) {
+  filtroContactosTenant = (e.target?.value || '').trim();
+  await loadContacts(filtroContactosTenant);
+  paginaContactos = 1;
+  renderContactos();
+}
 
 function cambiarFiltroCiudadContactos(e) {
   filtroContactosCiudad = (e.target.value || '').trim();
@@ -2380,6 +2411,14 @@ async function renderContactos() {
     });
   }
 
+  if (filtroContactosTenant) {
+    list = list.filter(c => {
+      const acc = (state.accounts || []).find(a => a.id === c.account_id);
+      const tid = c.tenant_id || (acc ? getAccountTenant(acc) : '');
+      return tid === filtroContactosTenant;
+    });
+  }
+
   if (filtroContactosTexto) {
     const q = filtroContactosTexto.toLowerCase();
     list = list.filter(c => {
@@ -2447,11 +2486,12 @@ async function renderContactos() {
 
   const sub = document.getElementById('contactosSub');
   if (sub) {
+    const totalRegistrados = state.contactsTotal || contacts.length;
     sub.textContent = totalItems === 0
       ? '0 contactos'
-      : (filtroContactosTexto || filtroContactosTab !== 'todos')
-        ? (totalItems + ' de ' + contacts.length + ' contactos (Pág. ' + paginaContactos + ' de ' + totalPaginasContactos + ')')
-        : (contacts.length + ' contactos registrados (Pág. ' + paginaContactos + ' de ' + totalPaginasContactos + ')');
+      : (filtroContactosTexto || filtroContactosTab !== 'todos' || filtroContactosTenant)
+        ? (totalItems + ' mostrados de ' + totalRegistrados + ' en D1 (Pág. ' + paginaContactos + ' de ' + totalPaginasContactos + ')')
+        : (totalRegistrados + ' contactos registrados en D1 (Pág. ' + paginaContactos + ' de ' + totalPaginasContactos + ')');
   }
 
   // Actualizar indicadores numéricos de paginación

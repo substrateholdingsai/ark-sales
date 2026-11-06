@@ -1087,17 +1087,23 @@ document.getElementById('newVoiceCampaignForm').addEventListener('submit', async
 // TENANTS OVERVIEW
 // -------------------------------------------------------------
 async function loadTenantsOverview() {
-  const data = await API('/api/superadmin/tenants/overview');
+  const selectedTenant = document.getElementById('overviewTenantFilter')?.value || '';
+  const url = selectedTenant 
+    ? '/api/superadmin/tenants/overview?tenant=' + encodeURIComponent(selectedTenant) + '&limit=1000'
+    : '/api/superadmin/tenants/overview?limit=1000';
+  const data = await API(url);
   allTenants = data.tenants || [];
 
   // Update tenant selectors
   const filterSelect = document.getElementById('tenantFilterSelect');
   const vcampSelect = document.getElementById('vcampTenantSelect');
   const orderTenantSelect = document.getElementById('orderTenantSelect');
-  const opts = '<option value="">Todos los Despachos (Global)</option>' + allTenants.map(t => '<option value="' + t.id + '">' + t.name + ' (' + (t.city || 'MX') + ')</option>').join('');
-  filterSelect.innerHTML = opts;
-  vcampSelect.innerHTML = opts;
-  if (orderTenantSelect) {
+  if (filterSelect && (!filterSelect.options || filterSelect.options.length <= 1)) {
+    const opts = '<option value="">Todos los Despachos (Global)</option>' + allTenants.map(t => '<option value="' + t.id + '">' + t.name + ' (' + (t.city || 'MX') + ')</option>').join('');
+    filterSelect.innerHTML = opts;
+    if (vcampSelect) vcampSelect.innerHTML = opts;
+  }
+  if (orderTenantSelect && (!orderTenantSelect.options || orderTenantSelect.options.length <= 1)) {
     orderTenantSelect.innerHTML = '<option value="">Seleccionar despacho registrado o manual...</option>' + allTenants.map(t => '<option value="' + t.id + '">' + t.name + '</option>').join('');
   }
 
@@ -1151,7 +1157,9 @@ window.openTenantCampaign = function(tenantId, tenantName) {
 };
 
 document.getElementById('refreshTenantsBtn').addEventListener('click', loadTenantsOverview);
-document.getElementById('overviewTenantFilter')?.addEventListener('change', renderTenantsTable);
+document.getElementById('overviewTenantFilter')?.addEventListener('change', () => {
+  loadTenantsOverview();
+});
 document.getElementById('exportTenantsCsvBtn')?.addEventListener('click', () => {
   if (!allTenants || !allTenants.length) {
     alert('No hay tenants cargados para exportar');

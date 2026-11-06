@@ -976,11 +976,42 @@ superadminRouter.get("/voice/sessions", async (c) => {
 // -------------------------------------------------------------
 superadminRouter.get("/tenants/overview", async (c) => {
   let accounts: any[] = [];
+  const tenantFilter = c.req.query("tenant") || c.req.query("tenant_id");
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "1000", 10) || 1000, 1), 2000);
+  const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
+
   if (c.env.DB) {
     try {
+      let whereClause = "WHERE 1=1";
+      if (tenantFilter === "acc_futura_capital") {
+        whereClause += ` AND (
+          a.tenant_id = 'acc_futura_capital' OR 
+          a.scian_code LIKE '62%' OR 
+          a.scian_code IN ('531210', '531311', '523920', '484111', '484121', '493111', '488511', '721111', '721190', '531110', '551110', '621111', '621112', '621211', '621399', '621511', '622111') OR
+          a.id LIKE '%futura%' OR
+          a.name LIKE '%futura capital%' OR
+          a.origin LIKE '%futura%' OR
+          a.harvest_source LIKE '%hermes%' OR
+          a.harvest_source LIKE '%vektor%'
+        )`;
+      } else if (tenantFilter === "acc_ark_ledger") {
+        whereClause += ` AND (
+          (a.tenant_id = 'acc_ark_ledger' OR a.tenant_id IS NULL) AND
+          (a.scian_code NOT LIKE '62%' OR a.scian_code IS NULL) AND
+          (a.scian_code NOT IN ('531210', '531311', '523920', '484111', '484121', '493111', '488511', '721111', '721190', '531110', '551110') OR a.scian_code IS NULL) AND
+          a.id NOT LIKE '%futura%' AND
+          a.name NOT LIKE '%futura capital%' AND
+          a.origin NOT LIKE '%futura%' AND
+          a.harvest_source NOT LIKE '%hermes%' AND
+          a.harvest_source NOT LIKE '%vektor%'
+        )`;
+      } else if (tenantFilter) {
+        whereClause += ` AND a.tenant_id = '${tenantFilter.replace(/'/g, "")}'`;
+      }
+
       const res = await c.env.DB.prepare(`
         SELECT 
-          a.id, a.name, a.size, a.city, a.origin, a.scian_code, a.harvest_source, a.created_at,
+          a.id, a.name, a.size, a.city, a.origin, a.scian_code, a.tenant_id, a.harvest_source, a.created_at,
           COUNT(DISTINCT c.id) as total_contacts,
           COUNT(DISTINCT o.id) as total_opportunities,
           COUNT(DISTINCT d.id) as total_emails_sent,
@@ -990,13 +1021,20 @@ superadminRouter.get("/tenants/overview", async (c) => {
         LEFT JOIN sales_opportunities o ON o.account_id = a.id
         LEFT JOIN email_dispatches d ON (d.account_id = a.id OR d.tenant_id = a.id)
         LEFT JOIN sales_voice_sessions v ON (v.account_id = a.id)
+        ${whereClause}
         GROUP BY a.id
         ORDER BY a.name ASC
-      `).all();
+        LIMIT ? OFFSET ?
+      `).bind(limit, offset).all();
+
       accounts = (res.results || []).map((row: any) => ({
         ...row,
         tenant_id: resolveTenantId(row),
       }));
+
+      if (tenantFilter) {
+        accounts = accounts.filter((row: any) => row.tenant_id === tenantFilter);
+      }
     } catch (e) {
       console.warn("[superadmin:tenants] Error aggregating tenants:", e);
     }
@@ -1005,6 +1043,8 @@ superadminRouter.get("/tenants/overview", async (c) => {
   return c.json({
     count: accounts.length,
     tenants: accounts,
+    limit,
+    offset
   });
 });
 
