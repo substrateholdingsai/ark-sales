@@ -141,6 +141,8 @@ class SipresHarvester(BaseHarvester):
             return
 
         tls_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        intermediate_ca = Path(__file__).parent / "certs" / "GeoTrustTLSRSACAG1.pem"
+        tls_context.load_verify_locations(cafile=str(intermediate_ca))
         async with httpx.AsyncClient(
             timeout=60.0,
             follow_redirects=True,

@@ -35,6 +35,8 @@ python -m lead_harvester.main --profile fintech_credit_app --plaza cdmx --limit 
 
 `sipres_sofom` consulta el registro público de [SIPRES](https://webapps.condusef.gob.mx/SIPRES/jsp/pub/index.jsp) con los sectores SOFOM E.N.R. y E.R. y filtra el estatus “En operación”. Prioriza nombres con referencias a crédito, préstamos, financiamiento, consumo o nómina, pero esa selección no confirma uso de app ni que el crédito sea el producto principal. El registro contiene datos corporativos de la institución; el sitio y las señales públicas deben revisarse antes de contacto comercial.
 
+Las conexiones HTTPS conservan la validación TLS del sistema y cargan el certificado intermedio GeoTrust publicado por DigiCert porque el servidor SIPRES no lo envía en su cadena.
+
 El límite de SIPRES es de 50 instituciones por ejecución. Para obtener una vista previa local sin ingesta, scoring externo ni escrituras a CRM:
 
 ```bash
