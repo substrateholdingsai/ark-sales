@@ -134,7 +134,14 @@ crmAccountsRouter.get("/:id", async (c) => {
 
   const { results: contacts } = await c.env.DB.prepare("SELECT * FROM sales_contacts WHERE account_id = ? ORDER BY created_at DESC").bind(id).all();
   const { results: opportunities } = await c.env.DB.prepare("SELECT * FROM sales_opportunities WHERE account_id = ? ORDER BY created_at DESC").bind(id).all();
-  const { results: activities } = await c.env.DB.prepare("SELECT * FROM sales_activities WHERE account_id = ? ORDER BY created_at DESC LIMIT 50").bind(id).all();
+  const { results: activities } = await c.env.DB.prepare(`
+    SELECT a.*, u.name AS author_name
+    FROM sales_activities a
+    LEFT JOIN crm_users u ON u.id = a.author_user_id
+    WHERE a.account_id = ?
+    ORDER BY a.created_at DESC
+    LIMIT 50
+  `).bind(id).all();
   const { results: tasks } = await c.env.DB.prepare("SELECT * FROM sales_tasks WHERE account_id = ? ORDER BY created_at DESC").bind(id).all();
   const { results: leads } = await c.env.DB.prepare("SELECT * FROM sales_leads WHERE account_id = ? ORDER BY created_at DESC").bind(id).all();
 

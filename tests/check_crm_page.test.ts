@@ -26,6 +26,15 @@ describe("Validate Client HTML Output", () => {
     expect(html).toContain("🏰 Campeche");
   });
 
+  it("renders note follow-up actions with a due date and current-user assignment", () => {
+    const html = renderCrmHtml();
+    expect(html).toContain("Crear seguimiento");
+    expect(html).toContain("crearSeguimientoDesdeNota(event, this)");
+    expect(html).toContain("owner_user_id: state.user.id");
+    expect(html).toContain("Fecha de vencimiento");
+    expect(html).toContain("Guardar tarea");
+  });
+
   it("renderSuperAdminHtml must contain valid JavaScript in all script tags", () => {
     const html = renderSuperAdminHtml();
     expect(html).toContain("<!DOCTYPE html>");

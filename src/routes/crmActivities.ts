@@ -42,12 +42,49 @@ crmActivitiesRouter.post("/", requireRole("write"), async (c) => {
     const validTypes = ["note","call","email","demo","stage_change","task","system"];
     if (!validTypes.includes(type)) return c.json({ error: "Tipo de actividad inválido." }, 400);
 
-    const id = `act_${crypto.randomUUID()}`;
-    const accountId = body?.account_id ?? null;
+    const rawContent = typeof body?.content === "string" ? body.content : null;
+    const noteContent = rawContent?.trim() || "";
+    if (type === "note" && !noteContent) {
+      return c.json({ error: "El texto de la nota es obligatorio." }, 400);
+    }
+    if (type === "note" && noteContent.length > 10000) {
+      return c.json({ error: "La nota no puede exceder 10,000 caracteres." }, 400);
+    }
+    const content = type === "note" ? noteContent : rawContent;
+
+    let accountId = body?.account_id ?? null;
     const contactId = body?.contact_id ?? null;
     const opportunityId = body?.opportunity_id ?? null;
     const leadId = body?.lead_id ?? null;
-    const content = body?.content ?? null;
+
+    if (accountId) {
+      const account = await c.env.DB.prepare("SELECT id FROM sales_accounts WHERE id = ?").bind(accountId).first();
+      if (!account) return c.json({ error: "La cuenta asociada no existe." }, 400);
+    }
+    if (contactId) {
+      const contact: any = await c.env.DB.prepare("SELECT id, account_id FROM sales_contacts WHERE id = ?").bind(contactId).first();
+      if (!contact) return c.json({ error: "El contacto asociado no existe." }, 400);
+      if (accountId && contact.account_id !== accountId) {
+        return c.json({ error: "El contacto no pertenece a la cuenta indicada." }, 400);
+      }
+      accountId = accountId || contact.account_id;
+    }
+    if (opportunityId) {
+      const opportunity: any = await c.env.DB.prepare("SELECT id, account_id, contact_id FROM sales_opportunities WHERE id = ?").bind(opportunityId).first();
+      if (!opportunity) return c.json({ error: "La oportunidad asociada no existe." }, 400);
+      if (accountId && opportunity.account_id !== accountId) {
+        return c.json({ error: "La oportunidad no pertenece a la cuenta indicada." }, 400);
+      }
+      if (contactId && opportunity.contact_id && opportunity.contact_id !== contactId) {
+        return c.json({ error: "La oportunidad no corresponde al contacto indicado." }, 400);
+      }
+      accountId = accountId || opportunity.account_id;
+    }
+    if (type === "note" && !accountId && !contactId && !opportunityId) {
+      return c.json({ error: "La nota debe asociarse a una cuenta, contacto u oportunidad." }, 400);
+    }
+
+    const id = `act_${crypto.randomUUID()}`;
     const metadata = body?.metadata ? JSON.stringify(body.metadata) : null;
 
     await c.env.DB.prepare(`
@@ -66,7 +103,12 @@ crmActivitiesRouter.post("/", requireRole("write"), async (c) => {
       ip: clientIp(c),
     });
 
-    const activity = await c.env.DB.prepare("SELECT * FROM sales_activities WHERE id = ?").bind(id).first();
+    const activity = await c.env.DB.prepare(`
+      SELECT a.*, u.name AS author_name
+      FROM sales_activities a
+      LEFT JOIN crm_users u ON u.id = a.author_user_id
+      WHERE a.id = ?
+    `).bind(id).first();
     return c.json({ activity }, 201);
   } catch (err: any) {
     return c.json({ error: err.message || "Error registrando actividad" }, 400);

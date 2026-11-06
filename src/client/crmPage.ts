@@ -1197,6 +1197,16 @@ async function apiCall(endpoint, method = 'GET', body = null) {
   return await res.json();
 }
 
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[char]);
+}
+
 // ── ESTADO LOCAL DE DATOS ──
 let state = {
   user: null,
@@ -1623,6 +1633,8 @@ async function abrirModalCuenta(id) {
     const account = detail?.account || acc;
     const contactos = detail?.contacts || [];
     const opps = detail?.opportunities || [];
+    const activities = detail?.activities || [];
+    const notes = activities.filter(activity => activity.type === 'note');
 
     content.innerHTML = \`
       <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
@@ -1700,6 +1712,77 @@ async function abrirModalCuenta(id) {
             </div>\`).join('') : '<p class="text-xs text-slate-500 bg-slate-800/20 p-3 rounded-lg">Sin oportunidades abiertas</p>'}
         </div>
 
+        <section class="rounded-xl border border-slate-700/70 bg-slate-900/50 p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h3 class="font-semibold text-white text-sm">Notas del cliente</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Notas internas disponibles aunque no haya una oportunidad activa.</p>
+              </div>
+              <span class="text-[11px] font-mono text-slate-500">\${notes.length}</span>
+            </div>
+            \${state.user && state.user.role !== 'lector' ? \`
+              <form onsubmit="guardarNotaCuenta(event, '\${escapeHtml(account.id)}')" class="space-y-2 mb-4">
+                <label for="notaCuentaTexto" class="sr-only">Nueva nota</label>
+                <textarea id="notaCuentaTexto" maxlength="10000" rows="3" required placeholder="Escribe una nota sobre este cliente…" class="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-ark-blue_hi focus:outline-none"></textarea>
+                <div class="grid sm:grid-cols-2 gap-2">
+                  <label class="sr-only" for="notaCuentaContacto">Contacto relacionado</label>
+                  <select id="notaCuentaContacto" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300">
+                    <option value="">Nota general de la cuenta</option>
+                    \${contactos.map(contact => \`<option value="\${escapeHtml(contact.id)}">\${escapeHtml(contact.name || contact.email || 'Contacto')}</option>\`).join('')}
+                  </select>
+                  <label class="sr-only" for="notaCuentaOportunidad">Oportunidad relacionada</label>
+                  <select id="notaCuentaOportunidad" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300">
+                    <option value="">Sin oportunidad asociada</option>
+                    \${opps.map(opportunity => \`<option value="\${escapeHtml(opportunity.id)}">\${escapeHtml(opportunity.name || ('Oportunidad ' + opportunity.id.slice(0, 8)))} · \${escapeHtml(opportunity.stage)}</option>\`).join('')}
+                  </select>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-[11px] text-slate-500">Máximo 10,000 caracteres</span>
+                  <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-ark-blue px-3 py-2 text-xs font-semibold text-white hover:bg-ark-blue/80">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Guardar nota
+                  </button>
+                </div>
+              </form>
+            \` : ''}
+            <div class="space-y-2" id="notasCuentaLista">
+              \${notes.length ? notes.map(note => \`
+                <article class="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+                  <p class="text-sm text-slate-200 whitespace-pre-wrap break-words">\${escapeHtml(note.content)}</p>
+                  <div class="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-slate-500">
+                    <span>\${escapeHtml(note.author_name || 'Usuario del CRM')}</span>
+                    <span aria-hidden="true">·</span>
+                    <time datetime="\${escapeHtml(note.created_at)}">\${escapeHtml(formatearFechaNota(note.created_at))}</time>
+                    \${note.contact_id ? '<span class="text-slate-600">· contacto relacionado</span>' : ''}
+                    \${note.opportunity_id ? '<span class="text-slate-600">· oportunidad relacionada</span>' : ''}
+                  </div>
+                  \${state.user && state.user.role !== 'lector' ? \`
+                    <button type="button" data-note-id="\${escapeHtml(note.id)}" onclick="mostrarFormularioSeguimiento(this)" class="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-ark-blue/30 bg-ark-blue/10 px-2.5 py-1.5 text-[11px] font-semibold text-ark-blue_hi hover:bg-ark-blue/20">
+                      <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> Crear seguimiento
+                    </button>
+                    <form id="seguimientoNota-\${escapeHtml(note.id)}" data-note-id="\${escapeHtml(note.id)}" data-account-id="\${escapeHtml(account.id)}" data-contact-id="\${escapeHtml(note.contact_id || '')}" data-opportunity-id="\${escapeHtml(note.opportunity_id || '')}" data-note-content="\${escapeHtml(note.content)}" onsubmit="crearSeguimientoDesdeNota(event, this)" class="hidden mt-3 space-y-2 rounded-lg border border-slate-800 bg-slate-900 p-3">
+                      <label class="block text-[11px] text-slate-400" for="seguimientoTitulo-\${escapeHtml(note.id)}">Próxima acción</label>
+                      <input id="seguimientoTitulo-\${escapeHtml(note.id)}" type="text" maxlength="200" required value="Dar seguimiento a esta nota" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-ark-blue_hi focus:outline-none">
+                      <div class="grid sm:grid-cols-2 gap-2">
+                        <div>
+                          <label class="block text-[11px] text-slate-400 mb-1" for="seguimientoFecha-\${escapeHtml(note.id)}">Fecha de vencimiento</label>
+                          <input id="seguimientoFecha-\${escapeHtml(note.id)}" type="date" min="\${fechaLocalHoy()}" value="\${fechaLocalManana()}" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-ark-blue_hi focus:outline-none">
+                        </div>
+                        <div>
+                          <span class="block text-[11px] text-slate-400 mb-1">Responsable</span>
+                          <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-300">\${escapeHtml(state.user.name || state.user.email || 'Usuario actual')}</div>
+                        </div>
+                      </div>
+                      <div class="flex justify-end gap-2 pt-1">
+                        <button type="button" onclick="this.closest('form').classList.add('hidden')" class="rounded-lg px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800">Cancelar</button>
+                        <button type="submit" class="rounded-lg bg-ark-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-ark-blue/80">Guardar tarea</button>
+                      </div>
+                    </form>
+                  \` : ''}
+                </article>
+              \`).join('') : '<p class="rounded-lg bg-slate-800/20 p-3 text-xs text-slate-500">Todavía no hay notas para esta cuenta.</p>'}
+            </div>
+        </section>
+
         <h3 class="font-semibold text-white text-sm">Observaciones del Profiler Agéntico</h3>
         <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 space-y-2">
           <div class="flex items-center gap-2">
@@ -1715,6 +1798,110 @@ async function abrirModalCuenta(id) {
     lucide.createIcons();
   } catch(e) {
     content.innerHTML = '<div class="text-rose-400 text-sm p-4">Error cargando detalles</div>';
+  }
+}
+
+function formatearFechaNota(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function fechaLocalHoy() {
+  const date = new Date();
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 10);
+}
+
+function fechaLocalManana() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 10);
+}
+
+function mostrarFormularioSeguimiento(button) {
+  const noteId = button.dataset.noteId;
+  const form = document.getElementById('seguimientoNota-' + noteId);
+  if (!form) {
+    toast('No se encontró el formulario de seguimiento.');
+    return;
+  }
+  form.classList.toggle('hidden');
+  if (!form.classList.contains('hidden')) {
+    form.querySelector('input[type="text"]').focus();
+  }
+}
+
+async function crearSeguimientoDesdeNota(event, form) {
+  event.preventDefault();
+  const titleInput = form.querySelector('input[type="text"]');
+  const dueDate = form.querySelector('input[type="date"]').value;
+  const title = titleInput.value.trim();
+  const button = form.querySelector('button[type="submit"]');
+  if (!title || !dueDate) {
+    toast('Indica la próxima acción y su fecha de vencimiento.');
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const result = await apiCall('/api/crm/tasks', 'POST', {
+      title,
+      description: 'Seguimiento creado desde una nota del cliente: ' + (form.dataset.noteContent || ''),
+      account_id: form.dataset.accountId,
+      contact_id: form.dataset.contactId || null,
+      opportunity_id: form.dataset.opportunityId || null,
+      owner_user_id: state.user.id,
+      due_date: dueDate
+    });
+    if (!result || result.error || !result.task) {
+      toast('No se pudo crear el seguimiento: ' + ((result && result.error) || 'respuesta inválida del servidor'));
+      return;
+    }
+    form.classList.add('hidden');
+    await loadTasks();
+    renderTareas();
+    toast('Seguimiento asignado a ' + (state.user.name || state.user.email) + ' para ' + dueDate + '.');
+  } catch (error) {
+    toast('Error al crear el seguimiento: ' + (error.message || 'Error de red'));
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function guardarNotaCuenta(event, accountId) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const textarea = form.querySelector('textarea');
+  const button = form.querySelector('button[type="submit"]');
+  const text = textarea.value.trim();
+  if (!text) {
+    toast('Escribe una nota antes de guardarla.');
+    textarea.focus();
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const contactId = form.querySelector('#notaCuentaContacto').value;
+    const opportunityId = form.querySelector('#notaCuentaOportunidad').value;
+    const result = await apiCall('/api/crm/activities', 'POST', {
+      type: 'note',
+      account_id: accountId,
+      contact_id: contactId || null,
+      opportunity_id: opportunityId || null,
+      content: text
+    });
+    if (!result || result.error || !result.activity) {
+      toast('No se pudo guardar la nota: ' + ((result && result.error) || 'respuesta inválida del servidor'));
+      return;
+    }
+    toast('Nota guardada.');
+    await abrirModalCuenta(accountId);
+  } catch (error) {
+    toast('Error al guardar la nota: ' + (error.message || 'Error de red'));
+  } finally {
+    button.disabled = false;
   }
 }
 

@@ -452,6 +452,7 @@ Grok Bot no es un lector de texto; es un operador autónomo que usa el navegador
 - [x] Construir una vista de pipeline por etapa, con filtros por responsable, origen, producto y fecha de próxima acción. (kanban + stage change)
 - [x] Construir fichas de cuenta y contacto con datos clave, oportunidades, actividades, tareas y conversaciones relacionadas. (openAccount modal)
 - [x] Permitir búsqueda, asignación de responsable, edición de datos y registro de actividades desde la ficha. (search accounts, new account/task modals)
+- [x] Registrar notas de texto libre en la ficha de cuenta, con autor y fecha, sin requerir una oportunidad del pipeline. (sales_activities type=note)
 - [x] Mostrar tareas vencidas y oportunidades abiertas sin próxima acción; confirmar acciones destructivas o difíciles de revertir. (overdue highlight; merge admin-only)
 - [x] Incluir estados de carga, vacío y error; adaptar la interfaz a móvil y navegación accesible por teclado. (loading/empty/error messages; responsive tailwind)
 - [x] **Criterio de salida:** un vendedor puede recorrer el flujo completo desde localizar un lead hasta registrar seguimiento sin usar SQL ni herramientas internas. (UI /crm)
@@ -459,6 +460,7 @@ Grok Bot no es un lector de texto; es un operador autónomo que usa el navegador
 ## Fase 5 — Seguimiento y automatizaciones controladas
 - [x] Crear automáticamente una tarea inicial cuando se califique un lead, indicando responsable y fecha según una regla acordada. (autoTaskOnQualifiedLead)
 - [x] Crear tareas de seguimiento al agendar una demo o enviar una propuesta; evitar duplicarlas ante reintentos. (ensureTask idempotente)
+- [x] Permitir crear una tarea de seguimiento desde una nota, con vencimiento y responsable asignado al usuario actual. (ficha de cuenta → sales_tasks)
 - [x] Detectar oportunidades abiertas sin actividad o con tarea vencida y mostrarlas en la bandeja de trabajo. (/api/crm/inbox)
 - [x] Permitir notificaciones internas configurables; no enviar mensajes comerciales automáticos al prospecto sin consentimiento y controles explícitos. (sin envío automático al prospecto; auditoría registrada)
 - [x] Integrar el cierre ganado/perdido con el flujo de entrega federada actual, conservando idempotencia y el patrón outbox. (enqueueFederatedOnWon)
