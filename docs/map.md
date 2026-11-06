@@ -269,14 +269,180 @@ type LeadIngestPayload = {
 
 ## 6. Grok Bot Integration (Operadores de Computadora)
 
-Grok Bot no es un lector de texto; es un operador autónomo que usa el navegador y aplicaciones en una computadora compartida:
+Grok Bot es el operador de computadora original que utiliza un daemon Python local con Playwright (`scripts/python/grok_bot_computer_runner.py`) para interactuar con navegadores físicos. Los dos operadores (Grok Bot y StayPuft) conviven en paralelo gracias a la columna `operator` en `agent_skills` y `agent_tasks`.
 
-1. **Tabla `agent_skills` en D1:** Permite dar de alta nuevas capacidades sin alterar el código ni redesplegar el Worker:
-   - `research_prospect_web`: Navega en LinkedIn y web del despacho para recopilar datos de socios y tamaño.
-   - `generate_custom_pdf`: Abre Ark Ledger, procesa Excel del prospecto y genera un cálculo fiscal con QR y sello SHA-256.
-   - `tag_prospect_on_x`: Intercepta quejas del SAT en X (Twitter) para argumentar soluciones de Ark Ledger y enlazar a demo.
-2. **Adquisición Automática `@bot` en X:**
-   - Tweet con queja SAT -> Webhook -> `tag_prospect_on_x` -> Lead registrado en `sales_leads` -> Especialista en Riesgo atiende al prospecto.
+---
+
+## 7. Operador StayPuft (Operador Agéntico Cloud-Native)
+
+**StayPuft** es el operador agéntico moderno de Ark Sales. A diferencia de Grok Bot, StayPuft **NO** corre como un daemon dependiente de una PC local ni requiere Playwright local. StayPuft consulta por API REST, ejecuta sus investigaciones y tareas en su propio entorno en la nube con su navegador y herramientas, y reporta los resultados estructurados a través de endpoints seguros con validación estricta de JSON Schema.
+
+### Arquitectura y Principio de Menor Privilegio (Least-Privilege)
+1. **Autenticación Aislada:** Utiliza el secreto `STAYPUFT_API_KEY`, configurado exclusivamente vía Cloudflare Secrets (`wrangler secret put STAYPUFT_API_KEY`), nunca en código ni en el repositorio.
+2. **Capacidades Acotadas:** La clave solo tiene permiso para:
+   - Leer tareas pendientes (`GET /api/internal/skills/pending`).
+   - Leer contexto ejecutivo del lead (`GET` / `POST /api/internal/context`).
+   - Ejecutar y reportar skills (`POST /api/internal/skills/execute`).
+   - Enriquecer leads (`POST /api/internal/leads/:lead_id/enrich`).
+   - Monitorear métricas de salud y cosecha (`GET /api/internal/harvest/metrics` y `GET /api/superadmin/harvest/metrics`).
+   Cualquier intento de modificar el catálogo, borrar registros de CRM o alterar usuarios es rechazado con **403 Forbidden**.
+3. **Protección de Cuota D1 (Lección del 5 de Noviembre):**
+   - Límite estricto por defecto y tope máximo inquebrantable de `limit = 100` registros por llamada.
+   - Prohibidos loops sin límite o escaneos completos sin paginación.
+   - Rate limit anti-abuso configurado en 120 req/min por operador.
+4. **Resiliencia y Circuit Breaker (Máximo 3 Reintentos):**
+   - Si una tarea agéntica falla 3 veces consecutivas, queda registrada en estado `failed` permanente y no se reintenta automáticamente, evitando saturación de cuotas o consumo innecesario.
+   - Cada ejecución queda auditada de forma inmutable en `agent_skill_runs`.
+
+### Contratos de Habilidades (JSON Schema)
+
+#### 1. `research_prospect_web`
+- **Input esperado:**
+  ```json
+  {
+    "lead_id": "string",
+    "despacho_nombre": "string",
+    "dominio": "string (opcional)",
+    "ciudad": "string (opcional)"
+  }
+  ```
+- **Output esperado:**
+  ```json
+  {
+    "tamano_estimado": "1-5 | 6-20 | 21-50 | 50+",
+    "socios": ["Lic. Roberto Garza", "C.P. Diana Morales"],
+    "software_detectado": ["Aspel", "Contpaqi", "Excel"],
+    "senales_dolor": ["Multas del SAT", "Conciliación manual lenta"],
+    "fuentes": ["https://despachogarza.com", "https://linkedin.com/company/garza"],
+    "confianza": 92
+  }
+  ```
+
+#### 2. `generate_custom_pdf`
+- **Input esperado:**
+  ```json
+  {
+    "lead_id": "string",
+    "archivo_excel_url_o_id": "string"
+  }
+  ```
+- **Output esperado (cálculo respaldado en Ark Ledger, nunca inventado):**
+  ```json
+  {
+    "pdf_url_o_id": "https://ledger.arksystems.site/docs/reporte_oficial_123.pdf",
+    "calculo_resumen": {
+      "base_gravable_mxn": 1250000,
+      "impuesto_determinado": 375000,
+      "deducciones_autorizadas": 180000
+    },
+    "sello_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "qr_payload": "https://ledger.arksystems.site/validador/e3b0c442"
+  }
+  ```
+
+#### 3. `tag_prospect_on_x`
+- **Input esperado:**
+  ```json
+  {
+    "tweet_id": "string",
+    "texto_queja": "string",
+    "autor": "string"
+  }
+  ```
+- **Output esperado (NUNCA publica en X por sí sola; requiere aprobación humana):**
+  ```json
+  {
+    "lead_creado": true,
+    "lead_id": "lead_x_tweet_12345",
+    "borrador_respuesta": "Hola @autor, en Ark Ledger automatizamos el cálculo de papeles de trabajo con sello SHA-256 ante el SAT. ¿Te gustaría ver una demo?",
+    "vertical_sugerida": "fiscal"
+  }
+  ```
+
+### Endpoints con Ejemplos en cURL
+
+> **Nota:** En todas las peticiones, utiliza la variable `$STAYPUFT_API_KEY`. Nunca quemes la clave real en código ni en scripts compartidos.
+
+#### 1. Obtener siguiente tarea pendiente
+```bash
+curl -X GET "https://sales.arksystems.site/api/internal/skills/pending?operator=staypuft" \
+  -H "X-StayPuft-Key: $STAYPUFT_API_KEY"
+```
+*Si no hay tareas pendientes, responde `{}` (vacío) con código `200 OK` (no error).*
+
+#### 2. Reportar resultado de ejecución de habilidad
+```bash
+curl -X POST "https://sales.arksystems.site/api/internal/skills/execute" \
+  -H "Content-Type: application/json" \
+  -H "X-StayPuft-Key: $STAYPUFT_API_KEY" \
+  -d '{
+    "lead_id": "lead_demo_101",
+    "skill": "research_prospect_web",
+    "status": "completed",
+    "result": {
+      "tamano_estimado": "6-20",
+      "socios": ["C.P. Mario Delgado"],
+      "software_detectado": ["Contpaqi"],
+      "senales_dolor": ["Conciliación bancaria manual"],
+      "fuentes": ["https://despachodelgado.com"],
+      "confianza": 90
+    }
+  }'
+```
+
+#### 3. Consultar Resumen Ejecutivo y contexto del lead
+```bash
+curl -X GET "https://sales.arksystems.site/api/internal/context?lead_id=lead_demo_101" \
+  -H "X-StayPuft-Key: $STAYPUFT_API_KEY"
+```
+
+#### 4. Enriquecer lead directamente
+```bash
+curl -X POST "https://sales.arksystems.site/api/internal/leads/lead_demo_101/enrich" \
+  -H "Content-Type: application/json" \
+  -H "X-StayPuft-Key: $STAYPUFT_API_KEY" \
+  -d '{
+    "tamano_estimado": "6-20",
+    "software_detectado": ["Aspel", "Contpaqi"],
+    "socios": ["Lic. Morales"],
+    "senales_dolor": ["Sobrecarga en cierre mensual"],
+    "fuentes": ["LinkedIn"],
+    "confianza": 88,
+    "resumen": "Despacho en crecimiento con 12 contadores."
+  }'
+```
+
+#### 5. Consultar métricas de harvesting y monitoreo agéntico
+```bash
+curl -X GET "https://sales.arksystems.site/api/superadmin/harvest/metrics" \
+  -H "X-StayPuft-Key: $STAYPUFT_API_KEY"
+```
+
+### Guía Paso a Paso para Probar con un Lead de Prueba
+
+1. **Crear o identificar un lead de prueba en D1:**
+   ```sql
+   INSERT INTO sales_leads (id, email, despacho_nombre, tamano, score, estado)
+   VALUES ('lead_prueba_staypuft_01', 'contacto@despachoprueba.com', 'Despacho Prueba Contable', '1-5', 60, 'nuevo');
+   ```
+2. **Consultar tarea pendiente:**
+   Ejecuta `GET /api/internal/skills/pending`. Deberá devolver la tarea con `lead_id: "lead_prueba_staypuft_01"`.
+3. **Consultar contexto del lead:**
+   Ejecuta `GET /api/internal/context?lead_id=lead_prueba_staypuft_01`. Verifica el Resumen Ejecutivo.
+4. **Ejecutar investigación y reportar resultado:**
+   Ejecuta `POST /api/internal/skills/execute` con el resultado de `research_prospect_web`.
+5. **Verificar persistencia:**
+   - En `sales_leads`, el tamaño se actualiza y el score incrementa en +15 puntos (máximo 100).
+   - En `agent_skill_runs`, queda registrada la ejecución con status `completed`.
+   - En `GET /api/superadmin/agent-skills/lead/lead_prueba_staypuft_01`, el Super Admin puede inspeccionar todo el historial.
+
+### Procedimiento ante Fallas (Troubleshooting)
+
+- **Error 401 Unauthorized:** Verifica que la cabecera `X-StayPuft-Key` contenga el valor configurado en el secreto de Cloudflare `STAYPUFT_API_KEY`.
+- **Error 403 Forbidden:** StayPuft solo puede invocar las 5 rutas designadas. No tiene acceso a borrar cuentas, alterar el catálogo de precios ni crear usuarios administrativos.
+- **Error 400 Bad Request (Validación JSON Schema):** El payload de `result` no cumplió con los campos requeridos por el contrato (ej. faltaron `fuentes` o `confianza`). Revisa el log de error en la respuesta para corregir la estructura.
+- **Error 429 Too Many Requests:** El operador excedió las 120 peticiones por minuto. Espera 60 segundos antes de reanudar el polling.
+- **Tarea en Estado `failed` Permanente:** Si una skill falla 3 veces seguidas, el circuit breaker desactiva reintentos automáticos. Para reactivarla, un Super Admin o Pablo debe revisar el motivo del error en `agent_skill_runs` y resetear la tarea a `pending`.
 
 ---
 
@@ -491,6 +657,17 @@ Grok Bot no es un lector de texto; es un operador autónomo que usa el navegador
 - [x] Consola Super Admin: pestaña `Cobranza Conekta (SPEI / Checkout)` con KPIs de recaudación, emisión de órdenes, copia de CLABE STP formateada, generador de mensajes de WhatsApp y simulador de pagos.
 - [x] Suite de pruebas automatizadas: 	ests/conekta.test.ts con 9 tests unitarios/integracin. Total ecosistema: 14 suites, 88 tests pasando (100% verde).
 - [x] Migración remota D1 aplicada y Cloudflare Worker desplegado a producción en `https://sales.arksystems.site`.
+
+## Sprint — Cosecha piloto SIPRES / SOFOM
+- [x] Añadir la fuente `sipres` para consultar SIPRES, filtrar SOFOM E.N.R. y E.R. con estatus “En operación” y priorizar hasta 50 registros por términos relacionados con crédito y préstamos.
+- [x] Extraer y conservar la referencia oficial de SIPRES; enrutar los candidatos bajo Ark Ledger, con Ark Angel como producto principal y Ledger como complemento.
+- [x] Añadir `--preview` y la opción `preview_only` de GitHub Actions para revisar candidatos sin ingesta ni escrituras al CRM.
+- [x] Resolver la cadena TLS incompleta del servidor SIPRES usando el intermedio público GeoTrust TLS RSA CA G1; se mantiene activa la validación del certificado contra una raíz confiable.
+- [x] Verificar en GitHub Actions que el preview encontró 50 candidatos y no ingirió ninguno; importar después 50 registros con 0 errores y 0 duplicados. [Ejecución de importación](https://github.com/substrateholdingsai/ark-sales/actions/runs/42186240930).
+- [x] Ejecutar las 32 pruebas Python del harvester; todas pasan.
+- [x] Publicar los cambios en `main` (`73692f0`, `71df7ae`, `1a1fea6`) y desplegar el Worker de producción (`7e2867f6-b44c-4b4f-a2a0-dbe15a8f20bd`).
+- [ ] Validar manualmente si cada institución ofrece crédito digital o utiliza una app: la pertenencia y estatus en SIPRES, así como la priorización por nombre, no confirman esas características.
+- [ ] Evaluar REDECO como fuente separada para despachos de cobranza; no forma parte de este piloto.
 
 ## Fuera del primer lanzamiento
 - [ ] Evaluar integraciones de correo, calendario, WhatsApp y proveedores externos después de estabilizar el CRM base.

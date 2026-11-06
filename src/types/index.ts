@@ -170,12 +170,44 @@ export type TaskRecord = {
 export type AgentSkill = {
   id: string;
   agent_id: string;
+  operator?: string;
   skill_name: string;
   description: string;
   input_schema: string | null;
+  output_schema?: string | null;
   execution_path: string;
   is_active: number;
   created_at: string;
+};
+
+export type AgentTaskRecord = {
+  id: string;
+  lead_id: string;
+  skill_name: string;
+  operator: "staypuft" | "grok_bot" | string;
+  payload: string | null;
+  status: "pending" | "running" | "completed" | "failed";
+  retry_count: number;
+  result: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type AgentSkillRunRecord = {
+  id: string;
+  task_id: string | null;
+  lead_id: string;
+  skill_name: string;
+  operator: "staypuft" | "grok_bot" | string;
+  status: "running" | "completed" | "failed";
+  input_payload: string | null;
+  output_result: string | null;
+  error_message: string | null;
+  started_at: string;
+  finished_at: string | null;
 };
 
 export type LeadExecutiveContext = {
@@ -227,6 +259,7 @@ export interface Env {
   SALES_API_URL?: string;
   INTERNAL_SERVICE_KEY?: string;
   INTERNAL_API_TOKEN?: string;
+  STAYPUFT_API_KEY?: string;
   WEBHOOK_SECRET?: string;
   ARK_WEBHOOK_SECRET?: string;
   CONEKTA_API_KEY?: string;

@@ -3,24 +3,87 @@ import { z } from "zod";
 import { Env, AgentSkill, LeadExecutiveContext } from "../types";
 import { ensureAccountContactForLead, ensureTask } from "../crm/automation";
 
-export const internalRouter = new Hono<{ Bindings: Env }>();
+export type InternalVariables = {
+  operator?: "staypuft" | "grok_bot" | "internal_service";
+};
+
+// Rate limiting en memoria para llamadas internas (120 req/min)
+const internalRateLimits = new Map<string, number[]>();
+function checkInternalRateLimit(key: string, limit = 120, windowMs = 60000): boolean {
+  const now = Date.now();
+  const times = (internalRateLimits.get(key) || []).filter((t) => now - t < windowMs);
+  if (times.length >= limit) return false;
+  times.push(now);
+  internalRateLimits.set(key, times);
+  return true;
+}
+
+export const internalRouter = new Hono<{ Bindings: Env; Variables: InternalVariables }>();
 
 internalRouter.use("*", async (c, next) => {
   const expectedService = c.env.INTERNAL_SERVICE_KEY;
   const expectedToken = c.env.INTERNAL_API_TOKEN;
+  const expectedStayPuft = c.env.STAYPUFT_API_KEY;
+
   const authHeader = c.req.header("Authorization") || "";
   const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
-  const provided = c.req.header("X-Ark-Internal-Key") || c.req.header("X-Internal-Token") || bearer;
+  const provided = c.req.header("X-Ark-Internal-Key") || c.req.header("X-Internal-Token") || c.req.header("X-StayPuft-Key") || bearer;
+
   if (!provided) {
     return c.json({ error: "Unauthorized: invalid or missing internal key." }, 401);
   }
-  if (expectedService || expectedToken) {
-    if (provided !== expectedService && provided !== expectedToken) {
+
+  let operator: "staypuft" | "grok_bot" | "internal_service" = "internal_service";
+
+  if (expectedStayPuft && provided === expectedStayPuft) {
+    operator = "staypuft";
+  } else if (expectedService || expectedToken) {
+    if (provided === expectedService || provided === expectedToken) {
+      operator = "internal_service";
+    } else {
       return c.json({ error: "Unauthorized: invalid or missing internal key." }, 401);
     }
   } else if ((c.env.ENVIRONMENT || "development") === "production") {
     return c.json({ error: "Unauthorized: internal key not configured." }, 401);
   }
+
+  // Rate Limiting anti-abuso
+  const rateLimitKey = `${operator}:${provided.slice(0, 10)}`;
+  if (!checkInternalRateLimit(rateLimitKey, 120, 60000)) {
+    return c.json({ error: "Too Many Requests: Rate limit exceeded (120 req/min)." }, 429);
+  }
+
+  c.set("operator", operator);
+
+  // Control de Acceso Estricto para StayPuft (Least Privilege - Req 1)
+  // StayPuft solo puede: leer pendientes, leer contexto, ejecutar skills y enriquecer leads.
+  // Nada de borrar, cambiar catálogo ni manipular usuarios.
+  if (operator === "staypuft") {
+    const path = c.req.path;
+    const method = c.req.method.toUpperCase();
+
+    const isPending = method === "GET" && path.endsWith("/skills/pending");
+    const isExecute = method === "POST" && path.endsWith("/skills/execute");
+    const isSkills = method === "GET" && path.endsWith("/skills");
+    const isContext = (method === "GET" || method === "POST") && path.endsWith("/context");
+    const isEnrich = method === "POST" && /\/leads\/[^/]+\/enrich$/.test(path);
+    const isMetrics = method === "GET" && (path.endsWith("/harvest/metrics") || path.endsWith("/metrics"));
+
+    if (!isPending && !isExecute && !isSkills && !isContext && !isEnrich && !isMetrics) {
+      return c.json({
+        error: "Forbidden: StayPuft operator does not have permission to access this endpoint or perform destructive operations.",
+        allowed_endpoints: [
+          "GET /api/internal/skills/pending",
+          "POST /api/internal/skills/execute",
+          "GET /api/internal/context",
+          "POST /api/internal/context",
+          "POST /api/internal/leads/:lead_id/enrich",
+          "GET /api/internal/harvest/metrics",
+        ],
+      }, 403);
+    }
+  }
+
   await next();
 });
 
@@ -291,15 +354,216 @@ async function handleGetContext(leadId: string, env: Env) {
 }
 
 /**
- * 4. Endpoint para Disparar Skills (/api/internal/skills/execute)
- * Recibe skill_name y payload, y devuelve la instrucciÃ³n de ejecuciÃ³n para Grok Bot.
+ * Validador de esquemas de salida (JSON Schema Contract) para las Habilidades de StayPuft
+ */
+export function validateSkillResult(skillName: string, result: any): { success: boolean; error?: string } {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    return { success: false, error: "El resultado debe ser un objeto JSON válido." };
+  }
+
+  if (skillName === "research_prospect_web") {
+    if (typeof result.tamano_estimado !== "string" || !result.tamano_estimado.trim()) {
+      return { success: false, error: "Campo requerido 'tamano_estimado' es obligatorio y debe ser texto." };
+    }
+    if (!Array.isArray(result.fuentes) || result.fuentes.length === 0) {
+      return { success: false, error: "Campo requerido 'fuentes' es obligatorio y debe ser un arreglo con al menos 1 fuente." };
+    }
+    if (typeof result.confianza !== "number" || result.confianza < 0 || result.confianza > 100) {
+      return { success: false, error: "Campo requerido 'confianza' es obligatorio y debe ser un número entre 0 y 100." };
+    }
+    return { success: true };
+  }
+
+  if (skillName === "generate_custom_pdf") {
+    if (typeof result.pdf_url_o_id !== "string" || !result.pdf_url_o_id.trim()) {
+      return { success: false, error: "Campo requerido 'pdf_url_o_id' es obligatorio y debe ser texto." };
+    }
+    if (!result.calculo_resumen || typeof result.calculo_resumen !== "object" || Array.isArray(result.calculo_resumen)) {
+      return { success: false, error: "Campo requerido 'calculo_resumen' es obligatorio y debe ser un objeto proveniente de Ark Ledger." };
+    }
+    if (typeof result.sello_sha256 !== "string" || !result.sello_sha256.trim()) {
+      return { success: false, error: "Campo requerido 'sello_sha256' es obligatorio y debe contener el hash SHA-256." };
+    }
+    if (typeof result.qr_payload !== "string" || !result.qr_payload.trim()) {
+      return { success: false, error: "Campo requerido 'qr_payload' es obligatorio." };
+    }
+    return { success: true };
+  }
+
+  if (skillName === "tag_prospect_on_x") {
+    if (typeof result.lead_creado !== "boolean") {
+      return { success: false, error: "Campo requerido 'lead_creado' es obligatorio y debe ser booleano (true/false)." };
+    }
+    if (typeof result.lead_id !== "string" || !result.lead_id.trim()) {
+      return { success: false, error: "Campo requerido 'lead_id' es obligatorio." };
+    }
+    if (typeof result.borrador_respuesta !== "string" || !result.borrador_respuesta.trim()) {
+      return { success: false, error: "Campo requerido 'borrador_respuesta' es obligatorio." };
+    }
+    if (typeof result.vertical_sugerida !== "string" || !result.vertical_sugerida.trim()) {
+      return { success: false, error: "Campo requerido 'vertical_sugerida' es obligatorio." };
+    }
+    return { success: true };
+  }
+
+  return { success: true };
+}
+
+/**
+ * 4. Endpoint para Ejecución y Reporte de Skills (/api/internal/skills/execute)
+ * - StayPuft: Reporta resultado { lead_id, skill, result, status } validando JSON Schema antes de guardar.
+ * - Grok Bot: Solicita instrucción para runner físico { skill_name, payload }.
  */
 internalRouter.post("/skills/execute", async (c) => {
   try {
     const body = await c.req.json();
-    const { skill_name, payload } = body;
+    const { skill_name, skill: rawSkill, payload, result, status, lead_id, error: execError } = body;
+    const effectiveSkill = skill_name || rawSkill;
 
-    if (!skill_name || typeof skill_name !== "string") {
+    // CASO A: Reporte de Resultado de StayPuft (o callback agéntico de completion)
+    if (result !== undefined || (status && (status === "completed" || status === "failed"))) {
+      if (!effectiveSkill || typeof effectiveSkill !== "string") {
+        return c.json({ error: "El campo 'skill' o 'skill_name' es obligatorio y debe ser texto." }, 400);
+      }
+      if (!lead_id || typeof lead_id !== "string") {
+        return c.json({ error: "El campo 'lead_id' es obligatorio para registrar la ejecución." }, 400);
+      }
+
+      if (!c.env.DB) {
+        return c.json({ error: "D1 no disponible" }, 503);
+      }
+
+      const operator = c.get("operator") || "staypuft";
+      const normalizedStatus = status === "completed" || status === "success" ? "completed" : "failed";
+
+      // 1. Si el estado es completed, validar contra el JSON Schema / contrato de la skill
+      if (normalizedStatus === "completed") {
+        const val = validateSkillResult(effectiveSkill, result);
+        if (!val.success) {
+          return c.json({
+            error: `Validación de JSON Schema fallida para la skill '${effectiveSkill}': ${val.error}`,
+            skill: effectiveSkill,
+          }, 400);
+        }
+      }
+
+      // 2. Manejo de reintentos y Circuit Breaker (Máximo 3 reintentos antes de estado failed permanente)
+      let finalTaskStatus = normalizedStatus;
+      let currentRetries = 0;
+
+      const existingTask = await c.env.DB.prepare(`
+        SELECT id, retry_count, status FROM agent_tasks
+        WHERE lead_id = ? AND skill_name = ? AND status IN ('pending', 'running')
+        ORDER BY created_at DESC LIMIT 1
+      `).bind(lead_id, effectiveSkill).first<any>();
+
+      if (normalizedStatus === "failed") {
+        currentRetries = (existingTask?.retry_count || 0) + 1;
+        finalTaskStatus = currentRetries >= 3 ? "failed" : "pending";
+      }
+
+      const taskId = existingTask?.id || `task_${crypto.randomUUID().slice(0, 12)}`;
+
+      if (existingTask) {
+        await c.env.DB.prepare(`
+          UPDATE agent_tasks
+          SET status = ?,
+              retry_count = ?,
+              result = ?,
+              error_message = ?,
+              finished_at = CURRENT_TIMESTAMP,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(
+          finalTaskStatus,
+          currentRetries,
+          result ? JSON.stringify(result) : null,
+          execError || (normalizedStatus === "failed" ? "Skill execution failed" : null),
+          existingTask.id
+        ).run();
+      } else {
+        await c.env.DB.prepare(`
+          INSERT INTO agent_tasks (
+            id, lead_id, skill_name, operator, payload, status, retry_count, result, error_message, finished_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).bind(
+          taskId,
+          lead_id,
+          effectiveSkill,
+          operator,
+          payload ? JSON.stringify(payload) : null,
+          finalTaskStatus,
+          currentRetries,
+          result ? JSON.stringify(result) : null,
+          execError || (normalizedStatus === "failed" ? "Skill execution failed" : null)
+        ).run();
+      }
+
+      // 3. Registrar en agent_skill_runs (Auditoría inmutable de ejecuciones agénticas)
+      const runId = `run_${crypto.randomUUID().slice(0, 12)}`;
+      await c.env.DB.prepare(`
+        INSERT INTO agent_skill_runs (
+          id, task_id, lead_id, skill_name, operator, status, input_payload, output_result, error_message, finished_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `).bind(
+        runId,
+        taskId,
+        lead_id,
+        effectiveSkill,
+        operator,
+        normalizedStatus,
+        payload ? JSON.stringify(payload) : null,
+        result ? JSON.stringify(result) : null,
+        execError || null
+      ).run();
+
+      // 4. Si la skill fue completada exitosamente, persistir en D1
+      if (normalizedStatus === "completed" && result) {
+        if (effectiveSkill === "research_prospect_web") {
+          const effectiveSize = result.tamano_estimado || "1-5";
+          const techList = Array.isArray(result.software_detectado) ? result.software_detectado.join(", ") : "";
+          const partnersList = Array.isArray(result.socios) ? result.socios.join(", ") : "";
+          const painList = Array.isArray(result.senales_dolor) ? result.senales_dolor.join(", ") : "";
+
+          const summaryAdd = ` [staypuft_autonomous_research] Tamaño: ${effectiveSize}. Tech: ${techList || "N/D"}. Socios: ${partnersList || "N/D"}. Dolor: ${painList || "N/D"}. Confianza: ${result.confianza || 0}%. Fuentes: ${(result.fuentes || []).join(", ")}.`;
+
+          await c.env.DB.prepare(`
+            UPDATE sales_leads
+            SET tamano = ?,
+                conversation_summary = COALESCE(conversation_summary, '') || ?,
+                score = MIN(100, score + 15),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).bind(effectiveSize, summaryAdd, lead_id).run();
+        } else if (effectiveSkill === "generate_custom_pdf") {
+          const actId = `act_${crypto.randomUUID().slice(0, 12)}`;
+          await c.env.DB.prepare(`
+            INSERT INTO sales_activities (id, lead_id, type, content, metadata, created_at)
+            VALUES (?, ?, 'system', 'Reporte fiscal PDF generado por StayPuft con cálculo Ark Ledger', ?, CURRENT_TIMESTAMP)
+          `).bind(actId, lead_id, JSON.stringify(result)).run();
+        } else if (effectiveSkill === "tag_prospect_on_x") {
+          const actId = `act_${crypto.randomUUID().slice(0, 12)}`;
+          await c.env.DB.prepare(`
+            INSERT INTO sales_activities (id, lead_id, type, content, metadata, created_at)
+            VALUES (?, ?, 'note', 'Borrador de interacción en X preparado por StayPuft (humano en el circuito, no publicado)', ?, CURRENT_TIMESTAMP)
+          `).bind(actId, lead_id, JSON.stringify(result)).run();
+        }
+      }
+
+      return c.json({
+        success: normalizedStatus === "completed",
+        lead_id,
+        skill: effectiveSkill,
+        task_id: taskId,
+        run_id: runId,
+        status: finalTaskStatus,
+        retry_count: currentRetries,
+        saved: true,
+      }, 200);
+    }
+
+    // CASO B: Solicitud de Instrucción para Grok Bot (Compatibilidad Retenida)
+    if (!effectiveSkill || typeof effectiveSkill !== "string") {
       return c.json({ error: "El campo 'skill_name' es obligatorio y debe ser texto." }, 400);
     }
 
@@ -307,21 +571,22 @@ internalRouter.post("/skills/execute", async (c) => {
       return c.json({ error: "D1 no disponible" }, 503);
     }
 
-    // 1. Consultar si la skill estÃ¡ registrada y activa en agent_skills
+    // 1. Consultar si la skill está registrada y activa en agent_skills (LIMIT 1)
     const skill = await c.env.DB.prepare(`
       SELECT * FROM agent_skills
       WHERE skill_name = ? AND is_active = 1
+      ORDER BY CASE WHEN operator = 'grok_bot' THEN 0 ELSE 1 END
       LIMIT 1
-    `).bind(skill_name).first<AgentSkill>();
+    `).bind(effectiveSkill).first<AgentSkill>();
 
     if (!skill) {
       return c.json({
-        error: `Skill '${skill_name}' no encontrada o inactiva en el registro de habilidades de Grok Bot.`,
+        error: `Skill '${effectiveSkill}' no encontrada o inactiva en el registro de habilidades de Grok Bot.`,
         available_skills_endpoint: "/api/internal/skills",
       }, 404);
     }
 
-    // 2. Validar campos requeridos segÃºn input_schema si existe
+    // 2. Validar campos requeridos según input_schema si existe
     if (skill.input_schema) {
       try {
         const schema = JSON.parse(skill.input_schema);
@@ -330,7 +595,7 @@ internalRouter.post("/skills/execute", async (c) => {
           const missingFields = schema.required.filter((field: string) => payloadObj[field] === undefined || payloadObj[field] === null);
           if (missingFields.length > 0) {
             return c.json({
-              error: `Payload incompleto para skill '${skill_name}'. Faltan campos requeridos: ${missingFields.join(", ")}`,
+              error: `Payload incompleto para skill '${effectiveSkill}'. Faltan campos requeridos: ${missingFields.join(", ")}`,
               required_fields: schema.required,
               schema,
             }, 400);
@@ -341,7 +606,7 @@ internalRouter.post("/skills/execute", async (c) => {
       }
     }
 
-    // 3. Generar la instrucciÃ³n operativa para Grok Bot
+    // 3. Generar la instrucción operativa para Grok Bot
     const jobId = `job_grok_${crypto.randomUUID()}`;
     const timestamp = new Date().toISOString();
 
@@ -360,38 +625,53 @@ internalRouter.post("/skills/execute", async (c) => {
       created_at: timestamp,
       grok_instruction: {
         role: "grok_computer_operator",
-        action: `Ejecutar la tarea autÃ³noma '${skill.skill_name}' en la computadora compartida.`,
+        action: `Ejecutar la tarea autónoma '${skill.skill_name}' en la computadora compartida.`,
         guidance: skill.description,
       },
     }, 200);
   } catch (err: any) {
     console.error("[skills/execute] Error:", err);
-    return c.json({ error: err.message || "Error procesando ejecuciÃ³n de skill" }, 500);
+    return c.json({ error: err.message || "Error procesando ejecución de skill" }, 500);
   }
 });
 
 /**
  * Endpoint de descubrimiento de Habilidades (/api/internal/skills)
- * Permite a Grok Bot aprender quÃ© tareas puede ejecutar en la computadora.
+ * Paginado estrictamente a un máximo de 100 registros para proteger cuota D1.
  */
 internalRouter.get("/skills", async (c) => {
   if (!c.env.DB) {
     return c.json({ error: "D1 no disponible" }, 503);
   }
 
-  const { results: skills } = await c.env.DB.prepare(`
-    SELECT * FROM agent_skills WHERE is_active = 1 ORDER BY agent_id, skill_name
-  `).all<AgentSkill>();
+  const limitRaw = c.req.query("limit");
+  const limit = Math.min(Math.max(1, parseInt(limitRaw || "50", 10) || 50), 100);
+  const operator = c.req.query("operator") || c.get("operator");
+
+  let query = "SELECT * FROM agent_skills WHERE is_active = 1";
+  const params: any[] = [];
+  if (operator) {
+    query += " AND (operator = ? OR operator IS NULL)";
+    params.push(operator);
+  }
+  query += " ORDER BY operator, skill_name LIMIT ?";
+  params.push(limit);
+
+  const stmt = c.env.DB.prepare(query);
+  const { results: skills } = await (params.length === 2 ? stmt.bind(params[0], params[1]) : stmt.bind(params[0])).all<AgentSkill>();
 
   return c.json({
     count: skills ? skills.length : 0,
+    limit,
     skills: skills || [],
   });
 });
 
 /**
- * Endpoint de Polling para el Runner de Grok Bot (/api/internal/skills/pending)
- * Permite a grok_bot_computer_runner.py obtener el siguiente job de investigaciÃ³n pendiente.
+ * Endpoint de Tareas Pendientes (/api/internal/skills/pending)
+ * - StayPuft & Grok Bot: Consulta la siguiente tarea pendiente con lead_id, skill, payload y created_at.
+ * - Si no hay nada, responde vacío ({}), no error (200 OK).
+ * - Protegido con LIMIT 1 y máximo 100 para evitar consumo excesivo de D1.
  */
 internalRouter.get("/skills/pending", async (c) => {
   if (!c.env.DB) {
@@ -399,28 +679,88 @@ internalRouter.get("/skills/pending", async (c) => {
   }
 
   try {
-    // Buscar un lead con nombre de despacho que aÃºn no tenga investigaciÃ³n de Grok Bot
+    const operator = c.req.query("operator") || c.get("operator") || "staypuft";
+
+    // 1. Buscar en agent_tasks tareas con status 'pending' que no hayan excedido 3 fallos
+    const task = await c.env.DB.prepare(`
+      SELECT id, lead_id, skill_name, payload, created_at, retry_count
+      FROM agent_tasks
+      WHERE (operator = ? OR operator IS NULL)
+        AND status = 'pending'
+        AND retry_count < 3
+      ORDER BY created_at ASC
+      LIMIT 1
+    `).bind(operator).first<any>();
+
+    if (task) {
+      await c.env.DB.prepare(`
+        UPDATE agent_tasks
+        SET status = 'running', started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(task.id).run();
+
+      let parsedPayload: any = {};
+      try {
+        parsedPayload = task.payload ? JSON.parse(task.payload) : {};
+      } catch {
+        parsedPayload = {};
+      }
+
+      return c.json({
+        task_id: task.id,
+        lead_id: task.lead_id,
+        skill: task.skill_name,
+        skill_name: task.skill_name,
+        payload: parsedPayload,
+        created_at: task.created_at,
+        job: {
+          lead_id: task.lead_id,
+          despacho_nombre: parsedPayload.despacho_nombre || "",
+          skill_name: task.skill_name,
+        },
+      }, 200);
+    }
+
+    // 2. Si no hay en cola agent_tasks, buscar un lead con nombre de despacho pendiente de enriquecer
     const lead = await c.env.DB.prepare(`
-      SELECT id, despacho_nombre
+      SELECT id, despacho_nombre, email
       FROM sales_leads
       WHERE despacho_nombre IS NOT NULL 
         AND despacho_nombre != ''
-        AND (conversation_summary IS NULL OR conversation_summary NOT LIKE '%grok_bot_autonomous_research%')
+        AND (
+          conversation_summary IS NULL
+          OR (
+            conversation_summary NOT LIKE '%grok_bot_autonomous_research%'
+            AND conversation_summary NOT LIKE '%staypuft_autonomous_research%'
+          )
+        )
       ORDER BY created_at DESC
       LIMIT 1
-    `).first<{ id: string; despacho_nombre: string }>();
+    `).first<{ id: string; despacho_nombre: string; email: string }>();
 
     if (!lead) {
-      return c.json({ job: null });
+      // Req 2: "Si no hay nada, responde vacío, no error."
+      return c.json({}, 200);
     }
 
+    const payloadObj = {
+      lead_id: lead.id,
+      despacho_nombre: lead.despacho_nombre,
+      email: lead.email,
+    };
+
     return c.json({
+      lead_id: lead.id,
+      skill: "research_prospect_web",
+      skill_name: "research_prospect_web",
+      payload: payloadObj,
+      created_at: new Date().toISOString(),
       job: {
         lead_id: lead.id,
         despacho_nombre: lead.despacho_nombre,
         skill_name: "research_prospect_web",
       },
-    });
+    }, 200);
   } catch (err: any) {
     console.error("[skills/pending] Error:", err);
     return c.json({ error: err.message }, 500);
@@ -444,30 +784,43 @@ internalRouter.post("/leads/:lead_id/enrich", async (c) => {
   try {
     const body = await c.req.json();
     const enrichment = body.enrichment || {};
-    const { estimated_size, detected_tech, research_summary, confidence_score } = enrichment;
 
-    // 1. Obtener lead actual
+    // 1. Obtener lead actual (LIMIT 1)
     const currentLead = await c.env.DB.prepare(`
-      SELECT * FROM sales_leads WHERE id = ?
+      SELECT * FROM sales_leads WHERE id = ? LIMIT 1
     `).bind(leadId).first<any>();
 
     if (!currentLead) {
       return c.json({ error: `Lead con ID '${leadId}' no encontrado.` }, 404);
     }
 
-    // 2. Componer nuevo summary
-    const techStr = Array.isArray(detected_tech) && detected_tech.length > 0 
-      ? ` TecnologÃ­as detectadas: ${detected_tech.join(", ")}.` 
-      : "";
+    // 2. Soportar formato plano de StayPuft y anidado de Grok Bot
+    const estimatedSize = body.tamano_estimado || body.tamano || enrichment.estimated_size || currentLead.tamano || "1-5";
+    const detectedTech: string[] = body.software_detectado || enrichment.detected_tech || [];
+    const partners: string[] = body.socios || [];
+    const painSignals: string[] = body.senales_dolor || [];
+    const sources: string[] = body.fuentes || [];
+    const confidence = typeof body.confianza === "number"
+      ? body.confianza
+      : (typeof enrichment.confidence_score === "number" ? enrichment.confidence_score * 100 : 80);
+    const summaryText = body.resumen || enrichment.research_summary || "Investigación completada.";
+
+    const operator = c.get("operator") || "staypuft";
+    const tagPrefix = operator === "grok_bot" ? "grok_bot_autonomous_research" : "staypuft_autonomous_research";
+
+    const techStr = detectedTech.length > 0 ? ` Tecnologías: ${detectedTech.join(", ")}.` : "";
+    const partnersStr = partners.length > 0 ? ` Socios: ${partners.join(", ")}.` : "";
+    const painStr = painSignals.length > 0 ? ` Señales de dolor: ${painSignals.join(", ")}.` : "";
+    const sourcesStr = sources.length > 0 ? ` Fuentes: ${sources.join(", ")}.` : "";
+
     const newSummary = [
       currentLead.conversation_summary || "",
-      `[grok_bot_autonomous_research] ${research_summary || ""}${techStr} Confianza: ${confidence_score || 0.8}.`
+      `[${tagPrefix}] ${summaryText}${techStr}${partnersStr}${painStr}${sourcesStr} Confianza: ${confidence}%.`
     ].filter(Boolean).join(" ");
 
-    // 3. Actualizar en D1
     const newScore = Math.min(100, (currentLead.score || 0) + 15);
-    const effectiveSize = currentLead.tamano || estimated_size || "1-5";
 
+    // 3. Actualizar en D1
     await c.env.DB.prepare(`
       UPDATE sales_leads
       SET tamano = ?,
@@ -475,9 +828,45 @@ internalRouter.post("/leads/:lead_id/enrich", async (c) => {
           score = ?,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(effectiveSize, newSummary, newScore, leadId).run();
+    `).bind(estimatedSize, newSummary, newScore, leadId).run();
 
-    // 4. Si el Durable Object estÃ¡ instanciado, registrar el hallazgo
+    // 4. Actualizar cuenta en CRM si existe asociada
+    try {
+      await c.env.DB.prepare(`
+        UPDATE sales_accounts
+        SET size = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE lead_id = ? OR id = ?
+      `).bind(estimatedSize, leadId, currentLead.account_id || `acc_${leadId}`).run();
+    } catch {
+      // Ignorar si cuenta no existe
+    }
+
+    // 5. Registrar auditoría en agent_skill_runs
+    try {
+      const runId = `run_${crypto.randomUUID().slice(0, 12)}`;
+      await c.env.DB.prepare(`
+        INSERT INTO agent_skill_runs (
+          id, lead_id, skill_name, operator, status, output_result, finished_at
+        ) VALUES (?, ?, 'research_prospect_web', ?, 'completed', ?, CURRENT_TIMESTAMP)
+      `).bind(
+        runId,
+        leadId,
+        operator,
+        JSON.stringify({
+          tamano_estimado: estimatedSize,
+          software_detectado: detectedTech,
+          socios: partners,
+          senales_dolor: painSignals,
+          fuentes: sources,
+          confianza: confidence,
+        })
+      ).run();
+    } catch (auditErr) {
+      console.warn("[leads/enrich] Error registrando auditoría en agent_skill_runs:", auditErr);
+    }
+
+    // 6. Si el Durable Object está instanciado, registrar el hallazgo
     if (c.env.SALES_AGENT && typeof c.env.SALES_AGENT.idFromName === "function") {
       try {
         const doId = c.env.SALES_AGENT.idFromName(leadId);
@@ -487,8 +876,8 @@ internalRouter.post("/leads/:lead_id/enrich", async (c) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             lead_id: leadId,
-            message: `[INTELIGENCIA AUTÃNOMA GROK BOT]: ${research_summary || "InvestigaciÃ³n completada."}${techStr}`,
-            tamano: effectiveSize,
+            message: `[INTELIGENCIA AUTÓNOMA ${operator.toUpperCase()}]: ${summaryText}${techStr}${partnersStr}`,
+            tamano: estimatedSize,
           }),
         });
       } catch (doErr) {
@@ -499,17 +888,76 @@ internalRouter.post("/leads/:lead_id/enrich", async (c) => {
     return c.json({
       success: true,
       lead_id: leadId,
-      tamano_asignado: effectiveSize,
+      tamano_asignado: estimatedSize,
       score_actualizado: newScore,
-      message: "Lead enriquecido exitosamente por Grok Bot.",
-    });
+      operator,
+      message: `Lead enriquecido exitosamente por ${operator}.`,
+    }, 200);
   } catch (err: any) {
     console.error("[leads/enrich] Error:", err);
     return c.json({ error: err.message }, 500);
   }
 });
+
 /**
- * Endpoint de clasificación de dolor/vertical vía Workers AI.
+ * Endpoint de Métricas de Harvesting y Monitoreo Agéntico (/api/internal/harvest/metrics)
+ * Permite a StayPuft y al sistema consultar cuentas, SCIAN, señales, cohortes y ejecuciones.
+ */
+internalRouter.get("/harvest/metrics", async (c) => {
+  if (!c.env.DB) return c.json({ error: "DB no disponible" }, 503);
+  try {
+    const totalAccounts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM sales_accounts").first<any>();
+    const byScian = await c.env.DB.prepare("SELECT scian_code, COUNT(*) as cnt FROM sales_accounts WHERE scian_code IS NOT NULL GROUP BY scian_code LIMIT 100").all();
+    const bySource = await c.env.DB.prepare("SELECT harvest_source, COUNT(*) as cnt FROM sales_accounts WHERE harvest_source IS NOT NULL GROUP BY harvest_source LIMIT 100").all();
+    const obsCount = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM sales_observations").first<any>();
+    const topSignals = await c.env.DB.prepare("SELECT signal_code, COUNT(*) as cnt FROM sales_observations GROUP BY signal_code ORDER BY cnt DESC LIMIT 10").all();
+    const cohorts = await c.env.DB.prepare("SELECT cohort_id, name, vertical FROM sales_cohorts LIMIT 100").all();
+    const cohortSizes: any[] = [];
+    for (const ch of (cohorts?.results || [])) {
+      try {
+        const cohortDef = await c.env.DB.prepare("SELECT query_sql FROM sales_cohorts WHERE cohort_id = ?").bind(ch.cohort_id).first<any>();
+        if (cohortDef?.query_sql) {
+          const r = await c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM (${cohortDef.query_sql})`).first<any>();
+          cohortSizes.push({ cohort_id: ch.cohort_id, name: ch.name, vertical: ch.vertical, size: r?.cnt || 0 });
+        }
+      } catch {
+        cohortSizes.push({ cohort_id: ch.cohort_id, name: ch.name, vertical: ch.vertical, size: 0 });
+      }
+    }
+    const lastRun = await c.env.DB.prepare("SELECT * FROM harvest_runs ORDER BY started_at DESC LIMIT 1").first<any>();
+
+    let pendingTasksCount = 0;
+    let recentRuns: any[] = [];
+    try {
+      const pendingRes = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM agent_tasks WHERE status = 'pending'").first<any>();
+      pendingTasksCount = pendingRes?.cnt || 0;
+      const runsRes = await c.env.DB.prepare("SELECT id, lead_id, skill_name, operator, status, started_at, finished_at, error_message FROM agent_skill_runs ORDER BY started_at DESC LIMIT 5").all<any>();
+      recentRuns = runsRes?.results || [];
+    } catch {
+      // Ignorar si las tablas aún no existen en tests
+    }
+
+    return c.json({
+      success: true,
+      total_accounts: totalAccounts?.cnt || 0,
+      accounts_by_scian: byScian?.results || [],
+      accounts_by_source: bySource?.results || [],
+      observations_count: obsCount?.cnt || 0,
+      top_signals: topSignals?.results || [],
+      cohorts_summary: cohortSizes,
+      last_harvest_run: lastRun || null,
+      agent_tasks: {
+        pending_count: pendingTasksCount,
+        recent_runs: recentRuns,
+      },
+    }, 200);
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error obteniendo métricas" }, 500);
+  }
+});
+
+/**
+ * Endpoint de clasificacion de dolor/vertical via Workers AI.
  */
 internalRouter.post("/leads/:lead_id/classify", async (c) => {
   const leadId = c.req.param("lead_id");

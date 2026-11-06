@@ -1683,6 +1683,23 @@ superadminRouter.get("/harvest/metrics", async (c) => {
     }
     const lastRun = await c.env.DB.prepare("SELECT * FROM harvest_runs ORDER BY started_at DESC LIMIT 1").first<any>();
 
+    // Resumen de tareas agénticas y ejecuciones recientes (StayPuft & Grok Bot)
+    let pendingTasksCount = 0;
+    let recentRuns: any[] = [];
+    try {
+      const pendingRes = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM agent_tasks WHERE status = 'pending'").first<any>();
+      pendingTasksCount = pendingRes?.cnt || 0;
+      const runsRes = await c.env.DB.prepare(`
+        SELECT id, lead_id, skill_name, operator, status, started_at, finished_at, error_message
+        FROM agent_skill_runs
+        ORDER BY started_at DESC
+        LIMIT 5
+      `).all<any>();
+      recentRuns = runsRes?.results || [];
+    } catch {
+      // Ignorar si aún no existen tablas en mocks
+    }
+
     return c.json({
       success: true,
       total_accounts: totalAccounts?.cnt || 0,
@@ -1692,9 +1709,113 @@ superadminRouter.get("/harvest/metrics", async (c) => {
       top_signals: topSignals?.results || [],
       cohorts_summary: cohortSizes,
       last_harvest_run: lastRun || null,
+      agent_tasks: {
+        pending_count: pendingTasksCount,
+        recent_runs: recentRuns,
+      },
     });
   } catch (err: any) {
     return c.json({ error: err?.message || "Error obteniendo métricas" }, 500);
+  }
+});
+
+/**
+ * Endpoints de Observabilidad de Operadores Agénticos (StayPuft & Grok Bot) para Super Admin
+ * Protección D1 estricta: Paginación y LIMIT máximo de 100 registros.
+ */
+superadminRouter.get("/agent-skills/tasks", async (c) => {
+  if (!c.env.DB) return c.json({ error: "DB no disponible" }, 503);
+  try {
+    const limitRaw = c.req.query("limit");
+    const limit = Math.min(Math.max(1, parseInt(limitRaw || "50", 10) || 50), 100);
+    const operator = c.req.query("operator");
+    const status = c.req.query("status");
+
+    let query = "SELECT * FROM agent_tasks WHERE 1=1";
+    const params: any[] = [];
+    if (operator) {
+      query += " AND operator = ?";
+      params.push(operator);
+    }
+    if (status) {
+      query += " AND status = ?";
+      params.push(status);
+    }
+    query += " ORDER BY created_at DESC LIMIT ?";
+    params.push(limit);
+
+    const stmt = c.env.DB.prepare(query);
+    const { results: tasks } = await (params.length === 3
+      ? stmt.bind(params[0], params[1], params[2])
+      : params.length === 2
+      ? stmt.bind(params[0], params[1])
+      : stmt.bind(params[0])).all();
+
+    return c.json({ success: true, count: tasks ? tasks.length : 0, limit, tasks: tasks || [] });
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error consultando tareas agénticas" }, 500);
+  }
+});
+
+superadminRouter.get("/agent-skills/runs", async (c) => {
+  if (!c.env.DB) return c.json({ error: "DB no disponible" }, 503);
+  try {
+    const limitRaw = c.req.query("limit");
+    const limit = Math.min(Math.max(1, parseInt(limitRaw || "50", 10) || 50), 100);
+    const operator = c.req.query("operator");
+    const status = c.req.query("status");
+
+    let query = "SELECT * FROM agent_skill_runs WHERE 1=1";
+    const params: any[] = [];
+    if (operator) {
+      query += " AND operator = ?";
+      params.push(operator);
+    }
+    if (status) {
+      query += " AND status = ?";
+      params.push(status);
+    }
+    query += " ORDER BY started_at DESC LIMIT ?";
+    params.push(limit);
+
+    const stmt = c.env.DB.prepare(query);
+    const { results: runs } = await (params.length === 3
+      ? stmt.bind(params[0], params[1], params[2])
+      : params.length === 2
+      ? stmt.bind(params[0], params[1])
+      : stmt.bind(params[0])).all();
+
+    return c.json({ success: true, count: runs ? runs.length : 0, limit, runs: runs || [] });
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error consultando ejecuciones de skills" }, 500);
+  }
+});
+
+superadminRouter.get("/agent-skills/lead/:lead_id", async (c) => {
+  if (!c.env.DB) return c.json({ error: "DB no disponible" }, 503);
+  const leadId = c.req.param("lead_id");
+  if (!leadId) return c.json({ error: "lead_id es obligatorio" }, 400);
+
+  try {
+    const lead = await c.env.DB.prepare("SELECT id, despacho_nombre, email, tamano, score, conversation_summary, updated_at FROM sales_leads WHERE id = ? LIMIT 1").bind(leadId).first<any>();
+    if (!lead) return c.json({ error: "Lead no encontrado" }, 404);
+
+    const { results: runs } = await c.env.DB.prepare(`
+      SELECT * FROM agent_skill_runs WHERE lead_id = ? ORDER BY started_at DESC LIMIT 50
+    `).bind(leadId).all();
+
+    const { results: tasks } = await c.env.DB.prepare(`
+      SELECT * FROM agent_tasks WHERE lead_id = ? ORDER BY created_at DESC LIMIT 50
+    `).bind(leadId).all();
+
+    return c.json({
+      success: true,
+      lead,
+      tasks: tasks || [],
+      runs: runs || [],
+    });
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error consultando historial de lead" }, 500);
   }
 });
 
