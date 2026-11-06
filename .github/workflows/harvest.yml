@@ -12,14 +12,15 @@ on:
         default: 'true'
         type: boolean
       source:
-        description: 'Harvest source'
+        description: 'Harvest source (SIPRES currently supports the active SOFOM pilot)'
         required: false
         default: 'denue'
         type: choice
         options:
           - denue
+          - sipres
       profile:
-        description: 'Target tenant/profile (ark, futura_capital, ark_ledger, fintech_credit_app)'
+        description: 'DENUE profile, or sipres_sofom for SIPRES'
         required: false
         default: 'futura_capital'
         type: choice
@@ -28,6 +29,7 @@ on:
           - ark
           - ark_ledger
           - fintech_credit_app
+          - sipres_sofom
       plaza:
         description: 'Target plaza filter (for fintech: cdmx, monterrey, guadalajara, queretaro, puebla, merida, tijuana, leon, all)'
         required: false
@@ -50,6 +52,11 @@ on:
         type: boolean
       dry_run:
         description: 'Dry run (no ingest)'
+        required: false
+        default: 'false'
+        type: boolean
+      preview_only:
+        description: 'Fetch and display candidates without writing to CRM'
         required: false
         default: 'false'
         type: boolean
@@ -81,11 +88,19 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           cd scripts/python
-          ARGS="--source ${{ inputs.source || 'denue' }} --profile ${{ inputs.profile || 'futura_capital' }} --limit ${{ inputs.limit || '1000' }}"
+          SOURCE="${{ inputs.source || 'denue' }}"
+          PROFILE="${{ inputs.profile || 'futura_capital' }}"
+          LIMIT="${{ inputs.limit || '1000' }}"
+          if [ "$SOURCE" = "sipres" ]; then
+            PROFILE="sipres_sofom"
+            if [ "$LIMIT" -gt 50 ]; then LIMIT=50; fi
+          fi
+          ARGS="--source $SOURCE --profile $PROFILE --limit $LIMIT"
           if [ -n "${{ inputs.plaza }}" ] && [ "${{ inputs.plaza }}" != "all" ]; then ARGS="$ARGS --plaza ${{ inputs.plaza }}"; fi
           if [ -n "${{ inputs.query }}" ]; then ARGS="$ARGS --query '${{ inputs.query }}'"; fi
           if [ "${{ inputs.skip_enrich }}" = "true" ]; then ARGS="$ARGS --skip-enrich"; fi
           if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          if [ "${{ inputs.preview_only }}" = "true" ]; then ARGS="$ARGS --preview"; fi
           python -m lead_harvester.main $ARGS
 
       - name: Upload harvest report

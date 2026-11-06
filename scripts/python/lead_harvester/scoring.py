@@ -194,6 +194,8 @@ def calcular_score_con_observaciones(raw_lead: RawLead, observaciones: list[dict
             dolor_principal = "inversion_patrimonial_yucatan"
     elif raw_lead.harvest_profile == "fintech_credit_app":
         dolor_principal = "cobranza_credito_digital"
+    elif raw_lead.harvest_profile == "sipres_sofom":
+        dolor_principal = "cobranza_sofom"
     elif raw_lead.tenant_id == "acc_ark_ledger":
         dolor_principal = "cierre_fiscal_y_cfdi"
     else:

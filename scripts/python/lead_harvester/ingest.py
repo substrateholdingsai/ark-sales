@@ -74,7 +74,7 @@ VERTICAL_TO_DEST = {
 
 
 def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
-    if lead.harvest_profile == "fintech_credit_app":
+    if lead.harvest_profile in ("fintech_credit_app", "sipres_sofom"):
         vertical, destination = (Vertical.COBRANZA, Destination.ANGEL)
     elif lead.tenant_id == "acc_futura_capital":
         vertical, destination = (Vertical.BUNDLE, Destination.BUNDLE)
@@ -97,8 +97,13 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
             email = f"lead_{lead.lead_id[:8]}@harvest.arksystems.local"
         contact_email = generar_contacto_corporativo(lead.lead_id, dominio)["email"]
 
-    dolor = "cobranza_credito_digital" if lead.harvest_profile == "fintech_credit_app" else (lead.dolor_principal or lead.actividad or "sin datos")
     if lead.harvest_profile == "fintech_credit_app":
+        dolor = "cobranza_credito_digital"
+    elif lead.harvest_profile == "sipres_sofom":
+        dolor = "cobranza_sofom"
+    else:
+        dolor = lead.dolor_principal or lead.actividad or "sin datos"
+    if lead.harvest_profile in ("fintech_credit_app", "sipres_sofom"):
         productos_interes = ["angel", "ledger"]
     elif lead.productos_interes:
         productos_interes = lead.productos_interes
@@ -116,6 +121,14 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
         "dolor_principal": dolor,
         "actividad": lead.actividad,
     }
+    if lead.harvest_profile == "sipres_sofom":
+        account_ctx.update({
+            "sipres_id": lead.raw.get("sipres_id"),
+            "sipres_status": lead.raw.get("status"),
+            "sipres_sector": lead.raw.get("sector"),
+            "sipres_registry_url": lead.raw.get("registry_url"),
+            "rfc": lead.rfc,
+        })
     if lead.harvest_profile != "general":
         account_ctx["harvest_profile"] = lead.harvest_profile
     if lead.ciudad or lead.estado:

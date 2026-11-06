@@ -175,6 +175,29 @@ webhookRouter.post("/", async (c) => {
           console.warn("[webhooks:fintech] Error registrando observación:", obsErr);
         }
       }
+      if (harvest_profile === "sipres_sofom") {
+        try {
+          await c.env.DB.prepare(`
+            INSERT OR REPLACE INTO sales_observations (
+              observation_id, account_id, signal_code, value_text, confidence,
+              evidence_url, observed_at, source_harvester
+            ) VALUES (?, ?, 'CANDIDATO_SIPRES_SOFOM', ?, 1.0, ?, CURRENT_TIMESTAMP, ?)
+          `).bind(
+            `obs_sipres_${finalLeadId}`,
+            targetAccountId,
+            JSON.stringify({
+              sipres_id: ctx.sipres_id || null,
+              status: ctx.sipres_status || null,
+              sector: ctx.sipres_sector || null,
+              rfc: ctx.rfc || null,
+            }),
+            ctx.sipres_registry_url || null,
+            harvest_source || "sipres"
+          ).run();
+        } catch (obsErr) {
+          console.warn("[webhooks:sipres] Error registrando observación:", obsErr);
+        }
+      }
       if (contact_email) {
         try {
           const existingCt: any = await c.env.DB.prepare("SELECT id FROM sales_contacts WHERE account_id = ? OR LOWER(email) = LOWER(?) LIMIT 1")

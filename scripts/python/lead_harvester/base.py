@@ -96,8 +96,12 @@ class BaseHarvester(ABC):
                 raw_lead.score = score_final
                 raw_lead.dolor_principal = dolor_principal
                 raw_lead.vertical = vertical
-                if raw_lead.harvest_profile == "fintech_credit_app":
-                    raw_lead.dolor_principal = "cobranza_credito_digital"
+                if raw_lead.harvest_profile in ("fintech_credit_app", "sipres_sofom"):
+                    raw_lead.dolor_principal = (
+                        "cobranza_credito_digital"
+                        if raw_lead.harvest_profile == "fintech_credit_app"
+                        else "cobranza_sofom"
+                    )
                     raw_lead.vertical = "cobranza"
                     raw_lead.productos_interes = ["angel", "ledger"]
                 elif raw_lead.tenant_id == "acc_futura_capital":

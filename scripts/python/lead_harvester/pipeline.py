@@ -9,6 +9,7 @@ from .denue import DenueHarvester
 from .ingest import ingest_lead
 from .models import RawLead, HarvestResult
 from .scoring import rule_score
+from .sipres import SipresHarvester
 
 
 async def run_pipeline(
@@ -21,17 +22,32 @@ async def run_pipeline(
     plaza: Optional[str] = None,
     query: Optional[str] = None,
     require_email: bool = False,
+    preview_only: bool = False,
 ) -> HarvestResult:
-    if source != "denue":
+    if source not in ("denue", "sipres"):
         raise ValueError(f"Unsupported source: {source}")
-    harvester = DenueHarvester(
-        fixture_path=fixture_path,
-        profile=profile,
-        plaza=plaza,
-        custom_query=query,
-    )
+    if source == "denue":
+        harvester = DenueHarvester(
+            fixture_path=fixture_path,
+            profile=profile,
+            plaza=plaza,
+            custom_query=query,
+        )
+    else:
+        if profile != "sipres_sofom":
+            raise ValueError("SIPRES source requires profile='sipres_sofom'")
+        if plaza:
+            raise ValueError("SIPRES source does not support --plaza")
+        sipres_limit = limit if limit is not None else 50
+        if not 1 <= sipres_limit <= 50:
+            raise ValueError("SIPRES pilot limit must be between 1 and 50")
+        harvester = SipresHarvester(
+            fixture_path=fixture_path,
+            limit=sipres_limit,
+            custom_query=query,
+        )
     result = HarvestResult(source=source)
-    stream = harvester.harvest_and_enrich() if enrich else harvester.harvest()
+    stream = harvester.harvest_and_enrich() if enrich and not preview_only else harvester.harvest()
     seen_ids: set[str] = set()
     count = 0
     enforce_email = require_email or (profile == "ark_ledger")
@@ -62,6 +78,20 @@ async def run_pipeline(
         score = getattr(lead, "score", 0) or rule_score(lead)
         if not enrich:
             score = rule_score(lead)
+        if preview_only:
+            result.candidates.append({
+                "lead_id": lead.lead_id,
+                "name": lead.razon_social,
+                "email": lead.email,
+                "phone": lead.telefono,
+                "website": lead.sitio_web,
+                "state": lead.estado,
+                "status": lead.raw.get("status"),
+                "sector": lead.raw.get("sector"),
+                "official_registry_url": lead.raw.get("registry_url"),
+                "score": score,
+            })
+            continue
         try:
             ok = await ingest_lead(lead, score=score, base_url=base_url)
             if ok:

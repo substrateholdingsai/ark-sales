@@ -23,6 +23,11 @@ export type LeadIngestPayload = {
     actividad?: string;
     harvest_profile?: string;
     tenant_id?: string;
+    sipres_id?: string | null;
+    sipres_status?: string | null;
+    sipres_sector?: string | null;
+    sipres_registry_url?: string | null;
+    rfc?: string | null;
   };
 };
 

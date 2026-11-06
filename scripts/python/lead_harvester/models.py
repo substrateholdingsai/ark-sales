@@ -72,3 +72,4 @@ class HarvestResult(BaseModel):
     deduped: int = 0
     errors: int = 0
     source: str = "denue"
+    candidates: list[dict] = Field(default_factory=list)
