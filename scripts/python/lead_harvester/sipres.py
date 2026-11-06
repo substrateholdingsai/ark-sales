@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import ssl
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import AsyncIterator, Optional
 from urllib.parse import urljoin
 
 import httpx
+import truststore
 
 from .base import BaseHarvester
 from .models import RawLead
@@ -138,7 +140,12 @@ class SipresHarvester(BaseHarvester):
                 yield self._normalize(item)
             return
 
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+        tls_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        async with httpx.AsyncClient(
+            timeout=60.0,
+            follow_redirects=True,
+            verify=tls_context,
+        ) as client:
             await self._throttle()
             response = await client.post(
                 SIPRES_SEARCH_URL,
