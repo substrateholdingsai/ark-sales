@@ -20,14 +20,19 @@ crmActivitiesRouter.get("/", async (c) => {
   const leadId = c.req.query("lead_id");
   const contactId = c.req.query("contact_id");
   const type = c.req.query("type");
-  let sql = "SELECT * FROM sales_activities WHERE 1=1";
+  let sql = `
+    SELECT a.*, u.name AS author_name
+    FROM sales_activities a
+    LEFT JOIN crm_users u ON u.id = a.author_user_id
+    WHERE 1=1
+  `;
   const params: any[] = [];
-  if (accountId) { sql += " AND account_id = ?"; params.push(accountId); }
-  if (opportunityId) { sql += " AND opportunity_id = ?"; params.push(opportunityId); }
-  if (leadId) { sql += " AND lead_id = ?"; params.push(leadId); }
-  if (contactId) { sql += " AND contact_id = ?"; params.push(contactId); }
-  if (type) { sql += " AND type = ?"; params.push(type); }
-  sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+  if (accountId) { sql += " AND a.account_id = ?"; params.push(accountId); }
+  if (opportunityId) { sql += " AND a.opportunity_id = ?"; params.push(opportunityId); }
+  if (leadId) { sql += " AND a.lead_id = ?"; params.push(leadId); }
+  if (contactId) { sql += " AND a.contact_id = ?"; params.push(contactId); }
+  if (type) { sql += " AND a.type = ?"; params.push(type); }
+  sql += " ORDER BY a.created_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
   const stmt = c.env.DB.prepare(sql);
   const bound = params.length ? stmt.bind(...params) : stmt;

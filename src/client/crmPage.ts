@@ -909,7 +909,7 @@ tailwind.config = {
 <!-- ═══════════════ MODAL EDITAR CONTACTO ═══════════════ -->
 <div id="modalEditarContacto" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
   <div class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="cerrarModalEditarContacto()"></div>
-  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl z-10">
+  <div class="modal-content relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-2xl z-10">
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center gap-2">
         <div class="w-8 h-8 rounded-lg bg-ark-blue/15 border border-ark-blue/30 flex items-center justify-center">
@@ -955,6 +955,26 @@ tailwind.config = {
           <option value="opt_out">Opt-out (No contactar)</option>
         </select>
       </div>
+      <section class="space-y-3 border-t border-slate-800 pt-4" aria-labelledby="editCtNotesHeading">
+        <div class="flex items-center justify-between">
+          <div>
+            <h4 id="editCtNotesHeading" class="text-sm font-semibold text-white">Notas del contacto</h4>
+            <p class="text-[11px] text-slate-500">El historial se guarda por separado de los datos del contacto.</p>
+          </div>
+        </div>
+        <div id="editCtNotesList" class="max-h-40 space-y-2 overflow-y-auto" aria-live="polite">
+          <p class="text-xs text-slate-500">Cargando notas…</p>
+        </div>
+        <div class="space-y-2">
+          <label for="editCtNoteInput" class="block text-xs font-mono text-slate-400">Agregar una nota</label>
+          <textarea id="editCtNoteInput" maxlength="10000" rows="2" placeholder="Escribe contexto o detalles de seguimiento…" class="w-full resize-y rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-ark-blue"></textarea>
+          <div class="flex justify-end">
+            <button type="button" id="editCtNoteSaveButton" onclick="guardarNotaContacto()" class="rounded-lg border border-ark-blue/30 bg-ark-blue/10 px-3 py-1.5 text-xs font-semibold text-ark-blue_hi hover:bg-ark-blue/20">
+              Guardar nota
+            </button>
+          </div>
+        </div>
+      </section>
       <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
         <button type="button" onclick="cerrarModalEditarContacto()" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">Cancelar</button>
         <button type="submit" class="px-4 py-2 rounded-lg bg-ark-blue hover:bg-ark-blue/80 text-white text-xs font-semibold transition-colors flex items-center gap-1.5">
@@ -3357,13 +3377,86 @@ function abrirModalEditarContacto(id, modalAccountId = null) {
   document.getElementById('editCtTelInput').value = (c.phone && c.phone !== '-') ? c.phone : '';
   document.getElementById('editCtWhatsAppInput').value = (c.whatsapp && c.whatsapp !== '-') ? c.whatsapp : '';
   document.getElementById('editCtConsentSelect').value = c.consent_status || 'opt_in';
+  document.getElementById('editCtNoteInput').value = '';
+  document.getElementById('editCtNotesList').innerHTML = '<p class="text-xs text-slate-500">Cargando notas…</p>';
+  const canWriteNotes = state.user && state.user.role !== 'lector';
+  document.getElementById('editCtNoteInput').disabled = !canWriteNotes;
+  document.getElementById('editCtNoteSaveButton').classList.toggle('hidden', !canWriteNotes);
 
   document.getElementById('modalEditarContacto').classList.remove('hidden');
   lucide.createIcons();
+  cargarNotasContacto(c.id);
 }
 
 function cerrarModalEditarContacto() {
   document.getElementById('modalEditarContacto').classList.add('hidden');
+}
+
+async function cargarNotasContacto(contactId) {
+  const list = document.getElementById('editCtNotesList');
+  try {
+    const result = await apiCall('/api/crm/activities?contact_id=' + encodeURIComponent(contactId) + '&type=note&limit=50');
+    if (document.getElementById('editCtId').value !== contactId) return;
+    if (!result || result.error) {
+      list.innerHTML = '<p class="text-xs text-rose-400">No se pudieron cargar las notas del contacto.</p>';
+      return;
+    }
+
+    const notes = result.items || [];
+    list.innerHTML = notes.length ? notes.map(note => \`
+      <article class="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5">
+        <p class="whitespace-pre-wrap break-words text-xs text-slate-200">\${escapeHtml(note.content)}</p>
+        <div class="mt-1.5 flex flex-wrap items-center gap-x-2 text-[10px] text-slate-500">
+          <span>\${escapeHtml(note.author_name || 'Usuario del CRM')}</span>
+          <span aria-hidden="true">·</span>
+          <time datetime="\${escapeHtml(note.created_at)}">\${escapeHtml(formatearFechaNota(note.created_at))}</time>
+        </div>
+      </article>
+    \`).join('') : '<p class="text-xs text-slate-500">Este contacto todavía no tiene notas.</p>';
+  } catch (error) {
+    if (document.getElementById('editCtId').value === contactId) {
+      list.innerHTML = '<p class="text-xs text-rose-400">Error al cargar las notas. Intenta de nuevo.</p>';
+    }
+    console.error('Error cargando notas del contacto:', error);
+  }
+}
+
+async function guardarNotaContacto() {
+  const contactId = document.getElementById('editCtId').value;
+  const contact = state.contacts.find(item => item.id === contactId);
+  const textarea = document.getElementById('editCtNoteInput');
+  const button = document.getElementById('editCtNoteSaveButton');
+  const content = textarea.value.trim();
+  if (!content) {
+    toast('Escribe una nota antes de guardarla.');
+    textarea.focus();
+    return;
+  }
+  if (!contact) {
+    toast('No se encontró el contacto para asociar la nota.');
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const result = await apiCall('/api/crm/activities', 'POST', {
+      type: 'note',
+      account_id: contact.account_id,
+      contact_id: contact.id,
+      content
+    });
+    if (!result || result.error || !result.activity) {
+      toast('No se pudo guardar la nota: ' + ((result && result.error) || 'respuesta inválida del servidor'));
+      return;
+    }
+    textarea.value = '';
+    await cargarNotasContacto(contactId);
+    toast('Nota del contacto guardada.');
+  } catch (error) {
+    toast('Error al guardar la nota: ' + (error.message || 'Error de red'));
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function guardarEditarContacto(e) {

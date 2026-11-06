@@ -35,6 +35,15 @@ describe("Validate Client HTML Output", () => {
     expect(html).toContain("Guardar tarea");
   });
 
+  it("renders contact notes in the contact edit modal and saves them separately", () => {
+    const html = renderCrmHtml();
+    expect(html).toContain("Notas del contacto");
+    expect(html).toContain("cargarNotasContacto(c.id)");
+    expect(html).toContain("&type=note&limit=50");
+    expect(html).toContain("guardarNotaContacto()");
+    expect(html).toContain("contact_id: contact.id");
+  });
+
   it("renderSuperAdminHtml must contain valid JavaScript in all script tags", () => {
     const html = renderSuperAdminHtml();
     expect(html).toContain("<!DOCTYPE html>");

@@ -30,6 +30,25 @@ function createMockDb() {
           return null;
         },
         async all() {
+          if (query.includes("from sales_activities a")) {
+            let results = activities;
+            if (query.includes("a.contact_id = ?")) {
+              results = results.filter(activity => activity.contact_id === args[0]);
+            }
+            if (query.includes("a.type = ?")) {
+              const typeIndex = query.includes("a.contact_id = ?") ? 1 : 0;
+              results = results.filter(activity => activity.type === args[typeIndex]);
+            }
+            const limitIndex = args.length - 2;
+            const offset = args[args.length - 1] || 0;
+            const limit = args[limitIndex] || 20;
+            return {
+              results: results.slice(offset, offset + limit).map(activity => ({
+                ...activity,
+                author_name: "Vendedor"
+              }))
+            };
+          }
           return { results: [] };
         },
         async run() {
@@ -107,6 +126,30 @@ describe("CRM account notes", () => {
     expect(body.activity.opportunity_id).toBe("opp_1");
     expect(body.activity.author_name).toBe("Vendedor");
     expect(db.activities).toHaveLength(1);
+  });
+
+  it("lists contact notes with their author for the edit modal", async () => {
+    const db = createMockDb();
+    await postActivity(db, {
+      type: "note",
+      account_id: "acc_1",
+      contact_id: "ct_1",
+      content: "Prefiere una llamada por la mañana."
+    });
+    const token = await signJwt(
+      { sub: "usr_1", email: "rep@ark.test", role: "vendedor", name: "Sales Rep" },
+      secret
+    );
+    const response = await app.fetch(new Request(
+      "http://localhost/api/crm/activities?contact_id=ct_1&type=note&limit=50",
+      { headers: { Authorization: `Bearer ${token}` } }
+    ), { DB: db, CRM_JWT_SECRET: secret } as any);
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as any;
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].content).toBe("Prefiere una llamada por la mañana.");
+    expect(body.items[0].author_name).toBe("Vendedor");
   });
 
   it("rejects blank notes and notes without a customer association", async () => {
