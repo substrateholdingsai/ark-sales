@@ -33,6 +33,10 @@ PATS_FUTURA = {
     "SENAL_LOGISTICA_CEDIS": r"bodega.*industrial|\bcedis\b|almacenaje|log[ií]stica|distribuci[oó]n|puerto.*progreso|parque.*industrial|carga.*pesada",
     "SENAL_INVERSION_PATRIMONIAL": r"plusval[ií]a|rendimiento|rentas.*vacacionales|fractional|patrimonio|hotel.*boutique|airbnb|riviera.*maya|tulum|canc[uú]n|playa.*del.*carmen",
 }
+PATS_FINTECH = {
+    "SENAL_PRESTAMO_DIGITAL": r"fintech|cr[eé]dito.{0,40}(digital|en l[ií]nea|app)|pr[eé]stamo.{0,40}(digital|en l[ií]nea|app)|solicita.{0,30}(pr[eé]stamo|cr[eé]dito)",
+    "SENAL_COBRANZA_CREDITO": r"pago.{0,30}(pr[eé]stamo|cr[eé]dito)|paga.{0,30}(tu|el).{0,15}cr[eé]dito|cobranza|cartera vencida|restructuraci[oó]n",
+}
 PATS_TAMANO = {
     "1-5": r"microempresa|1.*a.*5.*empleados",
     "6-20": r"peque[nñ]a.*empresa|6.*a.*20.*empleados",
@@ -57,6 +61,7 @@ class ProfileResult:
     software_usado: list[str] = field(default_factory=list)
     senales_dolor: list[str] = field(default_factory=list)
     senales_futura: list[str] = field(default_factory=list)
+    senales_fintech: list[str] = field(default_factory=list)
     telefonos_detectados: list[str] = field(default_factory=list)
     emails_detectados: list[str] = field(default_factory=list)
     tamano_estimado: str = "desconocido"
@@ -75,6 +80,7 @@ class HTTPProfiler:
             res.software_usado = self._detect(html, PATS_SOFTWARE)
             res.senales_dolor = self._detect(html, PATS_DOLOR)
             res.senales_futura = self._detect(html, PATS_FUTURA)
+            res.senales_fintech = self._detect(html, PATS_FINTECH)
             res.telefonos_detectados = self._extract_phones(html)
             res.emails_detectados = self._extract_emails(html)
             res.tamano_estimado = self._tamano(html) or "desconocido"
@@ -97,6 +103,13 @@ class HTTPProfiler:
                     "signal_code": sf,
                     "value_text": "Detectado en sitio web corporativo",
                     "confidence": 0.85,
+                    "evidence_url": f"https://{dominio}",
+                })
+            for sf in res.senales_fintech:
+                res.observaciones.append({
+                    "signal_code": sf,
+                    "value_text": "Detectado en sitio web corporativo",
+                    "confidence": 0.8,
                     "evidence_url": f"https://{dominio}",
                 })
             for phone in res.telefonos_detectados[:2]:

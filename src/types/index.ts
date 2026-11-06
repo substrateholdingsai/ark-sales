@@ -7,11 +7,22 @@ export type LeadIngestPayload = {
   vertical: "fiscal" | "cobranza" | "ecommerce" | "bundle";
   score: number; // 0-100
   conversation_summary: string;
+  tenant_id?: string | null;
+  harvest_profile?: string | null;
+  scian_code?: string | null;
+  harvest_source?: string;
+  sitio_web?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  contact_name?: string;
   account_context: {
     despacho_nombre: string;
     tamano: "1-5" | "6-20" | "21-50" | "50+";
     productos_interes: string[];
     dolor_principal: string;
+    actividad?: string;
+    harvest_profile?: string;
+    tenant_id?: string;
   };
 };
 

@@ -96,7 +96,11 @@ class BaseHarvester(ABC):
                 raw_lead.score = score_final
                 raw_lead.dolor_principal = dolor_principal
                 raw_lead.vertical = vertical
-                if raw_lead.tenant_id == "acc_futura_capital":
+                if raw_lead.harvest_profile == "fintech_credit_app":
+                    raw_lead.dolor_principal = "cobranza_credito_digital"
+                    raw_lead.vertical = "cobranza"
+                    raw_lead.productos_interes = ["angel", "ledger"]
+                elif raw_lead.tenant_id == "acc_futura_capital":
                     raw_lead.productos_interes = recomendar_desarrollos_futura(raw_lead, observaciones)
                 yield raw_lead
         finally:

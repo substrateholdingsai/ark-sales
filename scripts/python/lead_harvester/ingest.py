@@ -74,7 +74,9 @@ VERTICAL_TO_DEST = {
 
 
 def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
-    if lead.tenant_id == "acc_futura_capital":
+    if lead.harvest_profile == "fintech_credit_app":
+        vertical, destination = (Vertical.COBRANZA, Destination.ANGEL)
+    elif lead.tenant_id == "acc_futura_capital":
         vertical, destination = (Vertical.BUNDLE, Destination.BUNDLE)
     elif lead.tenant_id == "acc_ark_ledger":
         vertical, destination = (Vertical.FISCAL, Destination.LEDGER)
@@ -95,8 +97,10 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
             email = f"lead_{lead.lead_id[:8]}@harvest.arksystems.local"
         contact_email = generar_contacto_corporativo(lead.lead_id, dominio)["email"]
 
-    dolor = lead.dolor_principal or lead.actividad or "sin datos"
-    if lead.productos_interes:
+    dolor = "cobranza_credito_digital" if lead.harvest_profile == "fintech_credit_app" else (lead.dolor_principal or lead.actividad or "sin datos")
+    if lead.harvest_profile == "fintech_credit_app":
+        productos_interes = ["angel", "ledger"]
+    elif lead.productos_interes:
         productos_interes = lead.productos_interes
     elif lead.tenant_id == "acc_futura_capital":
         productos_interes = recomendar_desarrollos_futura(lead)
@@ -110,7 +114,10 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
         "tamano": tamano_from_rango(lead.empleados_rango),
         "productos_interes": productos_interes,
         "dolor_principal": dolor,
+        "actividad": lead.actividad,
     }
+    if lead.harvest_profile != "general":
+        account_ctx["harvest_profile"] = lead.harvest_profile
     if lead.ciudad or lead.estado:
         account_ctx["ubicacion"] = ", ".join(filter(None, [lead.ciudad, lead.estado]))
     if lead.tenant_id:
@@ -131,6 +138,7 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
         contact_phone=lead.telefono,
         contact_name="Contacto Corporativo",
         tenant_id=lead.tenant_id,
+        harvest_profile=lead.harvest_profile,
     )
 
 

@@ -1,8 +1,8 @@
 ## Lead Harvester (Python)
 - Ubicación: scripts/python/lead_harvester/
 - FASE 1-2: BaseHarvester, DENUE, profiling HTTP, scoring híbrido, ingesta.
-- CLI: `python -m lead_harvester.main --profile <ark|futura_capital|ark_ledger> [--source denue] [--plaza ...] [--query ...] [--limit N] [--fixture ...] [--skip-enrich] [--require-email] [--base-url ...] [--dry-run]`
-- GitHub Actions: `.github/workflows/harvest.yml` (cron cada 6h + switch manual `workflow_dispatch`)
+- CLI: `python -m lead_harvester.main --profile <ark|futura_capital|ark_ledger|fintech_credit_app> [--source denue] [--plaza ...] [--query ...] [--limit N] [--fixture ...] [--skip-enrich] [--require-email] [--base-url ...] [--dry-run]`
+- GitHub Actions: `.github/workflows/harvest.yml` (solo ejecución manual `workflow_dispatch`; cron desactivado)
 - Migraciones: migrations/0010_sales_observations.sql, migrations/0010_tenant_altum_sureste.sql, migrations/0011_cohorts.sql, migrations/0011_altum_email_templates.sql, migrations/0012_accounts_scian_sync.sql, migrations/0012_admin_user_substrate.sql, migrations/0013_harvest_runs.sql, migrations/0013_harvey_sales_engine.sql, migrations/0014_tenant_futura_capital.sql, migrations/0015_cohort_futura_us_investors.sql, migrations/0016_canaco_arkledger_pricing_tiers.sql, migrations/0017_canaco_mailing_campaigns_and_domains.sql, migrations/0018_tenant_ark_ledger.sql, migrations/0019_email_template_gancho_30dias.sql, migrations/0020_email_template_gancho_ledger_freemium.sql, migrations/0021_sales_contacts_whatsapp.sql, migrations/0022_update_ark_ledger_official_template.sql, migrations/0023_sales_accounts_tenant_id.sql, migrations/0024_email_template_ark_ledger_regulatory_overload.sql
 - Endpoints: POST /api/internal/leads/:lead_id/classify; POST /api/internal/harvest/runs; PATCH /api/internal/harvest/runs/:run_id; POST /api/internal/harvest/backfill-scian; Super Admin: GET /api/superadmin/cohorts, POST /api/superadmin/cohorts/:id/preview, /launch-email, /launch-voice, GET /api/superadmin/harvest/metrics
 

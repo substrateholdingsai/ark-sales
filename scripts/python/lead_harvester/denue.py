@@ -28,13 +28,46 @@ PROFILES_SCIAN: dict[str, list[str]] = {
         "541110",  # Bufetes jurídicos y asesoría fiscal
         "561490",  # Agencias de cobranza y servicios de nómina/maquila
     ],
+    # DENUE no tiene un SCIAN que identifique por sí solo prestamistas por app.
+    "fintech_credit_app": [],
 }
 
 PROFILES_ENTIDADES: dict[str, list[str]] = {
     "ark": ["0"],
     "futura_capital": ["31", "09", "19", "14", "23", "04"],
     "ark_ledger": ["0"],
+    "fintech_credit_app": ["0"],
 }
+
+FINTECH_PLAZA_CENTERS = {
+    "cdmx": "19.4326,-99.1332",
+    "monterrey": "25.6866,-100.3161",
+    "guadalajara": "20.6597,-103.3496",
+    "queretaro": "20.5888,-100.3899",
+    "puebla": "19.0414,-98.2063",
+    "merida": "20.9674,-89.5926",
+    "tijuana": "32.5149,-117.0382",
+    "leon": "21.1220,-101.6820",
+}
+FINTECH_PLAZA_ALIASES = {"mty": "monterrey", "gdl": "guadalajara"}
+FINTECH_SEARCH_TERMS = (
+    "prestamos personales",
+    "prestamo en linea",
+    "credito digital",
+    "fintech credito",
+    "SOFOM",
+)
+FINTECH_GEO_CLUSTERS = [
+    {
+        "query": term,
+        "coords": coords,
+        "radio": 15000,
+        "scian_default": None,
+        "plaza": plaza,
+    }
+    for plaza, coords in FINTECH_PLAZA_CENTERS.items()
+    for term in FINTECH_SEARCH_TERMS
+]
 
 # Palabras clave y coordenadas estratégicas para Futura Capital en Quintana Roo y Riviera Maya (Prioridad: Riviera Maya & Tulum)
 FUTURA_GEO_CLUSTERS = [
@@ -313,7 +346,15 @@ class DenueHarvester(BaseHarvester):
             raise RuntimeError("INEGI_TOKEN not set")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
-            if self.profile in ("futura_capital", "ark_ledger"):
+            if self.profile == "fintech_credit_app":
+                clusters = list(FINTECH_GEO_CLUSTERS)
+                if self.plaza and self.plaza != "all":
+                    plaza = FINTECH_PLAZA_ALIASES.get(self.plaza, self.plaza)
+                    if plaza not in FINTECH_PLAZA_CENTERS:
+                        choices = ", ".join(FINTECH_PLAZA_CENTERS)
+                        raise ValueError(f"Plaza fintech no válida: {self.plaza}. Opciones: {choices}")
+                    clusters = [cluster for cluster in clusters if cluster["plaza"] == plaza]
+            elif self.profile in ("futura_capital", "ark_ledger"):
                 # Consulta geográfica con endpoints probados y optimizados
                 if self.plaza == "campeche":
                     clusters = list(CAMPECHE_GEO_CLUSTERS)
@@ -404,6 +445,8 @@ class DenueHarvester(BaseHarvester):
             tenant_id = "acc_futura_capital"
         elif self.profile == "ark_ledger":
             tenant_id = "acc_ark_ledger"
+        elif self.profile == "fintech_credit_app":
+            tenant_id = "acc_ark_ledger"
         else:
             tenant_id = item.get("tenant_id")
 
@@ -440,6 +483,7 @@ class DenueHarvester(BaseHarvester):
             telefono=raw_tel,
             email=raw_email,
             tenant_id=tenant_id,
+            harvest_profile=self.profile,
             source="denue",
             raw=item,
         )

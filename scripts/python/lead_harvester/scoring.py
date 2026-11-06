@@ -11,6 +11,12 @@ PAIN_KEYWORDS = {
     "CFDI": 15,
     "multas": 20,
     "cobranza": 10,
+    "préstamo": 20,
+    "prestamo": 20,
+    "crédito": 20,
+    "credito": 20,
+    "fintech": 20,
+    "sofom": 20,
     # Señales contables y fiscales para Ark Ledger
     "contabilidad": 20,
     "despacho contable": 25,
@@ -139,6 +145,9 @@ def calcular_score_con_observaciones(raw_lead: RawLead, observaciones: list[dict
         elif sc == "DOLOR_MOROSIDAD":
             score += int(25 * conf)
             dolor_scores["cobranza"] = dolor_scores.get("cobranza", 0) + 25 * conf
+        elif sc in ("SENAL_PRESTAMO_DIGITAL", "SENAL_COBRANZA_CREDITO"):
+            score += int(25 * conf)
+            dolor_scores["cobranza_credito_digital"] = dolor_scores.get("cobranza_credito_digital", 0) + 25 * conf
         elif sc == "DOLOR_CFDI":
             score += int(15 * conf)
             dolor_scores["fiscal"] = dolor_scores.get("fiscal", 0) + 15 * conf
@@ -183,6 +192,8 @@ def calcular_score_con_observaciones(raw_lead: RawLead, observaciones: list[dict
             dolor_principal = "alianza_broker_inmobiliario"
         else:
             dolor_principal = "inversion_patrimonial_yucatan"
+    elif raw_lead.harvest_profile == "fintech_credit_app":
+        dolor_principal = "cobranza_credito_digital"
     elif raw_lead.tenant_id == "acc_ark_ledger":
         dolor_principal = "cierre_fiscal_y_cfdi"
     else:

@@ -39,6 +39,8 @@ webhookRouter.post("/", async (c) => {
     const tamano = body.tamano ?? ctx.tamano ?? (hLead.marketValueDollars && hLead.marketValueDollars > 1000000 ? "50+" : "6-20");
     const dolor_principal = body.dolor_principal ?? ctx.dolor_principal ?? (hLead.investorType === "accredited" ? "inversion_patrimonial" : "otro");
     const productos_interes = body.productos_interes ?? ctx.productos_interes ?? (hLead.investorType ? ["lote_residencial_playa", "parque_industrial_progreso"] : undefined);
+    const tenant_id = body.tenant_id ?? ctx.tenant_id ?? null;
+    const harvest_profile = body.harvest_profile ?? ctx.harvest_profile ?? null;
     const origen = body.origen || (hLead.source ? "hermes_us_proptech" : "web");
     const harvest_source = body.harvest_source || (hLead.source ? "hermes_us_proptech" : "denue");
     const scian_code = body.scian_code || (hLead.investorType ? "531110" : null);
@@ -149,11 +151,30 @@ webhookRouter.post("/", async (c) => {
           UPDATE sales_accounts
           SET scian_code = COALESCE(?, scian_code),
               harvest_source = COALESCE(?, harvest_source),
+              tenant_id = COALESCE(?, tenant_id),
               city = COALESCE(?, city),
               last_enriched_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(scian_code || null, harvest_source || "denue", ubicacion, targetAccountId).run();
+        `).bind(scian_code || null, harvest_source || "denue", tenant_id, ubicacion, targetAccountId).run();
       } catch {}
+      if (harvest_profile === "fintech_credit_app") {
+        try {
+          await c.env.DB.prepare(`
+            INSERT OR REPLACE INTO sales_observations (
+              observation_id, account_id, signal_code, value_text, confidence,
+              evidence_url, observed_at, source_harvester
+            ) VALUES (?, ?, 'CANDIDATO_FINTECH_CREDITO_APP', ?, 0.6, ?, CURRENT_TIMESTAMP, ?)
+          `).bind(
+            `obs_fintech_${finalLeadId}`,
+            targetAccountId,
+            JSON.stringify({ perfil: harvest_profile, actividad: body.account_context?.actividad || body.actividad || null }),
+            sitio_web || null,
+            harvest_source || "denue"
+          ).run();
+        } catch (obsErr) {
+          console.warn("[webhooks:fintech] Error registrando observación:", obsErr);
+        }
+      }
       if (contact_email) {
         try {
           const existingCt: any = await c.env.DB.prepare("SELECT id FROM sales_contacts WHERE account_id = ? OR LOWER(email) = LOWER(?) LIMIT 1")

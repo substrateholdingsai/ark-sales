@@ -19,7 +19,7 @@ on:
         options:
           - denue
       profile:
-        description: 'Target tenant profile (ark, futura_capital, ark_ledger)'
+        description: 'Target tenant/profile (ark, futura_capital, ark_ledger, fintech_credit_app)'
         required: false
         default: 'futura_capital'
         type: choice
@@ -27,13 +27,14 @@ on:
           - futura_capital
           - ark
           - ark_ledger
+          - fintech_credit_app
       plaza:
-        description: 'Target plaza filter (riviera_maya, cancun, merida, cdmx, monterrey, guadalajara, campeche, all)'
+        description: 'Target plaza filter (for fintech: cdmx, monterrey, guadalajara, queretaro, puebla, merida, tijuana, leon, all)'
         required: false
         default: 'all'
         type: string
       query:
-        description: 'Custom search term override (e.g. dental, cirugia plastica, asesoria fiscal)'
+        description: 'Custom search term override (e.g. prestamo en linea, credito digital, dental)'
         required: false
         default: ''
         type: string

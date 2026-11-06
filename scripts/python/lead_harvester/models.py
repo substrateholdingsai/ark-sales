@@ -43,6 +43,7 @@ class RawLead(BaseModel):
     score: int = 0
     dolor_principal: str = ""
     vertical: str = ""
+    harvest_profile: str = "general"
 
 
 class IngestPayload(BaseModel):
@@ -62,6 +63,7 @@ class IngestPayload(BaseModel):
     contact_phone: Optional[str] = None
     contact_name: str = "Contacto Corporativo"
     tenant_id: Optional[str] = None
+    harvest_profile: Optional[str] = None
 
 
 class HarvestResult(BaseModel):
