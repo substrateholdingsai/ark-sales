@@ -3,7 +3,7 @@
 - FASE 1-2: BaseHarvester, DENUE, profiling HTTP, scoring híbrido, ingesta.
 - CLI: `python -m lead_harvester.main --source <denue|sipres> --profile <ark|futura_capital|ark_ledger|fintech_credit_app|sipres_sofom> [--plaza ...] [--query ...] [--limit N] [--fixture ...] [--skip-enrich] [--require-email] [--preview] [--base-url ...] [--dry-run]`
 - GitHub Actions: `.github/workflows/harvest.yml` (solo ejecución manual `workflow_dispatch`; cron desactivado)
-- Migraciones: migrations/0010_sales_observations.sql, migrations/0010_tenant_altum_sureste.sql, migrations/0011_cohorts.sql, migrations/0011_altum_email_templates.sql, migrations/0012_accounts_scian_sync.sql, migrations/0012_admin_user_substrate.sql, migrations/0013_harvest_runs.sql, migrations/0013_harvey_sales_engine.sql, migrations/0014_tenant_futura_capital.sql, migrations/0015_cohort_futura_us_investors.sql, migrations/0016_canaco_arkledger_pricing_tiers.sql, migrations/0017_canaco_mailing_campaigns_and_domains.sql, migrations/0018_tenant_ark_ledger.sql, migrations/0019_email_template_gancho_30dias.sql, migrations/0020_email_template_gancho_ledger_freemium.sql, migrations/0021_sales_contacts_whatsapp.sql, migrations/0022_update_ark_ledger_official_template.sql, migrations/0023_sales_accounts_tenant_id.sql, migrations/0024_email_template_ark_ledger_regulatory_overload.sql
+- Migraciones: migrations/0010_sales_observations.sql, migrations/0010_tenant_altum_sureste.sql, migrations/0011_cohorts.sql, migrations/0011_altum_email_templates.sql, migrations/0012_accounts_scian_sync.sql, migrations/0012_admin_user_substrate.sql, migrations/0013_harvest_runs.sql, migrations/0013_harvey_sales_engine.sql, migrations/0014_tenant_futura_capital.sql, migrations/0015_cohort_futura_us_investors.sql, migrations/0016_canaco_arkledger_pricing_tiers.sql, migrations/0017_canaco_mailing_campaigns_and_domains.sql, migrations/0018_tenant_ark_ledger.sql, migrations/0019_email_template_gancho_30dias.sql, migrations/0020_email_template_gancho_ledger_freemium.sql, migrations/0021_sales_contacts_whatsapp.sql, migrations/0022_update_ark_ledger_official_template.sql, migrations/0023_sales_accounts_tenant_id.sql, migrations/0024_email_template_ark_ledger_regulatory_overload.sql, migrations/0025_staypuft_operator_and_agent_tasks.sql
 - Endpoints: POST /api/internal/leads/:lead_id/classify; POST /api/internal/harvest/runs; PATCH /api/internal/harvest/runs/:run_id; POST /api/internal/harvest/backfill-scian; Super Admin: GET /api/superadmin/cohorts, POST /api/superadmin/cohorts/:id/preview, /launch-email, /launch-voice, GET /api/superadmin/harvest/metrics
 
 
@@ -53,7 +53,7 @@
 │                │ (Outbox Pattern)                        │ (Queue Send)        │
 │                │                                         ▼                     │
 │   ┌────────────┴────────────┝         ┌─────────────────────────────────────┝  │
-│   │ Cron: */15 * * * *      │         │ Cloudflare Queue:                   │  │
+│   │ Cron: 0 2,14 * * *     │         │ Cloudflare Queue:                   │  │
 │   │ (Outbox Processor)      │         │ SALES_INGEST_QUEUE                  │  │
 │   └────────────┬────────────┘         └──────────────────┬──────────────────┘  │
 │                │                                         │                     │
@@ -75,11 +75,11 @@
 |---|---|---|---|---|
 | **Runtime** | Workers | - | `ark-sales` | Núcleo del motor de ventas agéntico |
 | **D1 Database** | SQL Serverless | `DB` | `ark-sales-db` | Config de productos, leads, conversaciones, outbox y skills |
-| **Workers AI** | AI Binding | `AI` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Razonamiento agéntico y ejecución de tool-calling |
+| **Workers AI** | AI Binding | `AI` | `@cf/meta/llama-3.1-8b-instruct (fallback @cf/meta/llama-3.3-70b-instruct-fp8-fast)` | Razonamiento agéntico y ejecución de tool-calling |
 | **Queue** | Producer / Consumer | `SALES_INGEST_QUEUE`| `ark-sales-ingest-queue` | Ingesta asíncrona federada de prospectos hacia hermanos |
 | **Dead Letter Queue**| Queue | - | `ark-sales-ingest-dlq` | Retención de mensajes fallidos tras 3 reintentos |
 | **Durable Object**| Stateful Actor | `SALES_AGENT` | `SalesAgent` | Memoria de conversación persistente por `lead_id` |
-| **Cron Trigger** | Programador | - | `*/15 * * * *` | Reintento automático del Outbox Pattern cada 15 min |
+| **Cron Trigger** | Programador | - | `0 2,14 * * *` | Reintento automático del Outbox Pattern 2 veces al día (08:00 y 20:00 CDMX) |
 | **Email Service** | HTTP / API | Secret | Resend API (`RESEND_API_KEY`) | Envío formal de contratos y cotizaciones por correo |
 
 ---
@@ -124,6 +124,7 @@ ark-sales/
 │   ├── 0022_update_ark_ledger_official_template.sql # Template oficial Ark Ledger
 │   ├── 0023_sales_accounts_tenant_id.sql # tenant_id en accounts
 │   └── 0024_email_template_ark_ledger_regulatory_overload.sql # Campaña Ark Ledger: sobrecarga regulatoria
+│   └── 0025_staypuft_operator_and_agent_tasks.sql # Operador StayPuft y tareas agénticas
 ??? src/
 │   ├── auth/
 │   │   ├── password.ts            # PBKDF2-SHA256 soberano (100k iteraciones, Web Crypto API)
@@ -146,6 +147,19 @@ ark-sales/
 │   ├── queue/
 │   │   ├── consumer.ts            # Consumidor de Queue hacia hermanos destinos
 │   │   └── outbox.ts              # Reintento programado de envíos pendientes (Cron)
+│   ├── crm/
+│   │   └── automation.ts         # Automatización CRM (tareas, deduplicación, federación) 
+│   ├── services/
+│   │   ├── atsHarvester.ts
+│   │   ├── conekta.ts
+│   │   ├── contactEnrichment.ts
+│   │   ├── dnc.ts
+│   │   ├── gate.ts
+│   │   ├── intentHandler.ts
+│   │   ├── sheetsImport.ts
+│   │   └── untrusted.ts
+│   ├── types/
+│   │   └── index.ts               # Tipos compartidos (Env, payloads, entidades) 
 │   ├── routes/
 │   │   ├── chat.ts                # POST /api/chat (Frontend y DO bridge)
 │   │   ├── webhooks.ts            # POST /webhooks/ingest (Formularios y terceros)
@@ -183,6 +197,22 @@ ark-sales/
     ├── crm_phase6.test.ts         # Tests de métricas y deduplicación CRM
     ├── telnyx_voice.test.ts       # Tests de llamadas de cortesía Telnyx (13 tests)
     ├── telnyx_voice_ai.test.ts    # Tests de Telnyx Voice AI Agents (tools, eventos, DO, fail-closed)
+    ├── admin_assistant_enrichment.test.ts
+    ├── altum.test.ts
+    ├── canaco_mailing_campaign.test.ts
+    ├── check_crm_page.test.ts
+    ├── conekta.test.ts
+    ├── contact_enrichment.test.ts
+    ├── crm_activities.test.ts
+    ├── crm_delete_and_export.test.ts
+    ├── fintech_webhook_ingest.test.ts
+    ├── futura_capital.test.ts
+    ├── harvey_engine.test.ts
+    ├── leads_ingest_siem.test.ts
+    ├── mcp_server.test.ts
+    ├── pipeline_email_sync_and_sheets_import.test.ts
+    ├── security_hardening.test.ts
+    ├── staypuft_operator.test.ts
     └── superadmin.test.ts         # Tests del panel Super Admin (Resend, templates, voz AI Telnyx, multi-tenant)
 ```
 
@@ -458,7 +488,7 @@ curl -X GET "https://sales.arksystems.site/api/superadmin/harvest/metrics" \
 - [x] Regla de oro **Fail-Closed**: Mensaje obligatorio *"Permíteme verificar la disponibilidad de esa solución con mi equipo."* ante caídas de catálogo o errores de base de datos.
 
 ### Inteligencia y Agentes por Dolor (Sprint 1)
-- [x] Orquestador de Tool Calling [`src/agents/orchestrator.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/src/agents/orchestrator.ts) con modelo `@cf/meta/llama-3.3-70b-instruct-fp8-fast`.
+- [x] Orquestador de Tool Calling [`src/agents/orchestrator.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/src/agents/orchestrator.ts) con modelo `@cf/meta/llama-3.1-8b-instruct (fallback @cf/meta/llama-3.3-70b-instruct-fp8-fast)`.
 - [x] 4 Agentes implementados con System Prompts especializados:
   - [x] **El Triador (`intake`):** Escucha activa, clasifica dolor, deriva a Riesgo, Flujo o Closer.
   - [x] **Especialista en Riesgo (`riesgo`):** Vende Ledger (SHA-256) + Angel contra contingencias del SAT.
@@ -470,7 +500,7 @@ curl -X GET "https://sales.arksystems.site/api/superadmin/harvest/metrics" \
 - [x] Durable Object [`SalesAgent`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/src/durable-objects/SalesAgent.ts) con memoria persistente de sesión por `lead_id`.
 - [x] Cloudflare Queue [`src/queue/consumer.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/src/queue/consumer.ts) con entrega en lote hacia hermanos bajo contrato `LEAD_INGEST_V3`.
 - [x] Outbox Pattern implementado en `sales_pending_ingest` con seguimiento de retries y errores.
-- [x] Cron Trigger cada 15 min [`src/queue/outbox.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/src/queue/outbox.ts) para reintento automático de entregas fallidas.
+- [x] Cron Trigger (0 2,14 * * *) [`src/queue/outbox.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/src/queue/outbox.ts) para reintento automático de entregas fallidas.
 - [x] Idempotencia garantizada mediante el header `X-Idempotency-Key: lead_id`.
 
 ### Capa de Integración con Grok Bot (Sprint 2)
@@ -508,20 +538,8 @@ curl -X GET "https://sales.arksystems.site/api/superadmin/harvest/metrics" \
 - [x] Suite completa [`tests/superadmin.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/superadmin.test.ts) (12/12 tests verdes).
 
 ### Verificación y Calidad de Código
-- [x] Suite de 58 pruebas unitarias e integración en Vitest pasando al 100% (11 suites verdes):
-  - [`tests/catalog.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/catalog.test.ts) (4/4)
-  - [`tests/tools.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/tools.test.ts) (5/5)
-  - [`tests/orchestrator.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/orchestrator.test.ts) (3/3)
-  - [`tests/outbox.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/outbox.test.ts) (3/3)
-  - [`tests/grok_integration.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/grok_integration.test.ts) (9/9)
-  - [`tests/widget.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/widget.test.ts) (3/3)
-  - [`tests/auth_routes.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/auth_routes.test.ts) (2/2)
-  - [`tests/crm_phase6.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/crm_phase6.test.ts) (2/2)
-  - [`tests/telnyx_voice.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/telnyx_voice.test.ts) (13/13)
-  - [`tests/telnyx_voice_ai.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/telnyx_voice_ai.test.ts) (2/2)
-  - [`tests/superadmin.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/superadmin.test.ts) (12/12)
-- [x] Verificación estricta de TypeScript (`npm run typecheck`): **0 errores** (src + tests; verificado 2026-11-05).
-- [x] Build y empaquetado de producción (`npm run build` / `wrangler deploy --dry-run`): **Exitoso** (upload ~980 KiB / gzip ~209 KiB; verificado 2026-11-05).
+- [x] Suite de 172 pruebas unitarias e integración en Vitest pasando al 100% (27 suites verdes).\n- [x] Verificación estricta de TypeScript (`npm run typecheck`): **0 errores** (src + tests; verificado 2026-11-05).
+- [x] Build y empaquetado de producción (`npm run build` / `wrangler deploy --dry-run`): **Exitoso** (upload ~1020 KiB / gzip ~218 KiB; verificado 2026-11-05).
 
 ---
 
@@ -673,3 +691,78 @@ curl -X GET "https://sales.arksystems.site/api/superadmin/harvest/metrics" \
 - [ ] Evaluar integraciones de correo, calendario, WhatsApp y proveedores externos después de estabilizar el CRM base.
 - [ ] Evaluar scoring predictivo o recomendaciones de IA con datos suficientes y revisión humana; no usar el score para decisiones automáticas irreversibles.
 - [ ] Evaluar importaciones masivas, sincronización con los Workers hermanos y segmentación avanzada según necesidades reales del equipo.
+
+
+---
+
+## 8. Operador StayPuft — Herramientas de Correo (Resend) y Fail-Closed
+
+StayPuft (Muse) opera el despacho y previsualización de correos transaccionales y de propuesta en Ark Sales a través de Resend, utilizando únicamente las plantillas HTML pre-aprobadas y auditadas por el Guardián Pre-Envío (`PreSendGate`). No requiere sesión JWT de Super Admin; opera bajo el principio de menor privilegio con `STAYPUFT_API_KEY`.
+
+### Reglas de Oro y Seguridad
+1. **Aprobación de Pablo (Human-in-the-Loop):** StayPuft jamás realiza un envío real (`dry_run: false`) sin la confirmación explícita de Pablo en el chat.
+2. **Cero Correos Arbitrarios:** El destinatario final siempre se valida contra el correo registrado del `lead_id` en D1.
+3. **Deduplicación 24 Horas:** Si la misma plantilla ya fue enviada al lead en las últimas 24 horas, el sistema devuelve el registro previo y aborta el duplicado.
+4. **Protección de Tasa (Rate Limits):** Máximo 20 envíos por hora y 100 por día para el operador StayPuft (retorna `429 Too Many Requests` y registra intento bloqueado).
+5. **PreSendGate:** Todo correo es validado determinísticamente contra tags sin resolver (`{{...}}`), spam triggers y directrices anti-IA antes de salir.
+
+### Endpoints Disponibles (`/api/internal/email/`)
+
+| Método | Endpoint | Descripción | Auth |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/internal/email/templates` | Lista plantillas activas con `variables_requeridas`. | `X-StayPuft-Key` |
+| `GET` / `POST` | `/api/internal/email/templates/:id/preview` | Renderiza vista previa HTML con variables inyectadas. | `X-StayPuft-Key` |
+| `GET` | `/api/internal/email/status` | Estado de conexión Resend y conteo diario/horario. | `X-StayPuft-Key` |
+| `POST` | `/api/internal/email/test` | Envío de prueba SOLO a destinatario autorizado. | `X-StayPuft-Key` |
+| `POST` | `/api/internal/email/send` | Validación fail-closed y envío real o dry-run. | `X-StayPuft-Key` |
+| `GET` | `/api/internal/email/history?lead_id=...` | Historial de despachos del lead (tope 100). | `X-StayPuft-Key` |
+
+### Parámetros de Envío (`POST /api/internal/email/send`)
+```json
+{
+  "lead_id": "lead_12345",
+  "template_id": "propuesta_enterprise",
+  "variables": {
+    "despacho_nombre": "Corporativo Fiscal MX",
+    "contacto_nombre": "Lic. Roberto Pérez"
+  },
+  "dry_run": true
+}
+```
+
+- `dry_run: true` (por defecto): Valida existencia en D1, variables requeridas, correo del lead y calidad `PreSendGate`. Devuelve HTML y asunto renderizado sin disparar a Resend ni alterar base de datos.
+- `dry_run: false`: Realiza el despacho vía Resend API, registra en `email_dispatches`, genera actividad en `sales_activities` con autor `staypuft` y promueve oportunidad a `propuesta_enviada`.
+
+### Ejemplos cURL
+
+```bash
+# 1. Consultar plantillas activas
+curl -s -H "X-StayPuft-Key: $STAYPUFT_API_KEY" \
+  https://sales.arksystems.site/api/internal/email/templates
+
+# 2. Previsualizar plantilla con variables
+curl -s -H "X-StayPuft-Key: $STAYPUFT_API_KEY" \
+  "https://sales.arksystems.site/api/internal/email/templates/propuesta_enterprise/preview?despacho_nombre=Despacho%20Ejemplo&contacto_nombre=Juan"
+
+# 3. Dry-run de validación de envío
+curl -s -X POST https://sales.arksystems.site/api/internal/email/send \
+  -H "X-StayPuft-Key: $STAYPUFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "lead_id": "lead_abc123",
+    "template_id": "propuesta_enterprise",
+    "variables": { "contacto_nombre": "Lic. Juan" },
+    "dry_run": true
+  }'
+
+# 4. Envío real (con aprobación previa de Pablo)
+curl -s -X POST https://sales.arksystems.site/api/internal/email/send \
+  -H "X-StayPuft-Key: $STAYPUFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "lead_id": "lead_abc123",
+    "template_id": "propuesta_enterprise",
+    "variables": { "contacto_nombre": "Lic. Juan" },
+    "dry_run": false
+  }'
+```

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { Env, AgentSkill, LeadExecutiveContext } from "../types";
 import { ensureAccountContactForLead, ensureTask } from "../crm/automation";
+import { internalEmailRouter } from "./internalEmail";
 
 export type InternalVariables = {
   operator?: "staypuft" | "grok_bot" | "internal_service";
@@ -20,10 +21,11 @@ function checkInternalRateLimit(key: string, limit = 120, windowMs = 60000): boo
 
 export const internalRouter = new Hono<{ Bindings: Env; Variables: InternalVariables }>();
 
+
 internalRouter.use("*", async (c, next) => {
-  const expectedService = c.env.INTERNAL_SERVICE_KEY;
-  const expectedToken = c.env.INTERNAL_API_TOKEN;
-  const expectedStayPuft = c.env.STAYPUFT_API_KEY;
+  const expectedService = c.env?.INTERNAL_SERVICE_KEY;
+  const expectedToken = c.env?.INTERNAL_API_TOKEN;
+  const expectedStayPuft = c.env?.STAYPUFT_API_KEY;
 
   const authHeader = c.req.header("Authorization") || "";
   const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
@@ -43,7 +45,7 @@ internalRouter.use("*", async (c, next) => {
     } else {
       return c.json({ error: "Unauthorized: invalid or missing internal key." }, 401);
     }
-  } else if ((c.env.ENVIRONMENT || "development") === "production") {
+  } else if ((c.env?.ENVIRONMENT || "development") === "production") {
     return c.json({ error: "Unauthorized: internal key not configured." }, 401);
   }
 
@@ -68,8 +70,9 @@ internalRouter.use("*", async (c, next) => {
     const isContext = (method === "GET" || method === "POST") && path.endsWith("/context");
     const isEnrich = method === "POST" && /\/leads\/[^/]+\/enrich$/.test(path);
     const isMetrics = method === "GET" && (path.endsWith("/harvest/metrics") || path.endsWith("/metrics"));
+    const isEmail = path.includes("/email/") || path.endsWith("/email");
 
-    if (!isPending && !isExecute && !isSkills && !isContext && !isEnrich && !isMetrics) {
+    if (!isPending && !isExecute && !isSkills && !isContext && !isEnrich && !isMetrics && !isEmail) {
       return c.json({
         error: "Forbidden: StayPuft operator does not have permission to access this endpoint or perform destructive operations.",
         allowed_endpoints: [
@@ -79,6 +82,12 @@ internalRouter.use("*", async (c, next) => {
           "POST /api/internal/context",
           "POST /api/internal/leads/:lead_id/enrich",
           "GET /api/internal/harvest/metrics",
+          "GET /api/internal/email/templates",
+          "GET /api/internal/email/templates/:id/preview",
+          "GET /api/internal/email/status",
+          "POST /api/internal/email/test",
+          "POST /api/internal/email/send",
+          "GET /api/internal/email/history",
         ],
       }, 403);
     }
@@ -86,6 +95,9 @@ internalRouter.use("*", async (c, next) => {
 
   await next();
 });
+
+// Rutas de Email para Operador StayPuft y Servicios Internos
+internalRouter.route("/email", internalEmailRouter);
 
 /**
  * Ingesta Federada de Leads y Altas de SIEM CANACO (/api/internal/leads/ingest)

@@ -264,6 +264,7 @@ export interface Env {
   ARK_WEBHOOK_SECRET?: string;
   CONEKTA_API_KEY?: string;
   CONEKTA_WEBHOOK_KEY?: string;
+  TEST_RECIPIENT_EMAIL?: string;
 }
 
 export type PaymentOrderStatus = "pending" | "paid" | "expired" | "cancelled" | "failed";
