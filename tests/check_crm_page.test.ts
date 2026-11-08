@@ -44,6 +44,37 @@ describe("Validate Client HTML Output", () => {
     expect(html).toContain("contact_id: contact.id");
   });
 
+  it("renders WhatsApp Studio modal with multi-tenant templates, super admin default number and zero-cost deep linking", () => {
+    const html = renderCrmHtml();
+    // Modal container
+    expect(html).toContain("modalWhatsAppStudio");
+    expect(html).toContain("WhatsApp Studio");
+    expect(html).toContain("CERO COSTO · wa.me");
+    expect(html).toContain("https://wa.me/");
+
+    // Super Admin Default number
+    expect(html).toContain("+525648564149");
+    expect(html).toContain("+52 56 4856 4149");
+
+    // Tenants
+    expect(html).toContain("Ark Technologies");
+    expect(html).toContain("Futura Capital");
+    expect(html).toContain("wsTenantSelect");
+    expect(html).toContain("wsNumeroEmisor");
+
+    // Templates for Futura Capital (Doctors & Real Estate) and Ark (Accounting & CFDI)
+    expect(html).toContain("Torre Médica MB");
+    expect(html).toContain("Preventa Consultorios para Médicos Especialistas");
+    expect(html).toContain("Ark Ledger — Cierre Fiscal Masivo & CFDI 4.0 SAT");
+    expect(html).toContain("Ark Angel — Cobranza Inteligente IA con Riel CoDi® Banxico");
+    expect(html).toContain("Ticket Digital de Cobro / Activación CoDi® Banxico");
+
+    // JS Action functions
+    expect(html).toContain("abrirModalWhatsAppStudio");
+    expect(html).toContain("dispararEnvioWhatsApp");
+    expect(html).toContain("copiarTextoWhatsApp");
+  });
+
   it("renderSuperAdminHtml must contain valid JavaScript in all script tags", () => {
     const html = renderSuperAdminHtml();
     expect(html).toContain("<!DOCTYPE html>");

@@ -3,6 +3,7 @@ import { Env, LeadIngestPayload } from "../types";
 import { ToolExecutor } from "../tools";
 import { ensureAccountContactForLead } from "../crm/automation";
 import { normalizarTelefonoE164 } from "../voice/telnyx";
+import { isGenericFirmName, isValidEmailFormat } from "./internal";
 
 export const webhookRouter = new Hono<{ Bindings: Env }>();
 
@@ -54,8 +55,41 @@ webhookRouter.post("/", async (c) => {
       normalizedPhone = normRes.valid && normRes.e164 ? normRes.e164 : String(rawPhone).trim();
     }
 
-    if (!email || typeof email !== "string") {
-      return c.json({ error: "El campo 'email' es obligatorio." }, 400);
+    // Filtro duro Fail-Closed: validación de nombre y email antes de entrar a sales_leads
+    const isEmailValid = isValidEmailFormat(typeof email === "string" ? email : "");
+    const isFirmNameValid = typeof despacho_nombre === "string" && !isGenericFirmName(despacho_nombre);
+
+    if (!isEmailValid || !isFirmNameValid) {
+      const quarantineReason = !isEmailValid && !isFirmNameValid
+        ? "sin_nombre_real_y_email_invalido"
+        : (!isEmailValid ? "email_invalido_o_placeholder" : "sin_nombre_real_generico");
+
+      const quarantineId = `quar_${crypto.randomUUID()}`;
+      if (c.env.DB) {
+        try {
+          await c.env.DB.prepare(`
+            INSERT INTO sales_lead_quarantine (id, lead_id, email, despacho_nombre, reason, payload_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(
+            quarantineId,
+            (typeof body.lead_id === "string" ? body.lead_id.trim() : null),
+            (typeof email === "string" ? email : null),
+            (typeof despacho_nombre === "string" ? despacho_nombre : null),
+            quarantineReason,
+            JSON.stringify(body)
+          ).run();
+        } catch (e) {
+          console.warn("[webhooks/ingest] Error saving to quarantine:", e);
+        }
+      }
+
+      return c.json({
+        status: "quarantined",
+        quarantined: true,
+        reason: quarantineReason,
+        quarantine_id: quarantineId,
+        message: "Lead en cuarentena para revisión manual (fail-closed: no contactable)."
+      }, 202);
     }
 
     let leadId = (typeof body.lead_id === "string" && body.lead_id.trim())

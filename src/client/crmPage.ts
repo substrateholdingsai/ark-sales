@@ -1095,6 +1095,148 @@ Equipo Comercial ARK Systems
   </div>
 </div>
 
+<!-- ═══════════════ MODAL WHATSAPP STUDIO (MULTI-TENANT & ZERO COST) ═══════════════ -->
+<div id="modalWhatsAppStudio" class="fixed inset-0 z-50 hidden flex items-center justify-center p-3 sm:p-4">
+  <div class="modal-backdrop absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="cerrarModalWhatsApp()"></div>
+  <div class="modal-content relative bg-slate-900 border border-emerald-500/30 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl z-10 overflow-hidden">
+    <!-- Header -->
+    <div class="bg-slate-950/90 px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/10">
+          <i data-lucide="message-circle" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="text-base font-bold text-white tracking-tight">WhatsApp Studio</h3>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold tracking-wide">CERO COSTO · wa.me</span>
+          </div>
+          <p class="text-xs text-slate-400">Deep-link nativo con plantillas inteligentes multitenant (sin APIs de pago de Meta)</p>
+        </div>
+      </div>
+      <button onclick="cerrarModalWhatsApp()" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors" title="Cerrar">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Body Scrollable -->
+    <div class="flex-1 overflow-y-auto p-5 space-y-4">
+      <!-- 1. Datos del Prospecto / Destinatario -->
+      <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+        <div class="flex items-center justify-between text-xs font-mono text-slate-400 border-b border-slate-800/80 pb-1.5">
+          <span class="flex items-center gap-1.5 text-slate-300 font-semibold"><i data-lucide="user-check" class="w-3.5 h-3.5 text-emerald-400"></i> Prospecto Destino</span>
+          <span id="wsContactoBadge" class="text-[11px] text-ark-blue_hi font-mono">Expediente CRM</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block text-[11px] font-mono text-slate-400 mb-0.5">Nombre Completo</label>
+            <input type="text" id="wsContactoNombre" oninput="onWsDatosChange()" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-emerald-500" placeholder="Ej. Dr. Roberto Silva">
+          </div>
+          <div>
+            <label class="block text-[11px] font-mono text-slate-400 mb-0.5">Especialidad / Cargo</label>
+            <input type="text" id="wsContactoTitulo" oninput="onWsDatosChange()" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-emerald-500" placeholder="Ej. Médico Cirujano">
+          </div>
+          <div>
+            <label class="block text-[11px] font-mono text-slate-400 mb-0.5">Clínica / Empresa</label>
+            <input type="text" id="wsContactoCuenta" oninput="onWsDatosChange()" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-emerald-500" placeholder="Ej. Centro Médico Altabrisa">
+          </div>
+          <div>
+            <label class="block text-[11px] font-mono text-slate-400 mb-0.5">Ciudad</label>
+            <input type="text" id="wsContactoCiudad" oninput="onWsDatosChange()" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-emerald-500" placeholder="Ej. Mérida, Yucatán">
+          </div>
+        </div>
+        <div>
+          <label class="block text-[11px] font-mono text-emerald-400 mb-1 flex items-center justify-between">
+            <span class="flex items-center gap-1"><i data-lucide="smartphone" class="w-3.5 h-3.5"></i> Teléfono WhatsApp (Destino)</span>
+            <span class="text-[10px] text-slate-400">Incluye código de país (ej. +52 999...)</span>
+          </label>
+          <div class="relative">
+            <input type="text" id="wsTelefonoDestino" oninput="onWsTelefonoChange()" class="w-full bg-slate-900 border border-emerald-500/40 rounded-lg pl-8 pr-3 py-1.5 text-xs font-mono text-white focus:border-emerald-500 focus:outline-none" placeholder="+52 999 123 4567">
+            <i data-lucide="phone-outgoing" class="w-3.5 h-3.5 text-emerald-400 absolute left-2.5 top-2.5"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Configuración Multi-Tenant y Remitente -->
+      <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+        <div class="flex items-center justify-between text-xs font-mono text-slate-400 border-b border-slate-800/80 pb-1.5">
+          <span class="flex items-center gap-1.5 text-slate-300 font-semibold"><i data-lucide="building-2" class="w-3.5 h-3.5 text-ark-indigo_hi"></i> Organización Tenant & Remitente</span>
+          <span class="text-[11px] text-slate-500">Configurable por Tenant</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block text-[11px] font-mono text-slate-400 mb-0.5">Tenant Emisor</label>
+            <select id="wsTenantSelect" onchange="onWsTenantChange()" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-emerald-500 font-medium">
+              <option value="ark">Ark Technologies (Super Admin: +52 56 4856 4149)</option>
+              <option value="futura_medica">Futura Capital · Consultorios Torre Médica MB (+52 999 381 7508)</option>
+              <option value="futura_terrenos">Futura Capital · Terrenos & Costa Yucatán (+52 999 218 2895)</option>
+              <option value="futura_aliados">Futura Capital · Coordinación Aliados (+52 56 3924 1169)</option>
+              <option value="custom">Otro Tenant / Número Personalizado...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-mono text-slate-400 mb-0.5">Número WhatsApp Emisor (Negocio)</label>
+            <input type="text" id="wsNumeroEmisor" oninput="onWsNumeroEmisorChange()" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-emerald-300 focus:border-emerald-500" placeholder="+52 56 4856 4149">
+          </div>
+        </div>
+        <div id="wsCustomTenantBanner" class="hidden text-[11px] bg-slate-900 p-2 rounded-lg border border-slate-800 text-slate-400 flex items-center justify-between">
+          <span>💡 El número de este tenant se guardará para futuras sesiones de envío.</span>
+          <button type="button" onclick="guardarNumeroTenantCustom()" class="px-2 py-0.5 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 text-[10px] font-mono">Guardar</button>
+        </div>
+      </div>
+
+      <!-- 3. Selector de Plantillas Dinámicas -->
+      <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+        <div class="flex items-center justify-between text-xs font-mono text-slate-400 border-b border-slate-800/80 pb-1.5">
+          <span class="flex items-center gap-1.5 text-slate-300 font-semibold"><i data-lucide="layout-template" class="w-3.5 h-3.5 text-amber-400"></i> Plantilla Dinámica</span>
+          <span id="wsPlantillaCategoryBadge" class="text-[11px] text-amber-300 font-mono">Inmobiliario / Médicos</span>
+        </div>
+        <div>
+          <select id="wsPlantillaSelect" onchange="onWsPlantillaChange()" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 font-medium">
+            <!-- Rellenado dinámicamente según el tenant -->
+          </select>
+        </div>
+
+        <!-- Barra de Tags / Variables Rápidas -->
+        <div class="flex items-center gap-1.5 flex-wrap pt-1">
+          <span class="text-[10px] font-mono text-slate-500">Insertar variable:</span>
+          <button type="button" onclick="insertarWsTag('{NOMBRE}')" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+{NOMBRE}</button>
+          <button type="button" onclick="insertarWsTag('{ESPECIALIDAD}')" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+{ESPECIALIDAD}</button>
+          <button type="button" onclick="insertarWsTag('{EMPRESA}')" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+{EMPRESA}</button>
+          <button type="button" onclick="insertarWsTag('{CIUDAD}')" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+{CIUDAD}</button>
+          <button type="button" onclick="insertarWsTag('{REMITENTE}')" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+{REMITENTE}</button>
+          <button type="button" onclick="insertarWsTag('{TEL_REMITENTE}')" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+{TEL_REMITENTE}</button>
+        </div>
+
+        <!-- Editor / Vista Previa -->
+        <div class="relative">
+          <textarea id="wsMensajeText" rows="9" oninput="actualizarContadorWhatsApp()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 leading-relaxed focus:border-emerald-500 focus:outline-none resize-y" placeholder="Escribe o personaliza el mensaje de WhatsApp..."></textarea>
+          <div class="flex items-center justify-between text-[10px] font-mono text-slate-500 px-1 pt-1">
+            <span id="wsContadorText">0 caracteres · 0 palabras</span>
+            <span class="text-emerald-400/80">Soporta negritas con *texto* y emojis nativos</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="bg-slate-950/90 px-5 py-3.5 border-t border-slate-800 flex items-center justify-between gap-3">
+      <button type="button" onclick="copiarTextoWhatsApp()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors">
+        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+        <span>Copiar Texto</span>
+      </button>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="cerrarModalWhatsApp()" class="px-4 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-400 text-xs font-semibold transition-colors">
+          Cancelar
+        </button>
+        <button type="button" onclick="dispararEnvioWhatsApp()" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-600/25 active:scale-95">
+          <i data-lucide="send" class="w-4 h-4"></i>
+          <span>Abrir en WhatsApp (wa.me)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════ MODAL IMPORTAR SHEETS / CSV ═══════════════ -->
 <div id="modalImportar" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
   <div class="modal-backdrop absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="cerrarModalImportarSheets()"></div>
@@ -1344,8 +1486,8 @@ async function loadAccounts(tenant = '') {
   try {
     const tVal = tenant || document.getElementById('filtroTenant')?.value || '';
     const url = tVal 
-      ? '/api/crm/accounts?limit=100&offset=0&tenant=' + encodeURIComponent(tVal)
-      : '/api/crm/accounts?limit=100&offset=0';
+      ? '/api/crm/accounts?limit=5000&offset=0&tenant=' + encodeURIComponent(tVal)
+      : '/api/crm/accounts?limit=5000&offset=0';
     const data = await apiCall(url);
     state.accounts = (data && data.items) || [];
     state.accountsTotal = data?.total ?? state.accounts.length;
@@ -1355,7 +1497,7 @@ async function loadAccounts(tenant = '') {
 
 async function loadOpportunities() {
   try {
-    const data = await apiCall('/api/crm/opportunities?limit=200');
+    const data = await apiCall('/api/crm/opportunities?limit=1000');
     if (data && data.items) state.opportunities = data.items;
   } catch (e) { console.error('loadOpportunities error:', e); }
 }
@@ -1364,8 +1506,8 @@ async function loadContacts(tenant = '') {
   try {
     const tVal = tenant || filtroContactosTenant || '';
     const url = tVal 
-      ? '/api/crm/contacts?limit=100&offset=0&tenant=' + encodeURIComponent(tVal)
-      : '/api/crm/contacts?limit=100&offset=0';
+      ? '/api/crm/contacts?limit=5000&offset=0&tenant=' + encodeURIComponent(tVal)
+      : '/api/crm/contacts?limit=5000&offset=0';
     const data = await apiCall(url);
     state.contacts = (data && data.items) || [];
     state.contactsTotal = data?.total ?? state.contacts.length;
@@ -1375,7 +1517,7 @@ async function loadContacts(tenant = '') {
 
 async function loadTasks() {
   try {
-    const data = await apiCall('/api/crm/tasks?limit=200');
+    const data = await apiCall('/api/crm/tasks?limit=1000');
     if (data && data.items) state.tasks = data.items;
   } catch (e) { console.error('loadTasks error:', e); }
 }
@@ -1737,7 +1879,7 @@ async function abrirModalCuenta(id) {
               </div>
               <div class="flex items-center gap-2">
                 <span class="text-xs text-slate-400 font-mono">\${c.email || 'Sin email'}</span>
-                \${c.whatsapp ? \`<button onclick="accionWhatsApp('\${c.whatsapp}')" class="p-1 rounded text-emerald-400 hover:bg-emerald-500/10 transition-colors" title="WhatsApp"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i></button>\` : ''}
+                \${c.whatsapp ? \`<button onclick="accionWhatsApp('\${c.whatsapp}', '\${c.id}')" class="p-1 rounded text-emerald-400 hover:bg-emerald-500/10 transition-colors" title="WhatsApp Studio"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i></button>\` : ''}
                 <button onclick="abrirModalEditarContacto('\${c.id}', '\${account.id}')" class="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-700/50 transition-colors" title="Editar contacto">
                   <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
                 </button>
@@ -2413,8 +2555,17 @@ async function renderContactos() {
 
   if (filtroContactosTenant) {
     list = list.filter(c => {
+      if (c.account_tenant_id === filtroContactosTenant) return true;
+      if (c.tenant_id === filtroContactosTenant) return true;
       const acc = (state.accounts || []).find(a => a.id === c.account_id);
-      const tid = c.tenant_id || (acc ? getAccountTenant(acc) : '');
+      const mockAcc = acc || {
+        id: c.account_id,
+        name: c.account_name,
+        tenant_id: c.account_tenant_id || c.tenant_id,
+        scian_code: c.account_scian,
+        origin: c.account_origin
+      };
+      const tid = getAccountTenant(mockAcc);
       return tid === filtroContactosTenant;
     });
   }
@@ -2569,7 +2720,7 @@ async function renderContactos() {
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.phone || '-'}</td>
           <td class="px-4 py-3">
             \${c.whatsapp && c.whatsapp !== '-'
-              ? \`<button onclick="accionWhatsApp('\${c.whatsapp}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-mono transition-colors" title="Abrir chat de WhatsApp">
+              ? \`<button onclick="accionWhatsApp('\${c.whatsapp}', '\${c.id}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-mono transition-colors" title="Abrir WhatsApp Studio">
                   <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> \${c.whatsapp}
                 </button>\`
               : '<span class="text-xs text-slate-600 font-mono">-</span>'}
@@ -2582,7 +2733,7 @@ async function renderContactos() {
           <td class="px-4 py-3 text-right whitespace-nowrap sticky right-0 bg-slate-900/95 backdrop-blur-sm border-l border-slate-800/80 shadow-[-8px_0_12px_rgba(0,0,0,0.5)] z-10">
             <div class="flex items-center justify-end gap-1.5">
               \${c.whatsapp && c.whatsapp !== '-'
-                ? \`<button onclick="accionWhatsApp('\${c.whatsapp}')" class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors" title="Abrir WhatsApp Web"><i data-lucide="message-circle" class="w-4 h-4"></i></button>\`
+                ? \`<button onclick="accionWhatsApp('\${c.whatsapp}', '\${c.id}')" class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors" title="Abrir WhatsApp Studio"><i data-lucide="message-circle" class="w-4 h-4"></i></button>\`
                 : ''}
               <button onclick="enriquecerContactoRow(\'\${c.id}\')" class="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors" title="🔍 Enriquecer con Google / Doctoralia"><i data-lucide="sparkles" class="w-4 h-4"></i></button>
               <button onclick="abrirModalEditarContacto('\${c.id}')" class="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors" title="Editar contacto"><i data-lucide="pencil" class="w-4 h-4"></i></button>
@@ -2597,11 +2748,525 @@ async function renderContactos() {
   lucide.createIcons();
 }
 
-function accionWhatsApp(num) {
-  if (!num || num === '-') { toast('Contacto sin WhatsApp registrado'); return; }
-  let clean = String(num).replace(/\\D/g, '');
-  if (clean.length === 10) clean = '52' + clean;
-  window.open('https://wa.me/' + clean, '_blank');
+// ── WHATSAPP STUDIO (MULTI-TENANT & ZERO COST DEEP LINKING) ──
+let wsCurrentContact = null;
+let wsCurrentAccount = null;
+
+const WS_TENANT_CONFIGS = {
+  ark: {
+    id: 'acc_ark_technologies',
+    name: 'Ark Financial Technologies',
+    remitente: 'Equipo Comercial ARK Systems',
+    phone: '+525648564149',
+    categoryBadge: 'Fintech & Cierre Contable',
+    category: 'ark'
+  },
+  futura_medica: {
+    id: 'acc_futura_capital',
+    name: 'Futura Capital Partners · Torre Médica MB',
+    remitente: 'Jaqueline Madera (Futura Capital)',
+    phone: '+529993817508',
+    categoryBadge: 'Médica & Consultorios',
+    category: 'futura'
+  },
+  futura_terrenos: {
+    id: 'acc_futura_capital',
+    name: 'Futura Capital Partners · Terrenos & Costa',
+    remitente: 'Enrique Xacur (Futura Capital)',
+    phone: '+529992182895',
+    categoryBadge: 'Terrenos & Costa Yucatán',
+    category: 'futura'
+  },
+  futura_aliados: {
+    id: 'acc_futura_capital',
+    name: 'Futura Capital Partners · Coordinación Aliados',
+    remitente: 'Jaime (Futura Capital)',
+    phone: '+525639241169',
+    categoryBadge: 'Alianzas & Brokers',
+    category: 'futura'
+  },
+  custom: {
+    id: 'acc_custom',
+    name: 'Tenant Personalizado',
+    remitente: 'Asesor Comercial Asignado',
+    phone: '+525648564149',
+    categoryBadge: 'Tenant Personalizado',
+    category: 'ark'
+  }
+};
+
+const WS_TEMPLATES = {
+  futura: [
+    {
+      id: 'futura_mb_doctores',
+      name: '🏥 Torre Médica MB — Preventa Consultorios para Médicos Especialistas',
+      lines: [
+        '🏥 *PREVENTA EXCLUSIVA — TORRE MÉDICA MB ALTABRISA*',
+        '',
+        'Estimado(a) *{NOMBRE}*, le saludo cordialmente de Futura Capital Partners.',
+        '',
+        'Vemos su destacada labor como *{ESPECIALIDAD}* en *{EMPRESA}* ({CIUDAD}). Le contactamos con la exclusividad de presentarle los consultorios médicos de alta plusvalía en la nueva *Torre Médica MB* en Mérida:',
+        '',
+        '• Consultorios de alta especificación médica y preparación clínica',
+        '• Elevadores camilleros de velocidad y quirófanos ambulatorios certificados',
+        '• Financiamiento directo a 36 MSI, certeza jurídica total y escrituración inmediata',
+        '• Proyección de rentas y plusvalía del 12% al 14% anual',
+        '',
+        '¿Me permite compartirle el brochure arquitectónico y corrida financiera por este medio?',
+        '',
+        'Atentamente,',
+        '*{REMITENTE}* · Futura Capital',
+        'WhatsApp: {TEL_REMITENTE}'
+      ]
+    },
+    {
+      id: 'futura_inversion_patrimonial',
+      name: '🏖️ Inversión Patrimonial — Lotes Residenciales Chicxulub & Sisal',
+      lines: [
+        '🏖️ *OPORTUNIDAD DE INVERSIÓN PATRIMONIAL EN YUCATÁN*',
+        '',
+        'Estimado(a) *{NOMBRE}*,',
+        '',
+        'Con gusto le saludo de Futura Capital Partners. Ponemos a su disposición nuestro portafolio de terrenos residenciales de alta plusvalía en la costa yucateca (Chicxulub y Sisal) y Mérida Norte:',
+        '',
+        '• Propiedad privada escriturable con certeza jurídica absoluta (libre de gravamen)',
+        '• Régimen en condominio con amenidades de club de playa',
+        '• Planes de financiamiento propio con enganches accesibles y hasta 48 MSI',
+        '',
+        '¿Le gustaría revisar las ubicaciones disponibles para consolidar su patrimonio?',
+        '',
+        'Saludos cordiales,',
+        '*{REMITENTE}* · Futura Capital',
+        'WhatsApp: {TEL_REMITENTE}'
+      ]
+    },
+    {
+      id: 'futura_temozon',
+      name: '🏢 Departamentos Paseos Temozón — Plusvalía y Retorno de Inversión',
+      lines: [
+        '🏢 *DEPARTAMENTOS PREMIUM EN PASEOS TEMOZÓN (MÉRIDA)*',
+        '',
+        'Hola *{NOMBRE}*, un gusto saludarle.',
+        '',
+        'En Paseos Temozón contamos con departamentos de diseño contemporáneo creados para médicos e inversionistas que buscan alta plusvalía y retorno de inversión en Mérida Norte:',
+        '',
+        '• Unidades de 1 y 2 recámaras con acabados premium y amenidades club',
+        '• Esquema de rentas asistidas con alto porcentaje de ocupación',
+        '• Descuentos por pago de contado o plan a meses sin intereses',
+        '',
+        '¿Le envío el recorrido virtual y la ficha técnica ejecutiva?',
+        '',
+        'Atentamente,',
+        '*{REMITENTE}* · Futura Capital',
+        'WhatsApp: {TEL_REMITENTE}'
+      ]
+    },
+    {
+      id: 'futura_desayuno_vip',
+      name: '🤝 Invitación VIP — Sesión Privada de Inversión Médica en Mérida',
+      lines: [
+        '🤝 *INVITACIÓN VIP — SESIÓN PRIVADA DE INVERSIÓN MÉDICA*',
+        '',
+        'Distinguido(a) *{NOMBRE}* ({ESPECIALIDAD}),',
+        '',
+        'Nos complace extenderle una cordial invitación al desayuno-sesión privada "Estrategias Patrimoniales y Rentas en Salud 2026" en Mérida, Yucatán.',
+        '',
+        'Analizaremos el modelo de negocio de la Torre Médica MB y esquemas de deducibilidad fiscal y plusvalía inmobiliaria para médicos especialistas.',
+        '',
+        'Cupo estrictamente reservado a 15 especialistas. ¿Le apartamos su lugar de cortesía?',
+        '',
+        'Confirmaciones directas:',
+        '*{REMITENTE}* · Futura Capital',
+        'WhatsApp: {TEL_REMITENTE}'
+      ]
+    },
+    {
+      id: 'futura_seguimiento',
+      name: '⚡ Seguimiento Rápido — Desarrollos Inmobiliarios Futura',
+      lines: [
+        'Hola *{NOMBRE}*, un cordial saludo. Le escribe *{REMITENTE}* de Futura Capital. Me pongo en contacto para dar seguimiento a la información que comentamos sobre nuestros desarrollos en Mérida. ¿Tuvo oportunidad de revisar el material o desea consultar alguna condición de financiamiento? Con gusto le atiendo por aquí.'
+      ]
+    },
+    {
+      id: 'futura_libre',
+      name: '✏️ Mensaje Libre / Personalizado',
+      lines: [
+        'Hola *{NOMBRE}*, le saludo cordialmente de Futura Capital Partners...'
+      ]
+    }
+  ],
+  ark: [
+    {
+      id: 'ark_ledger_cfdi',
+      name: '📊 Ark Ledger — Cierre Fiscal Masivo & CFDI 4.0 SAT (Despachos y PYMES)',
+      lines: [
+        '📊 *ARK LEDGER — CIERRE FISCAL Y AUDITORÍA SAT CFDI 4.0*',
+        '',
+        'Estimado(a) *{NOMBRE}* de *{EMPRESA}*,',
+        '',
+        'Le saludo de Ark Financial Technologies. Desarrollamos la infraestructura de software contable que automatiza el cierre fiscal y timbrado masivo CFDI 4.0 para despachos y empresas:',
+        '',
+        '• Validación y conciliación automática con el SAT en segundos',
+        '• Sellado criptográfico SHA-256 inmutable de pólizas contables en Cloudflare D1',
+        '• Reducción de hasta el 70% del tiempo operativo de auditoría mensual',
+        '• Planes desde $399 MXN/mes con timbrado ilimitado',
+        '',
+        '¿Le gustaría que le activemos una demo guiada de 7 días sin costo para su equipo?',
+        '',
+        'Atentamente,',
+        '*{REMITENTE}* · Ark Technologies',
+        'WhatsApp: {TEL_REMITENTE}'
+      ]
+    },
+    {
+      id: 'ark_angel_cobranza',
+      name: '🤖 Ark Angel — Cobranza Inteligente IA con Riel CoDi® Banxico',
+      lines: [
+        '🤖 *ARK ANGEL — COBRANZA AUTOMATIZADA CON IA & RIEL CODI®*',
+        '',
+        'Hola *{NOMBRE}*,',
+        '',
+        '¿Continúa su equipo enfrentando retrasos en la cobranza de facturas en *{EMPRESA}*? Ark Angel erradica la morosidad mediante agentes IA omnicanal con motor legal Condusef y riel oficial CoDi® Banxico (cero comisiones, cero contracargos y acreditación inmediata en segundos).',
+        '',
+        '¿Le muestro en una llamada de 5 minutos cómo funciona en vivo?',
+        '',
+        '*{REMITENTE}* · Ark Technologies',
+        'WhatsApp: {TEL_REMITENTE}'
+      ]
+    },
+    {
+      id: 'ark_ticket_codi',
+      name: '🧾 Ticket Digital de Cobro / Activación CoDi® Banxico',
+      lines: [
+        '🧾 *ARK CASH REGISTER — TICKET DIGITAL DE PAGO*',
+        '📍 Ark Financial Technologies',
+        '📅 Fecha: {FECHA}',
+        '🆔 Folio CoDi®: {FOLIO}',
+        '───────────────────────────────',
+        '👤 Cliente: *{NOMBRE}*',
+        '🏢 Razón Social: *{EMPRESA}*',
+        '📦 1x Licencia Anual Ark Ledger Enterprise',
+        '   $4,788.00 MXN',
+        '───────────────────────────────',
+        'TOTAL PAGADO: $4,788.00 MXN',
+        '───────────────────────────────',
+        '✅ Estado: Pago confirmado en Banxico CoDi®',
+        '🛡️ Seguridad: Riel oficial Banco de México · Cero contracargos',
+        '🚀 Infraestructura: Powered by Ark Cloud',
+        '',
+        '¡Gracias por su preferencia!',
+        '*{REMITENTE}* · WhatsApp: {TEL_REMITENTE}'
+      ]
+    },
+    {
+      id: 'ark_demo_7dias',
+      name: '🚀 Demo Gratuita 7 Días — Ark Ledger Enterprise',
+      lines: [
+        '🚀 *ACCESO DEMO 7 DÍAS — ARK LEDGER ENTERPRISE*',
+        '',
+        'Estimado(a) *{NOMBRE}*,',
+        '',
+        'Su entorno de prueba para *{EMPRESA}* está preparado para validar conciliación SAT, descarga masiva de metadatos y timbrado CFDI 4.0. Le acompañamos sin costo en la configuración inicial.',
+        '',
+        '¿A qué hora le viene bien una breve llamada para entregarle sus credenciales de acceso?',
+        '',
+        'Saludos cordiales,',
+        '*{REMITENTE}* · Ark Technologies',
+        'WhatsApp: {TEL_REMITENTE}'
+      ]
+    },
+    {
+      id: 'ark_cotizacion_express',
+      name: '💼 Cotización Formal Express — Software Ark',
+      lines: [
+        '💼 *ARK TECHNOLOGIES — COTIZACIÓN FORMAL EXPRESS*',
+        '',
+        'Prospecto: *{NOMBRE}*',
+        'Empresa: *{EMPRESA}* ({CIUDAD})',
+        'Fecha: {FECHA}',
+        '───────────────────────────────',
+        '1. Ark Ledger Pro (CFDI 4.0 + Conciliación SAT): $399 MXN/mes',
+        '2. Add-on Cobranza Ark Angel: Tarifa por consumo real',
+        '───────────────────────────────',
+        'Total Mensual: $399.00 MXN',
+        'Facturación inmediata con validez fiscal CFDI 4.0.',
+        '',
+        'Quedo a sus órdenes para emitir su orden de servicio.',
+        '*{REMITENTE}* · WhatsApp: {TEL_REMITENTE}'
+      ]
+    },
+    {
+      id: 'ark_libre',
+      name: '✏️ Mensaje Libre / Personalizado',
+      lines: [
+        'Hola *{NOMBRE}*, le saludo cordialmente de Ark Financial Technologies...'
+      ]
+    }
+  ]
+};
+
+function accionWhatsApp(num, contactId) {
+  abrirModalWhatsAppStudio(contactId, num);
+}
+
+function abrirModalWhatsAppStudio(contactId, fallbackNum) {
+  // Cargar número custom guardado si existe
+  try {
+    const savedCustom = localStorage.getItem('ark_custom_wa_sender');
+    if (savedCustom) WS_TENANT_CONFIGS.custom.phone = savedCustom;
+  } catch (e) {}
+
+  // Localizar contacto
+  let c = null;
+  if (contactId && state.contacts) {
+    c = state.contacts.find(x => x.id === contactId);
+  }
+  if (!c && fallbackNum && state.contacts) {
+    c = state.contacts.find(x => x.whatsapp === fallbackNum || x.phone === fallbackNum);
+  }
+  if (!c) {
+    c = {
+      id: contactId || '',
+      name: 'Prospecto',
+      title: '',
+      account_id: '',
+      account_name: '',
+      account_city: '',
+      phone: fallbackNum || '',
+      whatsapp: fallbackNum || ''
+    };
+  }
+  wsCurrentContact = c;
+
+  // Localizar cuenta
+  let acc = null;
+  if (c.account_id && state.accounts) {
+    acc = state.accounts.find(a => a.id === c.account_id);
+  }
+  wsCurrentAccount = acc;
+
+  // Inferencia de Tenant Inteligente
+  const combinedContext = ((c.name || '') + ' ' + (c.title || '') + ' ' + (c.account_name || (acc ? acc.name : '')) + ' ' + (c.account_city || (acc ? acc.city : ''))).toLowerCase();
+  const isMedicalOrFutura = c.account_id === 'acc_futura_capital' || 
+    combinedContext.includes('médic') || 
+    combinedContext.includes('medic') || 
+    combinedContext.includes('dr.') || 
+    combinedContext.includes('dra.') || 
+    combinedContext.includes('doctor') || 
+    combinedContext.includes('cirujan') || 
+    combinedContext.includes('clinica') || 
+    combinedContext.includes('clínica') || 
+    combinedContext.includes('salud') || 
+    combinedContext.includes('hospital') || 
+    combinedContext.includes('inmobili') || 
+    combinedContext.includes('futura');
+
+  let defaultTenant = isMedicalOrFutura ? 'futura_medica' : 'ark';
+
+  // Asignar datos en el formulario
+  const nombreInput = document.getElementById('wsContactoNombre');
+  const tituloInput = document.getElementById('wsContactoTitulo');
+  const cuentaInput = document.getElementById('wsContactoCuenta');
+  const ciudadInput = document.getElementById('wsContactoCiudad');
+  const telInput = document.getElementById('wsTelefonoDestino');
+  const tenantSelect = document.getElementById('wsTenantSelect');
+  const emisorInput = document.getElementById('wsNumeroEmisor');
+  const badgeContacto = document.getElementById('wsContactoBadge');
+
+  if (nombreInput) nombreInput.value = c.name && c.name !== 'Sin nombre' ? c.name : '';
+  if (tituloInput) tituloInput.value = c.title && c.title !== '-' ? c.title : (isMedicalOrFutura ? 'Médico Especialista' : 'Director / Responsable');
+  if (cuentaInput) cuentaInput.value = c.account_name || (acc ? acc.name : '') || '';
+  if (ciudadInput) ciudadInput.value = c.account_city || (acc ? acc.city : '') || (isMedicalOrFutura ? 'Mérida, Yucatán' : '');
+  if (telInput) telInput.value = c.whatsapp || c.phone || fallbackNum || '';
+  if (tenantSelect) tenantSelect.value = defaultTenant;
+  if (emisorInput) emisorInput.value = WS_TENANT_CONFIGS[defaultTenant].phone;
+  if (badgeContacto) badgeContacto.textContent = c.id ? 'ID: ' + c.id.slice(0, 10) : 'Nuevo Contacto';
+
+  actualizarSelectorPlantillas(defaultTenant);
+  compilarMensajeWhatsApp();
+
+  const modal = document.getElementById('modalWhatsAppStudio');
+  if (modal) {
+    modal.classList.remove('hidden');
+    lucide.createIcons();
+  }
+}
+
+function cerrarModalWhatsApp() {
+  const modal = document.getElementById('modalWhatsAppStudio');
+  if (modal) modal.classList.add('hidden');
+}
+
+function onWsTenantChange() {
+  const tenantKey = document.getElementById('wsTenantSelect')?.value || 'ark';
+  const cfg = WS_TENANT_CONFIGS[tenantKey] || WS_TENANT_CONFIGS.ark;
+  const emisorInput = document.getElementById('wsNumeroEmisor');
+  const customBanner = document.getElementById('wsCustomTenantBanner');
+
+  if (emisorInput) emisorInput.value = cfg.phone;
+  if (customBanner) {
+    if (tenantKey === 'custom') customBanner.classList.remove('hidden');
+    else customBanner.classList.add('hidden');
+  }
+
+  actualizarSelectorPlantillas(tenantKey);
+  compilarMensajeWhatsApp();
+}
+
+function onWsNumeroEmisorChange() {
+  const tenantKey = document.getElementById('wsTenantSelect')?.value;
+  const val = document.getElementById('wsNumeroEmisor')?.value || '';
+  if (tenantKey && WS_TENANT_CONFIGS[tenantKey]) {
+    WS_TENANT_CONFIGS[tenantKey].phone = val;
+  }
+  compilarMensajeWhatsApp();
+}
+
+function guardarNumeroTenantCustom() {
+  const val = document.getElementById('wsNumeroEmisor')?.value || '';
+  try {
+    localStorage.setItem('ark_custom_wa_sender', val);
+    WS_TENANT_CONFIGS.custom.phone = val;
+    toast('💾 Número de WhatsApp del Tenant guardado exitosamente');
+  } catch (e) {
+    toast('No se pudo guardar en almacenamiento local');
+  }
+}
+
+function actualizarSelectorPlantillas(tenantKey) {
+  const cfg = WS_TENANT_CONFIGS[tenantKey] || WS_TENANT_CONFIGS.ark;
+  const cat = cfg.category || 'ark';
+  const templates = WS_TEMPLATES[cat] || WS_TEMPLATES.ark;
+  const sel = document.getElementById('wsPlantillaSelect');
+  const badge = document.getElementById('wsPlantillaCategoryBadge');
+
+  if (badge) badge.textContent = cfg.categoryBadge || 'General';
+  if (!sel) return;
+
+  sel.innerHTML = templates.map(t => '<option value="' + t.id + '">' + t.name + '</option>').join('');
+}
+
+function onWsPlantillaChange() {
+  compilarMensajeWhatsApp();
+}
+
+function onWsDatosChange() {
+  compilarMensajeWhatsApp();
+}
+
+function onWsTelefonoChange() {
+  actualizarContadorWhatsApp();
+}
+
+function compilarMensajeWhatsApp() {
+  const tenantKey = document.getElementById('wsTenantSelect')?.value || 'ark';
+  const cfg = WS_TENANT_CONFIGS[tenantKey] || WS_TENANT_CONFIGS.ark;
+  const cat = cfg.category || 'ark';
+  const templates = WS_TEMPLATES[cat] || WS_TEMPLATES.ark;
+
+  const plantillaId = document.getElementById('wsPlantillaSelect')?.value;
+  const tmpl = templates.find(t => t.id === plantillaId) || templates[0];
+
+  const nombre = document.getElementById('wsContactoNombre')?.value || 'Estimado(a) cliente';
+  const especialidad = document.getElementById('wsContactoTitulo')?.value || (cat === 'futura' ? 'Médico Especialista' : 'Director');
+  const empresa = document.getElementById('wsContactoCuenta')?.value || (cat === 'futura' ? 'su consultorio' : 'su empresa');
+  const ciudad = document.getElementById('wsContactoCiudad')?.value || 'Mérida';
+  const remitente = cfg.remitente;
+  const telRemitente = document.getElementById('wsNumeroEmisor')?.value || cfg.phone;
+  const fechaHoy = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const folioCod = 'ARK-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+  const NL = String.fromCharCode(10);
+  let txt = (tmpl.lines || []).join(NL);
+  txt = txt.split('{NOMBRE}').join(nombre);
+  txt = txt.split('{ESPECIALIDAD}').join(especialidad);
+  txt = txt.split('{EMPRESA}').join(empresa);
+  txt = txt.split('{CIUDAD}').join(ciudad);
+  txt = txt.split('{REMITENTE}').join(remitente);
+  txt = txt.split('{TEL_REMITENTE}').join(telRemitente);
+  txt = txt.split('{FECHA}').join(fechaHoy);
+  txt = txt.split('{FOLIO}').join(folioCod);
+
+  const textarea = document.getElementById('wsMensajeText');
+  if (textarea) {
+    textarea.value = txt;
+  }
+  actualizarContadorWhatsApp();
+}
+
+function insertarWsTag(tag) {
+  const textarea = document.getElementById('wsMensajeText');
+  if (!textarea) return;
+  const start = textarea.selectionStart || textarea.value.length;
+  const end = textarea.selectionEnd || textarea.value.length;
+  const val = textarea.value;
+  textarea.value = val.substring(0, start) + tag + val.substring(end);
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+  actualizarContadorWhatsApp();
+}
+
+function actualizarContadorWhatsApp() {
+  const text = document.getElementById('wsMensajeText')?.value || '';
+  const chars = text.length;
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const contador = document.getElementById('wsContadorText');
+  if (contador) {
+    contador.textContent = chars + ' caracteres · ' + words + ' palabras';
+  }
+}
+
+function copiarTextoWhatsApp() {
+  const text = document.getElementById('wsMensajeText')?.value || '';
+  if (!text) {
+    toast('No hay texto para copiar');
+    return;
+  }
+  navigator.clipboard.writeText(text).then(() => {
+    toast('📋 Mensaje copiado al portapapeles');
+  }).catch(() => {
+    toast('Error copiando al portapapeles');
+  });
+}
+
+function dispararEnvioWhatsApp() {
+  const rawNum = document.getElementById('wsTelefonoDestino')?.value || '';
+  const clean = rawNum.replace(/[^0-9]/g, '');
+  if (!clean || clean.length < 10) {
+    toast('⚠️ Ingrese un número de WhatsApp destino válido (mínimo 10 dígitos)');
+    return;
+  }
+
+  let finalPhone = clean;
+  if (clean.length === 10) {
+    finalPhone = '52' + clean;
+  }
+
+  const text = document.getElementById('wsMensajeText')?.value || '';
+  const url = 'https://wa.me/' + finalPhone + '?text=' + encodeURIComponent(text);
+
+  // Registro de actividad opcional en background
+  try {
+    const tenantKey = document.getElementById('wsTenantSelect')?.value || 'ark';
+    const cfg = WS_TENANT_CONFIGS[tenantKey] || WS_TENANT_CONFIGS.ark;
+    const plantillaName = document.getElementById('wsPlantillaSelect')?.selectedOptions?.[0]?.text || 'Mensaje Libre';
+    if (wsCurrentContact && wsCurrentContact.id) {
+      fetch('/api/crm/activities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_id: wsCurrentContact.id,
+          account_id: wsCurrentContact.account_id || null,
+          type: 'note',
+          description: '💬 WhatsApp enviado vía wa.me [' + cfg.name + ']: ' + plantillaName
+        })
+      }).catch(function() {});
+    }
+  } catch (e) {}
+
+  window.open(url, '_blank');
+  toast('🚀 Chat de WhatsApp abierto con éxito (Cero Costo de API)');
+  cerrarModalWhatsApp();
 }
 
 function accionLlamar(tel) {

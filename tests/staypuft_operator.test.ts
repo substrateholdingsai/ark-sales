@@ -146,9 +146,9 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
       expect(res.status).toBe(401);
     });
 
-    it("StayPuft NO debe poder acceder a rutas destructivas o no autorizadas (403 Forbidden)", async () => {
+    it("StayPuft con Acceso Total debe poder acceder a endpoints internos del worker (200 OK)", async () => {
       const app = createApp(createMockEnv());
-      // Intentar una ruta interna no autorizada para StayPuft
+      // Acceso total: ingest y endpoints internos autorizados
       const res = await app.request(
         "/api/internal/leads/ingest",
         {
@@ -157,14 +157,18 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             "Content-Type": "application/json",
             "X-StayPuft-Key": STAYPUFT_TEST_KEY,
           },
-          body: JSON.stringify({ email: "hacker@test.com" }),
+          body: JSON.stringify({
+            email: "contacto@despacholeal.com",
+            despacho_nombre: "Despacho Leal SC",
+            tamano: "6-20",
+          }),
         },
         createMockEnv()
       );
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
       const data: any = await res.json();
-      expect(data.error).toContain("Forbidden");
+      expect(data.success).toBe(true);
     });
   });
 
@@ -488,6 +492,226 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
       const data: any = await res.json();
       expect(data.success).toBe(true);
       expect(data.total_accounts).toBe(150);
+      expect(data.phone_coverage).toBeDefined();
+    });
+  });
+
+  describe("6. Acceso Total y Enriquecimiento WhatsApp para StayPuft (Nov 2026)", () => {
+    it("debe aceptar y normalizar teléfono y WhatsApp en POST /api/internal/leads/:lead_id/enrich", async () => {
+      const mockLead = {
+        id: "lead_wa_01",
+        email: "fiscal@merida-contadores.mx",
+        despacho_nombre: "Mérida Contadores SC",
+        tamano: "1-5",
+        estado: "nuevo",
+        score: 40,
+        account_id: "acc_wa_01",
+      };
+      const db = createMockDb({ lead_wa_01: mockLead });
+      const env = createMockEnv(db);
+      const app = createApp(env);
+
+      const res = await app.request(
+        "/api/internal/leads/lead_wa_01/enrich",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-StayPuft-Key": STAYPUFT_TEST_KEY,
+          },
+          body: JSON.stringify({
+            tamano_estimado: "6-20",
+            telefono: "9991234567",
+            whatsapp: "9991234567",
+            whatsapp_valid: true,
+            fuente_telefono: "website",
+            telefono_url: "https://merida-contadores.mx/contacto",
+            telefono_verificado: true,
+            sin_whatsapp: false,
+            confianza: 95,
+          }),
+        },
+        env
+      );
+
+      expect(res.status).toBe(200);
+      const data: any = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.telefono).toBe("+529991234567");
+      expect(data.whatsapp).toBe("+529991234567");
+      expect(data.whatsapp_valid).toBe(true);
+    });
+
+    it("debe retornar phone_coverage en /api/internal/harvest/metrics y /api/internal/metrics", async () => {
+      const env = createMockEnv();
+      const app = createApp(env);
+
+      const res = await app.request(
+        "/api/internal/metrics",
+        {
+          method: "GET",
+          headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
+        },
+        env
+      );
+
+      expect(res.status).toBe(200);
+      const data: any = await res.json();
+      expect(data.phone_coverage).toBeDefined();
+      expect(data.phone_coverage.cohorts.ark_ledger_despachos).toBeDefined();
+      expect(data.phone_coverage.cohorts.futura_medicos_merida).toBeDefined();
+    });
+
+    it("GET /api/internal/leads permite consultar con filtro sin_whatsapp y cohort con cap 100", async () => {
+      const env = createMockEnv();
+      const app = createApp(env);
+
+      const res = await app.request(
+        "/api/internal/leads?cohort=ark_ledger_despachos&sin_whatsapp=true&limit=150",
+        {
+          method: "GET",
+          headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
+        },
+        env
+      );
+
+      expect(res.status).toBe(200);
+      const data: any = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.limit).toBe(100); // Enforced cap 100
+      expect(Array.isArray(data.leads)).toBe(true);
+    });
+
+    it("GET /api/internal/quarantine retorna registros de cuarentena", async () => {
+      const env = createMockEnv();
+      const app = createApp(env);
+
+      const res = await app.request(
+        "/api/internal/quarantine",
+        {
+          method: "GET",
+          headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
+        },
+        env
+      );
+
+      expect(res.status).toBe(200);
+      const data: any = await res.json();
+      expect(data.success).toBe(true);
+      expect(Array.isArray(data.quarantine)).toBe(true);
+    });
+
+    it("POST /api/internal/agent-tasks/enqueue permite encolar tarea individual", async () => {
+      const env = createMockEnv();
+      const app = createApp(env);
+
+      const res = await app.request(
+        "/api/internal/agent-tasks/enqueue",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-StayPuft-Key": STAYPUFT_TEST_KEY,
+          },
+          body: JSON.stringify({
+            lead_id: "lead_test_enqueue_01",
+            skill_name: "research_prospect_web",
+            operator: "staypuft",
+            payload: { domain: "despacho-test.com" },
+          }),
+        },
+        env
+      );
+
+      expect(res.status).toBe(201);
+      const data: any = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.task_id).toBeDefined();
+      expect(data.status).toBe("pending");
+    });
+
+    it("POST /api/internal/leads/:lead_id/draft-email prepara borrador sin enviar (gate seguro)", async () => {
+      const mockLead = {
+        id: "lead_draft_01",
+        email: "director@despacho-yucatan.mx",
+        despacho_nombre: "Despacho Yucatán SC",
+      };
+      const db = {
+        ...createMockDb({ lead_draft_01: mockLead }),
+        prepare: vi.fn().mockImplementation((q: string) => ({
+          bind: vi.fn().mockReturnValue({
+            first: vi.fn().mockImplementation(async () => {
+              if (q.includes("sales_leads")) return mockLead;
+              if (q.includes("email_templates")) {
+                return {
+                  id: "ark_ledger_invitacion_oficial",
+                  subject: "Alianza Estratégica con {{despacho_nombre}}",
+                  html_content: "<p>Hola {{despacho_nombre}}</p>",
+                };
+              }
+              return null;
+            }),
+            run: vi.fn().mockResolvedValue({ success: true }),
+          }),
+        })),
+      };
+      const env = createMockEnv(db);
+      const app = createApp(env);
+
+      const res = await app.request(
+        "/api/internal/leads/lead_draft_01/draft-email",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-StayPuft-Key": STAYPUFT_TEST_KEY,
+          },
+          body: JSON.stringify({
+            template_id: "ark_ledger_invitacion_oficial",
+          }),
+        },
+        env
+      );
+
+      expect(res.status).toBe(200);
+      const data: any = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.draft.subject).toContain("Despacho Yucatán SC");
+      expect(data.draft.requires_approval).toBe(true);
+    });
+
+    it("POST /api/internal/voice/prepare-call prepara contexto sin realizar llamada", async () => {
+      const mockLead = {
+        id: "lead_voice_01",
+        despacho_nombre: "Despacho Auditores Península",
+        phone: "+529995551234",
+        tamano: "6-20",
+        dolor_detectado: "fiscal",
+      };
+      const db = createMockDb({ lead_voice_01: mockLead });
+      const env = createMockEnv(db);
+      const app = createApp(env);
+
+      const res = await app.request(
+        "/api/internal/voice/prepare-call",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-StayPuft-Key": STAYPUFT_TEST_KEY,
+          },
+          body: JSON.stringify({
+            lead_id: "lead_voice_01",
+          }),
+        },
+        env
+      );
+
+      expect(res.status).toBe(200);
+      const data: any = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.prospect.phone).toBe("+529995551234");
+      expect(data.requires_approval).toBe(true);
     });
   });
 });

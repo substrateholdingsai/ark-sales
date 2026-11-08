@@ -32,22 +32,19 @@ export function authMiddleware() {
       if (match) token = decodeURIComponent(match[1]);
     }
 
-    // Soporte para clave StayPuft API Key con acceso exclusivo a métricas de monitoreo
+    // Soporte para clave StayPuft API Key con acceso total para StayPuft
     const staypuftKey = c.env?.STAYPUFT_API_KEY;
     const providedInternal = c.req.header("X-Ark-Internal-Key") || c.req.header("X-StayPuft-Key") || token;
     if (staypuftKey && providedInternal && providedInternal === staypuftKey) {
-      const path = c.req.path;
-      if (path.includes("/harvest/metrics")) {
-        c.set("user", {
-          sub: "service:staypuft",
-          email: "staypuft@internal.arksystems.site",
-          role: "admin",
-          iat: Math.floor(Date.now() / 1000),
-          exp: Math.floor(Date.now() / 1000) + 3600,
-        });
-        await next();
-        return;
-      }
+      c.set("user", {
+        sub: "service:staypuft",
+        email: "staypuft@internal.arksystems.site",
+        role: "admin",
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+      await next();
+      return;
     }
 
     if (!token) {

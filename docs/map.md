@@ -3,7 +3,7 @@
 - FASE 1-2: BaseHarvester, DENUE, profiling HTTP, scoring híbrido, ingesta.
 - CLI: `python -m lead_harvester.main --source <denue|sipres> --profile <ark|futura_capital|ark_ledger|fintech_credit_app|sipres_sofom> [--plaza ...] [--query ...] [--limit N] [--fixture ...] [--skip-enrich] [--require-email] [--preview] [--base-url ...] [--dry-run]`
 - GitHub Actions: `.github/workflows/harvest.yml` (solo ejecución manual `workflow_dispatch`; cron desactivado)
-- Migraciones: migrations/0010_sales_observations.sql, migrations/0010_tenant_altum_sureste.sql, migrations/0011_cohorts.sql, migrations/0011_altum_email_templates.sql, migrations/0012_accounts_scian_sync.sql, migrations/0012_admin_user_substrate.sql, migrations/0013_harvest_runs.sql, migrations/0013_harvey_sales_engine.sql, migrations/0014_tenant_futura_capital.sql, migrations/0015_cohort_futura_us_investors.sql, migrations/0016_canaco_arkledger_pricing_tiers.sql, migrations/0017_canaco_mailing_campaigns_and_domains.sql, migrations/0018_tenant_ark_ledger.sql, migrations/0019_email_template_gancho_30dias.sql, migrations/0020_email_template_gancho_ledger_freemium.sql, migrations/0021_sales_contacts_whatsapp.sql, migrations/0022_update_ark_ledger_official_template.sql, migrations/0023_sales_accounts_tenant_id.sql, migrations/0024_email_template_ark_ledger_regulatory_overload.sql, migrations/0025_staypuft_operator_and_agent_tasks.sql
+- Migraciones: migrations/0010_sales_observations.sql, migrations/0010_tenant_altum_sureste.sql, migrations/0011_cohorts.sql, migrations/0011_altum_email_templates.sql, migrations/0012_accounts_scian_sync.sql, migrations/0012_admin_user_substrate.sql, migrations/0013_harvest_runs.sql, migrations/0013_harvey_sales_engine.sql, migrations/0014_tenant_futura_capital.sql, migrations/0015_cohort_futura_us_investors.sql, migrations/0016_canaco_arkledger_pricing_tiers.sql, migrations/0017_canaco_mailing_campaigns_and_domains.sql, migrations/0018_tenant_ark_ledger.sql, migrations/0019_email_template_gancho_30dias.sql, migrations/0020_email_template_gancho_ledger_freemium.sql, migrations/0021_sales_contacts_whatsapp.sql, migrations/0022_update_ark_ledger_official_template.sql, migrations/0023_sales_accounts_tenant_id.sql, migrations/0024_email_template_ark_ledger_regulatory_overload.sql, migrations/0025_staypuft_operator_and_agent_tasks.sql, migrations/0026_staypuft_research_schema_and_quarantine.sql
 - Endpoints: POST /api/internal/leads/:lead_id/classify; POST /api/internal/harvest/runs; PATCH /api/internal/harvest/runs/:run_id; POST /api/internal/harvest/backfill-scian; Super Admin: GET /api/superadmin/cohorts, POST /api/superadmin/cohorts/:id/preview, /launch-email, /launch-voice, GET /api/superadmin/harvest/metrics
 
 
@@ -124,7 +124,8 @@ ark-sales/
 │   ├── 0022_update_ark_ledger_official_template.sql # Template oficial Ark Ledger
 │   ├── 0023_sales_accounts_tenant_id.sql # tenant_id en accounts
 │   └── 0024_email_template_ark_ledger_regulatory_overload.sql # Campaña Ark Ledger: sobrecarga regulatoria
-│   └── 0025_staypuft_operator_and_agent_tasks.sql # Operador StayPuft y tareas agénticas
+│   ├── 0025_staypuft_operator_and_agent_tasks.sql # Operador StayPuft y tareas agénticas
+│   └── 0026_staypuft_research_schema_and_quarantine.sql # Esquema extendido StayPuft y tabla de cuarentena fail-closed
 ??? src/
 │   ├── auth/
 │   │   ├── password.ts            # PBKDF2-SHA256 soberano (100k iteraciones, Web Crypto API)
@@ -766,3 +767,161 @@ curl -s -X POST https://sales.arksystems.site/api/internal/email/send \
     "dry_run": false
   }'
 ```
+
+---
+
+## 9. Encolado de Cohortes para StayPuft y Cuarentena Fail-Closed de Ingesta
+
+### Encolado de Lotes de Prueba (`POST /api/internal/agent-tasks/enqueue-cohort`)
+Permite a StayPuft o al equipo de ingeniería encolar un lote controlado y determinista de tareas de prospección (`research_prospect_web`) a partir de prospectos existentes en D1 de la cohorte `ark_ledger_despachos`.
+
+#### Filtros Duros Aplicados (Fail-Closed)
+1. **SCIAN:** Únicamente `541211` (servicios de contabilidad y auditoría) o `541212` (servicios de teneduría de libros).
+2. **Plaza / Ciudad:** Mérida, Yucatán.
+3. **Nombre de Despacho Real:** No nulo, no vacío, longitud mínima 3 caracteres y no genérico (`isGenericFirmName()`). Excluye registros como `"DESPACHO CONTABLE"`, `"CONTABILIDAD"`, `"SIN NOMBRE"`, `"ASESORIA CONTABLE"`, etc.
+4. **Email Válido:** Sintaxis RFC estricta (`isValidEmailFormat()`). Excluye placeholders `@harvest.arksystems.local`, dominios ficticios `@example.com`, y buzones desatendidos (`noreply`, `noemail`, `sincorreo`).
+5. **Deduplicación en el Lote:** Un solo prospecto por correo en el lote procesado.
+6. **Idempotencia Total:** Omite prospectos que ya cuenten con una tarea registrada en `agent_tasks` para la misma habilidad (`research_prospect_web`), en cualquier estado (`pending`, `running`, `completed`, `failed`), tanto de `staypuft` como de `grok_bot`.
+7. **Exclusión Estricta de SOFOMs / SIPRES:** No contamina la cohorte de Ledger con entidades financieras reguladas por CONDUSEF.
+
+#### Ejemplo de Petición cURL
+```bash
+curl -s -X POST https://sales.arksystems.site/api/internal/agent-tasks/enqueue-cohort \
+  -H "X-StayPuft-Key: $STAYPUFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cohort_slug": "ark_ledger_despachos",
+    "skill_name": "research_prospect_web",
+    "limit": 20
+  }'
+```
+
+#### Respuesta
+```json
+{
+  "success": true,
+  "cohort_id": "ark_ledger_despachos",
+  "skill_name": "research_prospect_web",
+  "operator": "staypuft",
+  "limit": 20,
+  "count": 20,
+  "enqueued": [
+    {
+      "task_id": "task_4f89d...",
+      "lead_id": "lead_12345",
+      "despacho_nombre": "Despacho Maya y Asociados S.C.",
+      "email": "contacto@fiscalmaya.com"
+    }
+  ],
+  "skipped": [
+    {
+      "lead_id": "lead_99999",
+      "reason": "nombre_generico"
+    }
+  ]
+}
+```
+
+---
+
+### Esquema Extendido de `research_prospect_web` para StayPuft (Migración 0026)
+StayPuft puede reportar campos adicionales para enriquecer la ficha del prospecto sin romper la compatibilidad histórica de Grok Bot:
+- `tamano`: `"1-5" | "6-20" | "21-50" | "50+" | "desconocido"`
+- `email_valid`: `boolean`
+- `website_url`: `string | null`
+- `linkedin_url`: `string | null`
+- `software_detectado`: `string | string[] | null`
+- `socios`: `string[]`
+- `senales_dolor`: `string[]`
+- `fuentes`: `string[]`
+- `confidence` / `confianza`: `number` (0 a 100)
+- `descartar`: `boolean`
+- `motivo_descarte`: `string | null` (obligatorio si `descartar: true`)
+- `telefono`: `string | null` (número en formato canónico E.164 `+52...`)
+- `whatsapp`: `string | null` (móvil normalizado apto para `wa.me`)
+- `whatsapp_valid`: `boolean` (true solo si es móvil mexicano de 10 dígitos o normalizado `+521` -> `+52`)
+- `fuente_telefono`: `"website" | "google_maps" | "facebook" | "denue" | "directorio" | "otro" | "ninguno"`
+- `telefono_url`: `string | null` (URL de la fuente verificable)
+- `telefono_verificado`: `boolean` (true si aparece en 2 fuentes independientes o en la web oficial)
+- `sin_whatsapp`: `boolean` (true si no cuenta con WhatsApp válido)
+
+#### Protocolo de Búsqueda y Validación Telefónica
+1. Orden de búsqueda estricto: (1) web oficial, (2) Google Maps / Google Business, (3) Facebook oficial, (4) DENUE / Directorio.
+2. Si no se encuentra número: devolver `null` + `fuente_telefono: "ninguno"`, `sin_whatsapp: true`. **NO** descartar el lead si el email sigue siendo válido.
+3. Si el número es fijo o dudoso: `telefono: "+52..."`, `whatsapp: null`, `whatsapp_valid: false`.
+
+#### Persistencia Canónica en D1
+Al ejecutar la skill o enriquecer el lead vía `/api/internal/leads/:lead_id/enrich`:
+- `sales_leads.phone`: se actualiza con el teléfono normalizado E.164.
+- `sales_contacts.phone`: teléfono normalizado.
+- `sales_contacts.whatsapp`: WhatsApp normalizado (usable de inmediato en WhatsApp Studio).
+- `sales_observations`: inserta la señal `WHATSAPP_CORPORATIVO` vinculada a la cuenta.
+
+---
+
+### Cuarentena Fail-Closed en Ingesta (`sales_lead_quarantine`)
+En el punto de entrada de leads (`POST /webhooks` y `POST /webhooks/ingest`):
+- Los registros entrantes se someten a los filtros duros: `isValidEmailFormat(email)` y `!isGenericFirmName(despacho_nombre)`.
+- Si fallan:
+  - **NO** se insertan en `sales_leads`.
+  - Se aíslan en la tabla `sales_lead_quarantine` con su payload completo para auditoría o corrección manual.
+  - El endpoint devuelve **HTTP 202 Accepted**:
+    ```json
+    {
+      "status": "quarantined",
+      "quarantined": true,
+      "reason": "sin_nombre_real_generico",
+      "quarantine_id": "quar_abc123",
+      "message": "Lead en cuarentena para revisión manual (fail-closed: no contactable)."
+    }
+    ```
+- Preserva la integridad del embudo comercial activo y previene la contaminación de agentes y métricas.
+
+---
+
+## 13. StayPuft: Operador Autónomo con Acceso Total al Worker (Nov 2026)
+
+StayPuft cuenta con **Acceso Total** a todos los endpoints internos y operacionales del worker utilizando su cabecera `X-StayPuft-Key` o `Authorization: Bearer STAYPUFT_API_KEY`. En el middleware de autenticación global (`authMiddleware`), StayPuft es reconocido con rol `admin` (`user_id: 'staypuft-operator'`, `tenant_id: 'ark'`), lo que le permite consultar e interactuar con CRM y Super Admin sin restricciones 401/403.
+
+> [!IMPORTANT]
+> **Gobernanza y Aprobación Humana:**
+> La capacidad y acceso a los endpoints es total. Sin embargo, la ejecución de acciones con impacto externo o irreversible (envío real de correos, publicación en redes sociales como X, realización de llamadas de voz y despliegue a producción) **requiere aprobación explícita de Pablo en el chat** antes de ejecutarse.
+
+### Catálogo de Endpoints Autorizados para StayPuft
+
+#### 1. Lectura y Monitoreo
+- `GET /api/internal/leads`: Listar prospectos con filtros `cohort`, `scian`, `ciudad`, `has_email`, `has_phone`, `sin_whatsapp`, `estado`, `limit` (cap 100), `offset`. Retorna: `lead_id, account_id, nombre, email, telefono, whatsapp, whatsapp_valid, sin_whatsapp, scian_code, ciudad, vertical, estado, score`.
+- `GET /api/internal/leads/:lead_id`: Detalle completo (lead, cuenta, contactos, observaciones, actividades, tareas, emails enviados).
+- `GET /api/internal/accounts/:id`: Detalle completo de una cuenta corporativa.
+- `GET /api/internal/quarantine` (o `/api/internal/leads/quarantine`): Prospectos descartados con motivo, confidence, timestamp y descartado_por.
+- `GET /api/internal/harvest/metrics` y `GET /api/internal/metrics`: Métricas de cuentas, fuentes, señales y bloque `phone_coverage` (global y desglosado para `ark_ledger_despachos` y `futura_medicos_merida`).
+- `GET /api/internal/skills`: Catálogo de habilidades registradas.
+- `GET /api/internal/skills/pending` y `GET /api/internal/agent-tasks/pending`: Tareas agénticas pendientes en cola.
+
+#### 2. Operaciones Agénticas y CRM
+- `POST /api/internal/agent-tasks/enqueue`: Encolar una tarea individual para un operador.
+- `POST /api/internal/agent-tasks/enqueue-cohort`: Encolar lote de hasta 20 prospectos de una cohorte con 7 filtros estrictos.
+- `POST /api/internal/agent-tasks/:id/claim`: Reclamar tarea (`in_progress`).
+- `POST /api/internal/agent-tasks/:id/complete`: Reportar resultado y completar tarea.
+- `POST /api/internal/agent-tasks/:id/fail`: Reportar fallo e incrementar retry.
+- `POST /api/internal/agent-tasks/:id/retry`: Restablecer tarea a `pending`.
+- `POST /api/internal/leads/:lead_id/enrich`: Enriquecer lead con esquema extendido (incluyendo teléfono y WhatsApp).
+- `POST /api/internal/skills/execute`: Ejecutar skill y persistir datos normalizados en D1.
+- `POST /api/internal/crm/activities`: Registrar notas o interacciones de CRM.
+- `POST /api/internal/leads/:lead_id/observations` y `POST /api/internal/observations`: Registrar señales de dolor u observaciones.
+- `POST /api/internal/leads/:lead_id/status`: Actualizar estado del lead (`nuevo`, `en_conversacion`, `calificado`, `propuesta_enviada`, `cerrado`, `descartado`).
+- `POST /api/internal/leads/:lead_id/score`: Ajustar o calcular score (0 a 100).
+- `POST /api/internal/leads/:lead_id/quarantine`: Mover lead a cuarentena manualmente con motivo auditado.
+- `POST /api/internal/accounts/:id/merge`: Fusionar cuentas duplicadas.
+- `POST /api/internal/leads/:lead_id/draft-email`: Generar borrador de correo con interpolación segura (sin envío).
+- `POST /api/internal/campaigns/:id/prepare-batch`: Preparar lote de campaña de correo para revisión de Pablo.
+- `POST /api/internal/voice/prepare-call`: Preparar guión y contexto para llamada de voz (sin iniciar llamada).
+
+### Ejemplo cURL: Consultar Despachos sin WhatsApp en Mérida
+```bash
+curl -s -X GET \
+  -H "X-StayPuft-Key: $STAYPUFT_API_KEY" \
+  "https://sales.arksystems.site/api/internal/leads?cohort=ark_ledger_despachos&sin_whatsapp=true&limit=20" \
+  | jq .
+```
+
