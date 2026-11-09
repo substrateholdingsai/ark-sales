@@ -12,50 +12,60 @@ export type InternalContext = Context<{ Bindings: Env; Variables: InternalVariab
 
 /**
  * Normaliza y valida números telefónicos para México en formato E.164 (+52...)
- * Detecta si el número es apto para WhatsApp (móvil de 10 dígitos nacional con lada).
+ * Regla IFT: En México todo número válido nacional tiene exactamente 10 dígitos y no inicia con 0 ni 1.
+ * Rechaza números concatenados, fijos con prefijos legacy 01 o longitudes inválidas (11, 14, 15 dígitos).
  */
 export function normalizeMexicanPhone(raw: string | null | undefined): {
   telefono: string | null;
   whatsapp: string | null;
   whatsapp_valid: boolean;
+  malformed: boolean;
 } {
   if (!raw || typeof raw !== "string") {
-    return { telefono: null, whatsapp: null, whatsapp_valid: false };
+    return { telefono: null, whatsapp: null, whatsapp_valid: false, malformed: false };
   }
   const trimmed = raw.trim();
-  if (!trimmed || trimmed === "-" || trimmed.toLowerCase() === "null") {
-    return { telefono: null, whatsapp: null, whatsapp_valid: false };
-  }
-  let digits = trimmed.replace(/\D/g, "");
-  // Si viene con prefijo internacional 521 (13 dígitos) -> 52 + 10
-  if (digits.startsWith("521") && digits.length === 13) {
-    digits = "52" + digits.slice(3);
-  } else if (!digits.startsWith("52") && digits.length === 10) {
-    digits = "52" + digits;
+  if (!trimmed || trimmed === "-" || trimmed.toLowerCase() === "null" || trimmed.toLowerCase() === "n/a") {
+    return { telefono: null, whatsapp: null, whatsapp_valid: false, malformed: false };
   }
 
-  // 12 dígitos empezando con 52 = E.164 mexicano válido (52 + 10 dígitos)
-  const isE164Mexican = digits.startsWith("52") && digits.length === 12;
-  if (isE164Mexican) {
-    const formatted = `+${digits}`;
-    return {
-      telefono: formatted,
-      whatsapp: formatted,
-      whatsapp_valid: true,
-    };
+  // Extraer sólo dígitos numéricos
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) {
+    return { telefono: null, whatsapp: null, whatsapp_valid: false, malformed: true };
   }
 
-  // Si tiene al menos 7 dígitos pero no es un móvil mexicano estándar (ej. fijo o incompleto)
-  if (digits.length >= 7) {
-    const formatted = trimmed.startsWith("+") ? `+${digits}` : `+${digits}`;
-    return {
-      telefono: formatted,
-      whatsapp: null,
-      whatsapp_valid: false,
-    };
+  let nationalDigits = "";
+
+  // 1. Caso internacional 13 dígitos: 521 + 10 dígitos (legacy móvil mexicano)
+  if (digits.length === 13 && digits.startsWith("521")) {
+    nationalDigits = digits.slice(3);
+  }
+  // 2. Caso internacional 12 dígitos: 52 + 10 dígitos (E.164 estándar mexicano)
+  else if (digits.length === 12 && digits.startsWith("52")) {
+    nationalDigits = digits.slice(2);
+  }
+  // 3. Caso nacional estándar: exactamente 10 dígitos
+  else if (digits.length === 10) {
+    nationalDigits = digits;
+  }
+  // Cualquier otra longitud (ej. 7, 8, 11, 14, 15 dígitos concatenados con 01) es MALFORMADA
+  else {
+    return { telefono: null, whatsapp: null, whatsapp_valid: false, malformed: true };
   }
 
-  return { telefono: null, whatsapp: null, whatsapp_valid: false };
+  // En el plan de numeración de México (IFT), los números nacionales de 10 dígitos nunca empiezan con 0 ni con 1.
+  if (nationalDigits.length !== 10 || nationalDigits.startsWith("0") || nationalDigits.startsWith("1")) {
+    return { telefono: null, whatsapp: null, whatsapp_valid: false, malformed: true };
+  }
+
+  const formatted = `+52${nationalDigits}`;
+  return {
+    telefono: formatted,
+    whatsapp: formatted,
+    whatsapp_valid: true,
+    malformed: false,
+  };
 }
 
 // Rate limiting en memoria para llamadas internas (120 req/min)
@@ -1419,18 +1429,21 @@ const metricsHandler = async (c: InternalContext) => {
       total_with_phone: 0,
       total_with_whatsapp_valid: 0,
       total_without_whatsapp: 0,
+      total_malformed_phone: 0,
       cohorts: {
         ark_ledger_despachos: {
           total_leads: 0,
           total_with_phone: 0,
           total_with_whatsapp_valid: 0,
           total_without_whatsapp: 0,
+          malformed_phone_count: 0,
         },
         futura_medicos_merida: {
           total_leads: 0,
           total_with_phone: 0,
           total_with_whatsapp_valid: 0,
           total_without_whatsapp: 0,
+          malformed_phone_count: 0,
         },
       },
     };
@@ -1439,8 +1452,20 @@ const metricsHandler = async (c: InternalContext) => {
       const phoneRes = await c.env.DB.prepare(`
         SELECT 
           COUNT(DISTINCT l.id) as total_leads,
-          COUNT(DISTINCT CASE WHEN (l.phone IS NOT NULL AND TRIM(l.phone) != '') OR (c.phone IS NOT NULL AND TRIM(c.phone) != '') OR (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '') THEN l.id END) as with_phone,
-          COUNT(DISTINCT CASE WHEN (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '') OR o.id IS NOT NULL OR (l.phone IS NOT NULL AND (l.phone LIKE '+52%' OR l.phone LIKE '52%') AND LENGTH(REPLACE(REPLACE(l.phone, '+', ''), ' ', '')) = 12) THEN l.id END) as with_wa
+          COUNT(DISTINCT CASE WHEN (
+            (l.phone IS NOT NULL AND TRIM(l.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13)) OR
+            (c.phone IS NOT NULL AND TRIM(c.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13)) OR
+            (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.whatsapp, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13))
+          ) THEN l.id END) as with_phone,
+          COUNT(DISTINCT CASE WHEN (
+            (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.whatsapp, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13)) OR
+            o.id IS NOT NULL OR
+            (l.phone IS NOT NULL AND (l.phone LIKE '+52%' OR l.phone LIKE '52%' OR LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) = 10) AND LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13))
+          ) THEN l.id END) as with_wa,
+          COUNT(DISTINCT CASE WHEN (
+            (l.phone IS NOT NULL AND TRIM(l.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) NOT IN (10, 12, 13)) OR
+            (c.phone IS NOT NULL AND TRIM(c.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), ' ', ''), '-', '')) NOT IN (10, 12, 13))
+          ) THEN l.id END) as malformed_phone
         FROM sales_leads l
         LEFT JOIN sales_contacts c ON c.account_id = l.account_id
         LEFT JOIN sales_observations o ON o.account_id = l.account_id AND o.signal_code = 'WHATSAPP_CORPORATIVO'
@@ -1450,19 +1475,36 @@ const metricsHandler = async (c: InternalContext) => {
         phoneCoverage.total_with_phone = phoneRes.with_phone || 0;
         phoneCoverage.total_with_whatsapp_valid = phoneRes.with_wa || 0;
         phoneCoverage.total_without_whatsapp = Math.max(0, (phoneRes.total_leads || 0) - (phoneRes.with_wa || 0));
+        phoneCoverage.total_malformed_phone = phoneRes.malformed_phone || 0;
       }
 
       const arkRes = await c.env.DB.prepare(`
         SELECT 
           COUNT(DISTINCT l.id) as total_leads,
-          COUNT(DISTINCT CASE WHEN (l.phone IS NOT NULL AND TRIM(l.phone) != '') OR (c.phone IS NOT NULL AND TRIM(c.phone) != '') OR (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '') THEN l.id END) as with_phone,
-          COUNT(DISTINCT CASE WHEN (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '') OR o.id IS NOT NULL OR (l.phone IS NOT NULL AND (l.phone LIKE '+52%' OR l.phone LIKE '52%') AND LENGTH(REPLACE(REPLACE(l.phone, '+', ''), ' ', '')) = 12) THEN l.id END) as with_wa
+          COUNT(DISTINCT CASE WHEN (
+            (l.phone IS NOT NULL AND TRIM(l.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13)) OR
+            (c.phone IS NOT NULL AND TRIM(c.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13)) OR
+            (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.whatsapp, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13))
+          ) THEN l.id END) as with_phone,
+          COUNT(DISTINCT CASE WHEN (
+            (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.whatsapp, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13)) OR
+            o.id IS NOT NULL OR
+            (l.phone IS NOT NULL AND (l.phone LIKE '+52%' OR l.phone LIKE '52%' OR LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) = 10) AND LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13))
+          ) THEN l.id END) as with_wa,
+          COUNT(DISTINCT CASE WHEN (
+            (l.phone IS NOT NULL AND TRIM(l.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) NOT IN (10, 12, 13)) OR
+            (c.phone IS NOT NULL AND TRIM(c.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), ' ', ''), '-', '')) NOT IN (10, 12, 13))
+          ) THEN l.id END) as malformed_phone
         FROM sales_leads l
         JOIN sales_accounts a ON a.id = l.account_id
         LEFT JOIN sales_contacts c ON c.account_id = l.account_id
         LEFT JOIN sales_observations o ON o.account_id = l.account_id AND o.signal_code = 'WHATSAPP_CORPORATIVO'
-        WHERE a.scian_code IN ('541211', '541212', '541219', '541110', '561490', '541210')
-           OR a.tenant_id = 'acc_ark_ledger'
+        WHERE a.scian_code IN ('541211', '541212')
+          AND (LOWER(COALESCE(a.city, '')) LIKE '%merida%' OR LOWER(COALESCE(a.city, '')) LIKE '%mérida%' OR LOWER(COALESCE(a.city, '')) LIKE '%yucat%')
+          AND a.id NOT LIKE '%sipres%'
+          AND LOWER(COALESCE(a.name, '')) NOT LIKE '%sofom%'
+          AND LOWER(COALESCE(a.name, '')) NOT LIKE '%s.a.p.i.%'
+          AND l.id NOT LIKE '%sipres%'
       `).first<any>();
 
       if (arkRes) {
@@ -1471,19 +1513,33 @@ const metricsHandler = async (c: InternalContext) => {
           total_with_phone: arkRes.with_phone || 0,
           total_with_whatsapp_valid: arkRes.with_wa || 0,
           total_without_whatsapp: Math.max(0, (arkRes.total_leads || 0) - (arkRes.with_wa || 0)),
+          malformed_phone_count: arkRes.malformed_phone || 0,
         };
       }
 
       const futRes = await c.env.DB.prepare(`
         SELECT 
           COUNT(DISTINCT l.id) as total_leads,
-          COUNT(DISTINCT CASE WHEN (l.phone IS NOT NULL AND TRIM(l.phone) != '') OR (c.phone IS NOT NULL AND TRIM(c.phone) != '') OR (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '') THEN l.id END) as with_phone,
-          COUNT(DISTINCT CASE WHEN (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '') OR o.id IS NOT NULL OR (l.phone IS NOT NULL AND (l.phone LIKE '+52%' OR l.phone LIKE '52%') AND LENGTH(REPLACE(REPLACE(l.phone, '+', ''), ' ', '')) = 12) THEN l.id END) as with_wa
+          COUNT(DISTINCT CASE WHEN (
+            (l.phone IS NOT NULL AND TRIM(l.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13)) OR
+            (c.phone IS NOT NULL AND TRIM(c.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13)) OR
+            (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.whatsapp, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13))
+          ) THEN l.id END) as with_phone,
+          COUNT(DISTINCT CASE WHEN (
+            (c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.whatsapp, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13)) OR
+            o.id IS NOT NULL OR
+            (l.phone IS NOT NULL AND (l.phone LIKE '+52%' OR l.phone LIKE '52%' OR LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) = 10) AND LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) IN (10, 12, 13))
+          ) THEN l.id END) as with_wa,
+          COUNT(DISTINCT CASE WHEN (
+            (l.phone IS NOT NULL AND TRIM(l.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(l.phone, '+', ''), ' ', ''), '-', '')) NOT IN (10, 12, 13)) OR
+            (c.phone IS NOT NULL AND TRIM(c.phone) != '' AND LENGTH(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), ' ', ''), '-', '')) NOT IN (10, 12, 13))
+          ) THEN l.id END) as malformed_phone
         FROM sales_leads l
         JOIN sales_accounts a ON a.id = l.account_id
         LEFT JOIN sales_contacts c ON c.account_id = l.account_id
         LEFT JOIN sales_observations o ON o.account_id = l.account_id AND o.signal_code = 'WHATSAPP_CORPORATIVO'
-        WHERE a.scian_code IN ('621111', '621112', '621211', '621511', '622111')
+        WHERE (a.scian_code IN ('621111', '621112', '621211', '621511', '622111') OR a.scian_code LIKE '62%')
+          AND (LOWER(COALESCE(a.city, '')) LIKE '%merida%' OR LOWER(COALESCE(a.city, '')) LIKE '%mérida%' OR LOWER(COALESCE(a.city, '')) LIKE '%yucat%')
       `).first<any>();
 
       if (futRes) {
@@ -1492,6 +1548,7 @@ const metricsHandler = async (c: InternalContext) => {
           total_with_phone: futRes.with_phone || 0,
           total_with_whatsapp_valid: futRes.with_wa || 0,
           total_without_whatsapp: Math.max(0, (futRes.total_leads || 0) - (futRes.with_wa || 0)),
+          malformed_phone_count: futRes.malformed_phone || 0,
         };
       }
     } catch {
@@ -1713,7 +1770,7 @@ internalRouter.post("/harvest/backfill-scian", async (c) => {
 
 /**
  * GET /api/internal/leads
- * Filtros: cohort, scian, ciudad, has_email, has_phone, sin_whatsapp, estado, limit (default 20, cap 100), offset.
+ * Filtros: cohort, scian, ciudad, has_email, has_phone, sin_whatsapp, estado, q, limit (default 20, cap 100), offset.
  * Devuelve por lead: lead_id, account_id, nombre, email, telefono, whatsapp, whatsapp_valid, sin_whatsapp, scian_code, ciudad, vertical, estado, score.
  */
 internalRouter.get("/leads", async (c) => {
@@ -1726,6 +1783,7 @@ internalRouter.get("/leads", async (c) => {
     const hasPhone = c.req.query("has_phone");
     const sinWhatsapp = c.req.query("sin_whatsapp");
     const estado = c.req.query("estado");
+    const q = (c.req.query("q") || "").trim();
 
     let limit = parseInt(c.req.query("limit") || "20", 10);
     if (isNaN(limit) || limit < 1) limit = 20;
@@ -1776,9 +1834,19 @@ internalRouter.get("/leads", async (c) => {
 
     if (cohort) {
       if (cohort === "ark_ledger_despachos") {
-        whereClauses.push(`(a.scian_code IN ('541211', '541212', '541219', '541110', '561490', '541210') OR a.tenant_id = 'acc_ark_ledger')`);
+        whereClauses.push(`(
+          a.scian_code IN ('541211', '541212') 
+          AND (LOWER(COALESCE(a.city, '')) LIKE '%merida%' OR LOWER(COALESCE(a.city, '')) LIKE '%mérida%' OR LOWER(COALESCE(a.city, '')) LIKE '%yucat%')
+          AND a.id NOT LIKE '%sipres%' 
+          AND LOWER(COALESCE(a.name, '')) NOT LIKE '%sofom%' 
+          AND LOWER(COALESCE(a.name, '')) NOT LIKE '%s.a.p.i.%'
+          AND l.id NOT LIKE '%sipres%'
+        )`);
       } else if (cohort === "futura_medicos_merida") {
-        whereClauses.push(`(a.scian_code IN ('621111', '621112', '621211', '621511', '622111'))`);
+        whereClauses.push(`(
+          a.scian_code IN ('621111', '621112', '621211', '621511', '622111')
+          AND (LOWER(COALESCE(a.city, '')) LIKE '%merida%' OR LOWER(COALESCE(a.city, '')) LIKE '%mérida%' OR LOWER(COALESCE(a.city, '')) LIKE '%yucat%')
+        )`);
       } else {
         try {
           const chRow = await c.env.DB.prepare("SELECT query_sql FROM sales_cohorts WHERE cohort_id = ?").bind(cohort).first<any>();
@@ -1790,9 +1858,9 @@ internalRouter.get("/leads", async (c) => {
     }
 
     if (hasEmail === "true") {
-      whereClauses.push("(l.email IS NOT NULL AND TRIM(l.email) != '' AND l.email != 'placeholder@lead.local')");
+      whereClauses.push("(COALESCE(l.email, c.email) IS NOT NULL AND TRIM(COALESCE(l.email, c.email)) != '' AND COALESCE(l.email, c.email) NOT LIKE '%@harvest.arksystems.local' AND COALESCE(l.email, c.email) NOT LIKE '%placeholder%')");
     } else if (hasEmail === "false") {
-      whereClauses.push("(l.email IS NULL OR TRIM(l.email) = '' OR l.email = 'placeholder@lead.local')");
+      whereClauses.push("(COALESCE(l.email, c.email) IS NULL OR TRIM(COALESCE(l.email, c.email)) = '' OR COALESCE(l.email, c.email) LIKE '%@harvest.arksystems.local' OR COALESCE(l.email, c.email) LIKE '%placeholder%')");
     }
 
     if (hasPhone === "true") {
@@ -1807,19 +1875,39 @@ internalRouter.get("/leads", async (c) => {
       whereClauses.push("((c.whatsapp IS NOT NULL AND TRIM(c.whatsapp) != '') OR (l.phone IS NOT NULL AND (l.phone LIKE '+52%' OR l.phone LIKE '52%') AND LENGTH(REPLACE(REPLACE(l.phone, '+', ''), ' ', '')) = 12))");
     }
 
-    if (whereClauses.length > 0) {
-      baseQuery += ` WHERE ` + whereClauses.join(" AND ");
+    if (q) {
+      whereClauses.push("(LOWER(COALESCE(l.despacho_nombre, '')) LIKE ? OR LOWER(COALESCE(a.name, '')) LIKE ? OR LOWER(COALESCE(l.email, '')) LIKE ? OR LOWER(COALESCE(c.email, '')) LIKE ? OR LOWER(COALESCE(c.name, '')) LIKE ?)");
+      const qParam = `%${q.toLowerCase()}%`;
+      params.push(qParam, qParam, qParam, qParam, qParam);
     }
 
-    baseQuery += ` GROUP BY l.id ORDER BY l.created_at DESC LIMIT ? OFFSET ?`;
-    params.push(limit, offset);
+    let countQuery = `
+      SELECT COUNT(DISTINCT l.id) as total
+      FROM sales_leads l
+      LEFT JOIN sales_accounts a ON a.id = l.account_id
+      LEFT JOIN sales_contacts c ON c.account_id = l.account_id
+    `;
+    if (whereClauses.length > 0) {
+      countQuery += ` WHERE ` + whereClauses.join(" AND ");
+    }
+    const countRow = await c.env.DB.prepare(countQuery).bind(...params).first<{ total: number }>();
+    const total = countRow?.total || 0;
 
-    const rows = await c.env.DB.prepare(baseQuery).bind(...params).all<any>();
+    let query = baseQuery;
+    if (whereClauses.length > 0) {
+      query += ` WHERE ` + whereClauses.join(" AND ");
+    }
+
+    query += ` GROUP BY l.id ORDER BY l.created_at DESC LIMIT ? OFFSET ?`;
+    const queryParams = [...params, limit, offset];
+
+    const rows = await c.env.DB.prepare(query).bind(...queryParams).all<any>();
     const leads = (rows?.results || []).map((row: any) => {
-      const norm = normalizeMexicanPhone(row.raw_whatsapp || row.raw_phone);
-      const telefono = row.raw_phone ? (norm.telefono || row.raw_phone) : null;
-      const whatsapp = row.raw_whatsapp || norm.whatsapp || null;
-      const whatsappValid = norm.whatsapp_valid || (whatsapp ? whatsapp.startsWith("+52") && whatsapp.length === 13 : false);
+      const rawVal = row.raw_whatsapp || row.raw_phone;
+      const norm = normalizeMexicanPhone(rawVal);
+      const telefono = norm.telefono;
+      const whatsapp = norm.whatsapp;
+      const whatsappValid = norm.whatsapp_valid;
       const isSinWhatsapp = !whatsappValid;
 
       return {
@@ -1842,6 +1930,7 @@ internalRouter.get("/leads", async (c) => {
     return c.json({
       success: true,
       count: leads.length,
+      total,
       limit,
       offset,
       leads,
@@ -1853,7 +1942,7 @@ internalRouter.get("/leads", async (c) => {
 
 /**
  * GET /api/internal/leads/:lead_id
- * Detalle completo de un lead: cuenta, contactos, observaciones, actividades, tareas, emails.
+ * Detalle completo de un lead: cohorte real, cuenta, contactos, observaciones, actividades, tareas, emails.
  */
 internalRouter.get("/leads/:lead_id", async (c) => {
   if (!c.env.DB) return c.json({ error: "DB no disponible" }, 503);
@@ -1900,11 +1989,40 @@ internalRouter.get("/leads/:lead_id", async (c) => {
       emails = emailsRes?.results || [];
     } catch {}
 
+    // Calcular cohorte real del lead
+    let cohort: string | null = null;
+    const scianCode = String(account?.scian_code || "");
+    const city = String(account?.city || "").toLowerCase();
+    const isMerida = city.includes("merida") || city.includes("mérida") || city.includes("yucat");
+    const accId = String(account?.id || "");
+    const accName = String(account?.name || "").toLowerCase();
+    const isSipres = accId.includes("sipres") || leadId.toLowerCase().includes("sipres") || accName.includes("sofom") || accName.includes("s.a.p.i.");
+
+    if (isSipres) {
+      cohort = "sipres_sofom";
+    } else if (["541211", "541212"].includes(scianCode) && isMerida) {
+      cohort = "ark_ledger_despachos";
+    } else if (["621111", "621112", "621211", "621511", "622111"].includes(scianCode) && isMerida) {
+      cohort = "futura_medicos_merida";
+    } else if (["541211", "541212", "541219", "541110", "561490"].includes(scianCode)) {
+      cohort = "despachos_general";
+    }
+
+    const normPhone = normalizeMexicanPhone(lead.phone);
+    const cleanedLead = {
+      ...lead,
+      phone: normPhone.telefono,
+      whatsapp: normPhone.whatsapp,
+      whatsapp_valid: normPhone.whatsapp_valid,
+      sin_whatsapp: !normPhone.whatsapp_valid,
+    };
+
     return c.json({
       success: true,
       lead_id: lead.id,
+      cohort,
       score: lead.score,
-      lead,
+      lead: cleanedLead,
       account,
       contacts,
       observations,

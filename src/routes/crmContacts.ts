@@ -10,7 +10,7 @@ export const crmContactsRouter = new Hono<{ Bindings: Env; Variables: AuthVariab
 crmContactsRouter.use("*", requireAuth());
 
 function parsePagination(c: any) {
-  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "20", 10) || 20, 1), 5000);
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "20", 10) || 20, 1), 100);
   const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
   return { limit, offset };
 }

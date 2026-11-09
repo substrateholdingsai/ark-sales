@@ -890,32 +890,33 @@ StayPuft cuenta con **Acceso Total** a todos los endpoints internos y operaciona
 ### Catálogo de Endpoints Autorizados para StayPuft
 
 #### 1. Lectura y Monitoreo
-- `GET /api/internal/leads`: Listar prospectos con filtros `cohort`, `scian`, `ciudad`, `has_email`, `has_phone`, `sin_whatsapp`, `estado`, `limit` (cap 100), `offset`. Retorna: `lead_id, account_id, nombre, email, telefono, whatsapp, whatsapp_valid, sin_whatsapp, scian_code, ciudad, vertical, estado, score`.
-- `GET /api/internal/leads/:lead_id`: Detalle completo (lead, cuenta, contactos, observaciones, actividades, tareas, emails enviados).
+- `GET /api/internal/leads`: Listar prospectos con filtros `cohort`, `scian`, `ciudad`, `has_email`, `has_phone`, `sin_whatsapp`, `estado`, `q`, `limit` (cap estricto 100), `offset`. Retorna: `count, total, limit, offset, leads: [{ lead_id, account_id, nombre, email, telefono, whatsapp, whatsapp_valid, sin_whatsapp, scian_code, ciudad, vertical, estado, score }]`.
+- `GET /api/internal/leads/:lead_id`: Detalle completo 360° (lead, cohort real calculada, cuenta, contactos, observaciones, actividades, tareas, emails enviados).
 - `GET /api/internal/accounts/:id`: Detalle completo de una cuenta corporativa.
 - `GET /api/internal/quarantine` (o `/api/internal/leads/quarantine`): Prospectos descartados con motivo, confidence, timestamp y descartado_por.
-- `GET /api/internal/harvest/metrics` y `GET /api/internal/metrics`: Métricas de cuentas, fuentes, señales y bloque `phone_coverage` (global y desglosado para `ark_ledger_despachos` y `futura_medicos_merida`).
+- `GET /api/internal/harvest/metrics` y `GET /api/internal/metrics`: Métricas de cuentas, fuentes, señales y bloque `phone_coverage` (global y desglosado para `ark_ledger_despachos` y `futura_medicos_merida`, incluyendo `malformed_phone_count`).
 - `GET /api/internal/skills`: Catálogo de habilidades registradas.
 - `GET /api/internal/skills/pending` y `GET /api/internal/agent-tasks/pending`: Tareas agénticas pendientes en cola.
 
-#### 2. Operaciones Agénticas y CRM
-- `POST /api/internal/agent-tasks/enqueue`: Encolar una tarea individual para un operador.
-- `POST /api/internal/agent-tasks/enqueue-cohort`: Encolar lote de hasta 20 prospectos de una cohorte con 7 filtros estrictos.
-- `POST /api/internal/agent-tasks/:id/claim`: Reclamar tarea (`in_progress`).
-- `POST /api/internal/agent-tasks/:id/complete`: Reportar resultado y completar tarea.
-- `POST /api/internal/agent-tasks/:id/fail`: Reportar fallo e incrementar retry.
-- `POST /api/internal/agent-tasks/:id/retry`: Restablecer tarea a `pending`.
-- `POST /api/internal/leads/:lead_id/enrich`: Enriquecer lead con esquema extendido (incluyendo teléfono y WhatsApp).
-- `POST /api/internal/skills/execute`: Ejecutar skill y persistir datos normalizados en D1.
-- `POST /api/internal/crm/activities`: Registrar notas o interacciones de CRM.
-- `POST /api/internal/leads/:lead_id/observations` y `POST /api/internal/observations`: Registrar señales de dolor u observaciones.
-- `POST /api/internal/leads/:lead_id/status`: Actualizar estado del lead (`nuevo`, `en_conversacion`, `calificado`, `propuesta_enviada`, `cerrado`, `descartado`).
-- `POST /api/internal/leads/:lead_id/score`: Ajustar o calcular score (0 a 100).
-- `POST /api/internal/leads/:lead_id/quarantine`: Mover lead a cuarentena manualmente con motivo auditado.
-- `POST /api/internal/accounts/:id/merge`: Fusionar cuentas duplicadas.
-- `POST /api/internal/leads/:lead_id/draft-email`: Generar borrador de correo con interpolación segura (sin envío).
-- `POST /api/internal/campaigns/:id/prepare-batch`: Preparar lote de campaña de correo para revisión de Pablo.
-- `POST /api/internal/voice/prepare-call`: Preparar guión y contexto para llamada de voz (sin iniciar llamada).
+---
+
+### Regla Arquitectural de Pertenencia a Cohortes y Protección de Cuota D1
+
+#### 1. Regla Canónica de Pertenencia a `ark_ledger_despachos`
+La pertenencia a la cohorte `ark_ledger_despachos` es **estricta y fail-closed** en todos los endpoints (`GET /api/internal/leads?cohort=ark_ledger_despachos`, encolado, métricas):
+- **SCIAN:** `541211` (Contabilidad/Auditoría) o `541212` (Teneduría de libros).
+- **Plaza:** Mérida / Yucatán (`LOWER(a.city) LIKE '%merida%'` o `%mérida%` o `%yucat%`).
+- **Exclusión Fail-Closed:** `a.id NOT LIKE '%sipres%' AND LOWER(a.name) NOT LIKE '%sofom%' AND LOWER(a.name) NOT LIKE '%s.a.p.i.%' AND l.id NOT LIKE '%sipres%'`.
+- *Nota Crítica:* La presencia de `tenant_id = 'acc_ark_ledger'` en `sales_accounts` es un clasificador fallback para cuentas huérfanas y **nunca** confiere pertenencia a la cohorte de despachos contables si no cumple la regla de SCIAN y plaza.
+
+#### 2. Política de Paginación en Servidor (Cap 100) — Mitigación Anti-Abuso D1
+- **Incidente de Referencia:** Incidente del 2026-11-05 (saturación de cuota de lectura en D1 y memoria del worker por consultas masivas `limit=5000`).
+- **Política Vigente:**
+  1. Todo endpoint de listado (`/api/crm/accounts`, `/api/crm/contacts`, `/api/internal/leads`) tiene un **tope no sobrepasable de 100 registros por query** (`limit = Math.min(limit, 100)`).
+  2. La paginación es **server-side** utilizando `limit` y `offset`.
+  3. El frontend de CRM (`crmPage.ts`) muestra navegación `"Página X de Y — {total} registros en total"` con botones Anterior/Siguiente.
+  4. La búsqueda por texto se realiza en el servidor mediante el parámetro `q` contra índices y columnas filtradas, nunca transfiriendo toda la base para filtrar en memoria en el cliente.
+  5. En el expediente 360°, los contactos, observaciones y actividades se cargan bajo demanda (`GET /api/crm/accounts/:id` o `GET /api/internal/leads/:lead_id`) al abrir el modal, evitando precargar grafos relacionales pesados en tablas principales.
 
 ### Ejemplo cURL: Consultar Despachos sin WhatsApp en Mérida
 ```bash

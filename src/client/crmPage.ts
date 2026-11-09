@@ -339,22 +339,30 @@ tailwind.config = {
         </div>
       </div>
 
-      <div class="flex flex-wrap gap-2" id="cuentasFiltros">
-        <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue" id="filtroTamano" onchange="filtrarCuentas()">
-          <option value="">Tamaño (todos)</option>
-          <option value="1-5">1-5 empleados</option>
-          <option value="6-20">6-20 empleados</option>
-          <option value="21-50">21-50 empleados</option>
-          <option value="50+">50+ empleados</option>
-        </select>
-        <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue" id="filtroTenant" onchange="cambiarFiltroTenant(this.value)">
-          <option value="">Tenant (todos)</option>
-          <option value="acc_ark_ledger">Ark Ledger</option>
-          <option value="acc_futura_capital">Futura Capital</option>
-        </select>
-        <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue font-medium cursor-pointer" id="filtroCiudad" onchange="filtrarCuentas()">
-          <option value="">Ciudad (Todas)</option>
-        </select>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+        <div class="flex items-center gap-2 flex-1 max-w-md">
+          <div class="relative w-full">
+            <i data-lucide="search" class="w-4 h-4 text-slate-500 absolute left-3 top-2.5"></i>
+            <input type="text" id="filtroCuentasInput" oninput="buscarCuentasEnTabla(event)" placeholder="Buscar por razón social o nombre..." class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white focus:border-ark-blue">
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2" id="cuentasFiltros">
+          <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue" id="filtroTamano" onchange="filtrarCuentas()">
+            <option value="">Tamaño (todos)</option>
+            <option value="1-5">1-5 empleados</option>
+            <option value="6-20">6-20 empleados</option>
+            <option value="21-50">21-50 empleados</option>
+            <option value="50+">50+ empleados</option>
+          </select>
+          <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue" id="filtroTenant" onchange="cambiarFiltroTenant(this.value)">
+            <option value="">Tenant (todos)</option>
+            <option value="acc_ark_ledger">Ark Ledger</option>
+            <option value="acc_futura_capital">Futura Capital</option>
+          </select>
+          <select class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-ark-blue font-medium cursor-pointer" id="filtroCiudad" onchange="filtrarCuentas()">
+            <option value="">Ciudad (Todas)</option>
+          </select>
+        </div>
       </div>
 
       <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -372,6 +380,29 @@ tailwind.config = {
           </thead>
           <tbody id="cuentasBody" class="divide-y divide-slate-800/50"></tbody>
         </table>
+      </div>
+
+      <!-- Controles de Paginación de Cuentas (100 por página) -->
+      <div id="cuentasPagination" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-400">
+        <div class="flex items-center gap-2">
+          <span>Página <span id="pagActualCuentas" class="text-ark-blue_hi font-bold">1</span> de <span id="pagTotalPagsCuentas" class="text-slate-300">1</span> — <span id="pagTotalCuentas" class="text-white font-mono font-medium">0</span> registros en total</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button type="button" onclick="irPrimeraPaginaCuentas()" id="btnPagPrimeraCuentas" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Primera página">
+            <i data-lucide="chevrons-left" class="w-4 h-4"></i>
+          </button>
+          <button type="button" onclick="cambiarPaginaCuentas(-1)" id="btnPagAnteriorCuentas" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Página anterior">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Anterior</span>
+          </button>
+          <button type="button" onclick="cambiarPaginaCuentas(1)" id="btnPagSiguienteCuentas" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Página siguiente">
+            <span class="hidden sm:inline">Siguiente</span>
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+          <button type="button" onclick="irUltimaPaginaCuentas()" id="btnPagUltimaCuentas" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Última página">
+            <i data-lucide="chevrons-right" class="w-4 h-4"></i>
+          </button>
+        </div>
       </div>
     </section>
 
@@ -1482,15 +1513,28 @@ async function loadMetrics() {
   } catch (e) { console.error('loadMetrics error:', e); }
 }
 
-async function loadAccounts(tenant = '') {
+let paginaCuentas = 1;
+const CUENTAS_POR_PAGINA = 100;
+let totalPaginasCuentas = 1;
+let filtroCuentasTexto = '';
+
+async function loadAccounts(page = 1, tenant = '') {
   try {
+    paginaCuentas = page;
     const tVal = tenant || document.getElementById('filtroTenant')?.value || '';
-    const url = tVal 
-      ? '/api/crm/accounts?limit=5000&offset=0&tenant=' + encodeURIComponent(tVal)
-      : '/api/crm/accounts?limit=5000&offset=0';
+    const qVal = filtroCuentasTexto || '';
+    const offset = (paginaCuentas - 1) * CUENTAS_POR_PAGINA;
+    const params = new URLSearchParams();
+    params.set('limit', String(CUENTAS_POR_PAGINA));
+    params.set('offset', String(offset));
+    if (tVal) params.set('tenant', tVal);
+    if (qVal) params.set('q', qVal);
+
+    const url = '/api/crm/accounts?' + params.toString();
     const data = await apiCall(url);
     state.accounts = (data && data.items) || [];
     state.accountsTotal = data?.total ?? state.accounts.length;
+    totalPaginasCuentas = Math.max(1, Math.ceil(state.accountsTotal / CUENTAS_POR_PAGINA));
     actualizarOpcionesFiltroCiudades();
   } catch (e) { console.error('loadAccounts error:', e); }
 }
@@ -1502,15 +1546,25 @@ async function loadOpportunities() {
   } catch (e) { console.error('loadOpportunities error:', e); }
 }
 
-async function loadContacts(tenant = '') {
+async function loadContacts(page = 1, tenant = '') {
   try {
+    paginaContactos = page;
     const tVal = tenant || filtroContactosTenant || '';
-    const url = tVal 
-      ? '/api/crm/contacts?limit=5000&offset=0&tenant=' + encodeURIComponent(tVal)
-      : '/api/crm/contacts?limit=5000&offset=0';
+    const qVal = filtroContactosTexto || '';
+    const cityVal = filtroContactosCiudad || '';
+    const offset = (paginaContactos - 1) * CONTACTOS_POR_PAGINA;
+    const params = new URLSearchParams();
+    params.set('limit', String(CONTACTOS_POR_PAGINA));
+    params.set('offset', String(offset));
+    if (tVal) params.set('tenant', tVal);
+    if (qVal) params.set('q', qVal);
+    if (cityVal) params.set('city', cityVal);
+
+    const url = '/api/crm/contacts?' + params.toString();
     const data = await apiCall(url);
     state.contacts = (data && data.items) || [];
     state.contactsTotal = data?.total ?? state.contacts.length;
+    totalPaginasContactos = Math.max(1, Math.ceil(state.contactsTotal / CONTACTOS_POR_PAGINA));
     actualizarOpcionesFiltroCiudades();
   } catch (e) { console.error('loadContacts error:', e); }
 }
@@ -1700,13 +1754,45 @@ async function moverEtapaAPi(id, stage) {
 
 // ── CUENTAS Y DESPACHOS ──
 async function renderCuentas() {
-  if (!state.accounts.length) await loadAccounts();
+  if (!state.accounts.length) await loadAccounts(paginaCuentas);
   filtrarCuentas();
 }
 
 async function cambiarFiltroTenant(val) {
-  await loadAccounts(val);
+  paginaCuentas = 1;
+  await loadAccounts(1, val);
   filtrarCuentas();
+}
+
+async function irAPaginaCuentas(pag) {
+  if (pag < 1) pag = 1;
+  if (pag > totalPaginasCuentas) pag = totalPaginasCuentas;
+  paginaCuentas = pag;
+  await loadAccounts(paginaCuentas);
+  filtrarCuentas();
+}
+
+function cambiarPaginaCuentas(delta) {
+  irAPaginaCuentas(paginaCuentas + delta);
+}
+
+function irPrimeraPaginaCuentas() {
+  irAPaginaCuentas(1);
+}
+
+function irUltimaPaginaCuentas() {
+  irAPaginaCuentas(totalPaginasCuentas);
+}
+
+let debounceBuscarCuentas = null;
+function buscarCuentasEnTabla(e) {
+  filtroCuentasTexto = (e.target.value || '').trim();
+  paginaCuentas = 1;
+  clearTimeout(debounceBuscarCuentas);
+  debounceBuscarCuentas = setTimeout(async () => {
+    await loadAccounts(1);
+    filtrarCuentas();
+  }, 300);
 }
 
 const FUTURA_SCIANS = new Set([
@@ -1759,7 +1845,27 @@ function filtrarCuentas() {
   }
 
   const totalNum = state.accountsTotal || state.accounts.length;
-  document.getElementById('cuentasSub').textContent = \`\${list.length} mostrados (de \${totalNum} registrados en D1)\`;
+  totalPaginasCuentas = Math.max(1, Math.ceil(totalNum / CUENTAS_POR_PAGINA));
+  const subEl = document.getElementById('cuentasSub');
+  if (subEl) {
+    subEl.textContent = 'Página ' + paginaCuentas + ' de ' + totalPaginasCuentas + ' — ' + totalNum + ' registros en total (' + list.length + ' en página actual)';
+  }
+
+  const pActualC = document.getElementById('pagActualCuentas');
+  const pTotalPagsC = document.getElementById('pagTotalPagsCuentas');
+  const pTotalC = document.getElementById('pagTotalCuentas');
+  const btnPrevC = document.getElementById('btnPagAnteriorCuentas');
+  const btnNextC = document.getElementById('btnPagSiguienteCuentas');
+  const btnFirstC = document.getElementById('btnPagPrimeraCuentas');
+  const btnLastC = document.getElementById('btnPagUltimaCuentas');
+
+  if (pActualC) pActualC.textContent = paginaCuentas;
+  if (pTotalPagsC) pTotalPagsC.textContent = totalPaginasCuentas;
+  if (pTotalC) pTotalC.textContent = totalNum;
+  if (btnFirstC) btnFirstC.disabled = paginaCuentas <= 1;
+  if (btnPrevC) btnPrevC.disabled = paginaCuentas <= 1;
+  if (btnNextC) btnNextC.disabled = paginaCuentas >= totalPaginasCuentas;
+  if (btnLastC) btnLastC.disabled = paginaCuentas >= totalPaginasCuentas;
 
   const body = document.getElementById('cuentasBody');
   body.innerHTML = list.length === 0
@@ -2311,15 +2417,14 @@ async function cambiarFiltroTenantContactos(e) {
   renderContactos();
 }
 
-function cambiarFiltroCiudadContactos(e) {
+async function cambiarFiltroCiudadContactos(e) {
   filtroContactosCiudad = (e.target.value || '').trim();
   paginaContactos = 1;
+  await loadContacts(1);
   renderContactos();
 }
 
-let paginaContactos = 1;
-const CONTACTOS_POR_PAGINA = 50;
-let totalPaginasContactos = 1;
+const CONTACTOS_POR_PAGINA = 100;
 
 function cambiarPaginaContactos(delta) {
   irAPaginaContactos(paginaContactos + delta);
@@ -2333,21 +2438,25 @@ function irUltimaPaginaContactos() {
   irAPaginaContactos(totalPaginasContactos);
 }
 
-function irAPaginaContactos(pag) {
+async function irAPaginaContactos(pag) {
   if (pag < 1) pag = 1;
   if (pag > totalPaginasContactos) pag = totalPaginasContactos;
-  if (pag !== paginaContactos) {
-    paginaContactos = pag;
-    renderContactos();
-    const scrollEl = document.getElementById('contactosTableScrollContainer');
-    if (scrollEl) scrollEl.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-  }
+  paginaContactos = pag;
+  await loadContacts(paginaContactos);
+  renderContactos();
+  const scrollEl = document.getElementById('contactosTableScrollContainer');
+  if (scrollEl) scrollEl.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
 }
 
+let debounceBuscarContactos = null;
 function buscarContactosEnTabla(e) {
-  filtroContactosTexto = (e.target.value || '').trim().toLowerCase();
+  filtroContactosTexto = (e.target.value || '').trim();
   paginaContactos = 1;
-  renderContactos();
+  clearTimeout(debounceBuscarContactos);
+  debounceBuscarContactos = setTimeout(async () => {
+    await loadContacts(1);
+    renderContactos();
+  }, 300);
 }
 
 function cambiarTabContactos(tab) {
@@ -2627,22 +2736,16 @@ async function renderContactos() {
   });
 
   const totalItems = list.length;
-  totalPaginasContactos = Math.max(1, Math.ceil(totalItems / CONTACTOS_POR_PAGINA));
+  const totalRegistrados = state.contactsTotal || totalItems;
+  totalPaginasContactos = Math.max(1, Math.ceil(totalRegistrados / CONTACTOS_POR_PAGINA));
   if (paginaContactos > totalPaginasContactos) paginaContactos = totalPaginasContactos;
   if (paginaContactos < 1) paginaContactos = 1;
 
-  const startIndex = totalItems === 0 ? 0 : (paginaContactos - 1) * CONTACTOS_POR_PAGINA;
-  const endIndex = Math.min(startIndex + CONTACTOS_POR_PAGINA, totalItems);
-  const itemsPagina = list.slice(startIndex, endIndex);
+  const itemsPagina = list;
 
   const sub = document.getElementById('contactosSub');
   if (sub) {
-    const totalRegistrados = state.contactsTotal || contacts.length;
-    sub.textContent = totalItems === 0
-      ? '0 contactos'
-      : (filtroContactosTexto || filtroContactosTab !== 'todos' || filtroContactosTenant)
-        ? (totalItems + ' mostrados de ' + totalRegistrados + ' en D1 (Pág. ' + paginaContactos + ' de ' + totalPaginasContactos + ')')
-        : (totalRegistrados + ' contactos registrados en D1 (Pág. ' + paginaContactos + ' de ' + totalPaginasContactos + ')');
+    sub.textContent = 'Página ' + paginaContactos + ' de ' + totalPaginasContactos + ' — ' + totalRegistrados + ' registros en total (' + totalItems + ' en página actual)';
   }
 
   // Actualizar indicadores numéricos de paginación
@@ -2656,9 +2759,12 @@ async function renderContactos() {
   const btnFirst = document.getElementById('btnPagPrimera');
   const btnLast = document.getElementById('btnPagUltima');
 
-  if (pStart) pStart.textContent = totalItems === 0 ? 0 : (startIndex + 1);
-  if (pEnd) pEnd.textContent = endIndex;
-  if (pTotal) pTotal.textContent = totalItems;
+  const startIdx = totalItems === 0 ? 0 : (paginaContactos - 1) * CONTACTOS_POR_PAGINA + 1;
+  const endIdx = (paginaContactos - 1) * CONTACTOS_POR_PAGINA + totalItems;
+
+  if (pStart) pStart.textContent = startIdx;
+  if (pEnd) pEnd.textContent = endIdx;
+  if (pTotal) pTotal.textContent = totalRegistrados;
   if (pActual) pActual.textContent = paginaContactos;
   if (pTotalPags) pTotalPags.textContent = totalPaginasContactos;
 

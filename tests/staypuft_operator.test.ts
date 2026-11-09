@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { Hono } from "hono";
-import { internalRouter } from "../src/routes/internal";
+import { internalRouter, normalizeMexicanPhone } from "../src/routes/internal";
 import { superadminRouter } from "../src/routes/superadmin";
 import { authMiddleware } from "../src/auth/middleware";
 import { Env, AgentSkill } from "../src/types";
@@ -579,7 +579,134 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
       const data: any = await res.json();
       expect(data.success).toBe(true);
       expect(data.limit).toBe(100); // Enforced cap 100
+      expect(data.total).toBeDefined();
       expect(Array.isArray(data.leads)).toBe(true);
+    });
+
+    it("normalizeMexicanPhone valida estrictamente 10 dígitos y rechaza números malformados", () => {
+      // Casos válidos
+      const val1 = normalizeMexicanPhone("9991234567");
+      expect(val1).toEqual({
+        telefono: "+529991234567",
+        whatsapp: "+529991234567",
+        whatsapp_valid: true,
+        malformed: false,
+      });
+
+      const val2 = normalizeMexicanPhone("+52 999 123 4567");
+      expect(val2).toEqual({
+        telefono: "+529991234567",
+        whatsapp: "+529991234567",
+        whatsapp_valid: true,
+        malformed: false,
+      });
+
+      const val3 = normalizeMexicanPhone("5219991234567");
+      expect(val3).toEqual({
+        telefono: "+529991234567",
+        whatsapp: "+529991234567",
+        whatsapp_valid: true,
+        malformed: false,
+      });
+
+      // Casos malformados (12 a 15 dígitos concatenados con 01 legacy, números truncados)
+      const mal1 = normalizeMexicanPhone("+222012223729222"); // 15 dígitos
+      expect(mal1.malformed).toBe(true);
+      expect(mal1.telefono).toBeNull();
+      expect(mal1.whatsapp_valid).toBe(false);
+
+      const mal2 = normalizeMexicanPhone("+81018183440404"); // 14 dígitos
+      expect(mal2.malformed).toBe(true);
+      expect(mal2.telefono).toBeNull();
+      expect(mal2.whatsapp_valid).toBe(false);
+
+      const mal3 = normalizeMexicanPhone("+555536839216"); // 12 dígitos pero no empieza con 52
+      expect(mal3.malformed).toBe(true);
+      expect(mal3.telefono).toBeNull();
+
+      const mal4 = normalizeMexicanPhone("12345"); // Demasiado corto
+      expect(mal4.malformed).toBe(true);
+
+      const mal5 = normalizeMexicanPhone("0180012345"); // Inicia con 0
+      expect(mal5.malformed).toBe(true);
+    });
+
+    it("GET /api/internal/leads/:lead_id resuelve cohorte real ark_ledger_despachos vs sipres_sofom", async () => {
+      const mockLeadDespacho = {
+        id: "lead_despacho_merida_01",
+        account_id: "acc_despacho_01",
+        phone: "+529991112233",
+        score: 80,
+      };
+      const mockAccountDespacho = {
+        id: "acc_despacho_01",
+        name: "Despacho Fiscal Peninsular S.C.",
+        scian_code: "541211",
+        city: "Mérida, Yucatán",
+      };
+
+      const mockLeadSofom = {
+        id: "lead_sipres_1844",
+        account_id: "acc_sipres_1844",
+        phone: "+222012223729222",
+        score: 30,
+      };
+      const mockAccountSofom = {
+        id: "acc_sipres_1844",
+        name: "CrediPronto SOFOM E.N.R.",
+        scian_code: "522210",
+        city: "Puebla",
+      };
+
+      const db = {
+        prepare: vi.fn().mockImplementation((query: string) => ({
+          bind: vi.fn().mockImplementation((...params: any[]) => ({
+            first: vi.fn().mockImplementation(async () => {
+              if (query.includes("sales_leads WHERE id = ?")) {
+                const id = params[0];
+                if (id === "lead_despacho_merida_01") return mockLeadDespacho;
+                if (id === "lead_sipres_1844") return mockLeadSofom;
+              }
+              if (query.includes("sales_accounts WHERE id = ?")) {
+                const id = params[0];
+                if (id === "acc_despacho_01") return mockAccountDespacho;
+                if (id === "acc_sipres_1844") return mockAccountSofom;
+              }
+              return null;
+            }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+            run: vi.fn().mockResolvedValue({ success: true }),
+          })),
+        })),
+      };
+
+      const env = createMockEnv(db);
+      const app = createApp(env);
+
+      // 1. Probar despacho
+      const resDespacho = await app.request(
+        "/api/internal/leads/lead_despacho_merida_01",
+        { headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY } },
+        env
+      );
+      expect(resDespacho.status).toBe(200);
+      const dataDespacho: any = await resDespacho.json();
+      expect(dataDespacho.cohort).toBe("ark_ledger_despachos");
+      expect(dataDespacho.lead.phone).toBe("+529991112233");
+      expect(dataDespacho.lead.whatsapp_valid).toBe(true);
+
+      // 2. Probar SOFOM SIPRES con teléfono malformado
+      const resSofom = await app.request(
+        "/api/internal/leads/lead_sipres_1844",
+        { headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY } },
+        env
+      );
+      expect(resSofom.status).toBe(200);
+      const dataSofom: any = await resSofom.json();
+      expect(dataSofom.cohort).toBe("sipres_sofom");
+      expect(dataSofom.lead.phone).toBeNull(); // Rechazado por malformado
+      expect(dataSofom.lead.whatsapp_valid).toBe(false);
+      expect(dataSofom.lead.sin_whatsapp).toBe(true);
     });
 
     it("GET /api/internal/quarantine retorna registros de cuarentena", async () => {
