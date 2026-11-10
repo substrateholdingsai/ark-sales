@@ -15,7 +15,7 @@ export const ADMIN_ASSISTANT_WIDGET_JS_SOURCE = `
     .ark-admin-fab {
       position: fixed;
       bottom: 24px;
-      right: 24px;
+      left: 24px;
       z-index: 999999;
       background: #0f172a;
       color: #f8fafc;
@@ -36,7 +36,7 @@ export const ADMIN_ASSISTANT_WIDGET_JS_SOURCE = `
     .ark-admin-modal {
       position: fixed;
       bottom: 84px;
-      right: 24px;
+      left: 24px;
       z-index: 999999;
       width: 400px;
       max-width: calc(100vw - 32px);

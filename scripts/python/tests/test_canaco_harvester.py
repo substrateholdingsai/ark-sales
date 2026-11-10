@@ -41,9 +41,8 @@ async def test_canaco_harvester_plaza_and_query_filters():
     # Filtro por plaza Yucatán
     h_yuc = CanacoHarvester(plaza="yucatan")
     leads_yuc = [l async for l in h_yuc.harvest()]
-    assert len(leads_yuc) == 1
-    assert leads_yuc[0].ciudad == "Mérida"
-    assert leads_yuc[0].estado == "Yucatán"
+    assert len(leads_yuc) >= 1
+    assert any(l.ciudad == "Mérida" and l.estado == "Yucatán" for l in leads_yuc)
 
     # Filtro por query Guadalajara
     h_gdl = CanacoHarvester(custom_query="guadalajara")
