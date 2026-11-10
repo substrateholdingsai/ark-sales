@@ -495,11 +495,11 @@ def get_candidate_leads(limit: int, tenant_id: str) -> List[Dict[str, Any]]:
 
 
 def apply_d1_updates(results: List[Dict[str, Any]], run_id: str):
-    """Aplica las actualizaciones de enriquecimiento, cuarentena y evidencia a Cloudflare D1."""
+    """Aplica las actualizaciones de enriquecimiento, cuarentena y evidencia a Cloudflare D1 en lotes optimizados."""
     env = os.environ.copy()
     env["CLOUDFLARE_ACCOUNT_ID"] = "ccab12c2e99a74d45eda626cb81c5c0c"
 
-    logger.info(f"Aplicando actualizaciones a Cloudflare D1 para {len(results)} registros...")
+    statements = []
     for item in results:
         contact_id = item["contact_id"]
         account_id = item["account_id"]
@@ -511,15 +511,20 @@ def apply_d1_updates(results: List[Dict[str, Any]], run_id: str):
 
         if decision == "enriched":
             updates = []
-            if data["phone"]:
-                updates.append(f"phone = '{data['phone']}'")
-                updates.append(f"raw_phone = '{data.get('raw_phone') or data['phone']}'")
-            if data["email"]:
-                updates.append(f"email = '{data['email']}'")
-            if data["whatsapp"]:
-                updates.append(f"whatsapp_url = '{data['whatsapp']}'")
-            if data["doctor_name"]:
-                updates.append(f"name = '{data['doctor_name']}'")
+            if data.get("phone"):
+                safe_ph = data['phone'].replace("'", "''")
+                updates.append(f"phone = '{safe_ph}'")
+                safe_raw = (data.get('raw_phone') or data['phone']).replace("'", "''")
+                updates.append(f"raw_phone = '{safe_raw}'")
+            if data.get("email"):
+                safe_em = data['email'].replace("'", "''")
+                updates.append(f"email = '{safe_em}'")
+            if data.get("whatsapp"):
+                safe_wa = data['whatsapp'].replace("'", "''")
+                updates.append(f"whatsapp_url = '{safe_wa}'")
+            if data.get("doctor_name"):
+                safe_doc = data['doctor_name'].replace("'", "''")
+                updates.append(f"name = '{safe_doc}'")
                 updates.append("title = 'Titular / Director Médico'")
 
             updates.append("enrichment_status = 'enriched'")
@@ -529,42 +534,55 @@ def apply_d1_updates(results: List[Dict[str, Any]], run_id: str):
             updates.append("updated_at = CURRENT_TIMESTAMP")
 
             sql = f"UPDATE sales_contacts SET {', '.join(updates)} WHERE id = '{contact_id}';"
-            subprocess.run(["npx", "wrangler", "d1", "execute", "ark-sales-db", "--remote", "--command", sql], env=env, shell=True)
+            statements.append(sql)
 
         elif decision == "needs_review":
-            sql = f"""
-            UPDATE sales_contacts 
-            SET enrichment_status = 'needs_review',
-                actionability_score = {act_score},
-                confidence_score = {conf_score},
-                enrichment_run_id = '{run_id}',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = '{contact_id}';
-            """
-            subprocess.run(["npx", "wrangler", "d1", "execute", "ark-sales-db", "--remote", "--command", sql], env=env, shell=True)
+            sql = f"UPDATE sales_contacts SET enrichment_status = 'needs_review', actionability_score = {act_score}, confidence_score = {conf_score}, enrichment_run_id = '{run_id}', updated_at = CURRENT_TIMESTAMP WHERE id = '{contact_id}';"
+            statements.append(sql)
 
         else:  # quarantined
-            sql = f"""
-            UPDATE sales_contacts 
-            SET enrichment_status = 'quarantined',
-                quarantined_at = CURRENT_TIMESTAMP,
-                quarantine_reason = 'sin_contacto_digital_verificable',
-                actionability_score = {act_score},
-                confidence_score = {conf_score},
-                enrichment_run_id = '{run_id}',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = '{contact_id}';
-            """
-            subprocess.run(["npx", "wrangler", "d1", "execute", "ark-sales-db", "--remote", "--command", sql], env=env, shell=True)
+            sql = f"UPDATE sales_contacts SET enrichment_status = 'quarantined', quarantined_at = CURRENT_TIMESTAMP, quarantine_reason = 'sin_contacto_digital_verificable', actionability_score = {act_score}, confidence_score = {conf_score}, enrichment_run_id = '{run_id}', updated_at = CURRENT_TIMESTAMP WHERE id = '{contact_id}';"
+            statements.append(sql)
 
         # Insertar evidencias
         for ev in item.get("evidence", []):
-            ev_id = f"ev_{int(time.time()*1000)}_{random.randint(100, 999)}"
-            ins_ev = f"""
-            INSERT INTO sales_enrichment_evidence (id, tenant_id, contact_id, account_id, source_type, source_url, field_name, raw_value, normalized_value, confidence_score, run_id)
-            VALUES ('{ev_id}', '{tenant_id}', '{contact_id}', '{account_id}', '{ev['source_type']}', '{ev.get('source_url') or ''}', '{ev['field']}', '{ev.get('raw') or ''}', '{ev.get('normalized') or ''}', {ev.get('confidence', 0)}, '{run_id}');
-            """
-            subprocess.run(["npx", "wrangler", "d1", "execute", "ark-sales-db", "--remote", "--command", ins_ev], env=env, shell=True)
+            ev_id = f"ev_{int(time.time()*1000)}_{random.randint(1000, 9999)}"
+            s_url = (ev.get('source_url') or '').replace("'", "''")
+            s_raw = (ev.get('raw') or '').replace("'", "''")
+            s_norm = (ev.get('normalized') or '').replace("'", "''")
+            s_field = (ev.get('field') or '').replace("'", "''")
+            s_type = (ev.get('source_type') or '').replace("'", "''")
+            ins_ev = f"INSERT INTO sales_enrichment_evidence (id, tenant_id, contact_id, account_id, source_type, source_url, field_name, raw_value, normalized_value, confidence_score, run_id) VALUES ('{ev_id}', '{tenant_id}', '{contact_id}', '{account_id}', '{s_type}', '{s_url}', '{s_field}', '{s_raw}', '{s_norm}', {ev.get('confidence', 0)}, '{run_id}');"
+            statements.append(ins_ev)
+
+    logger.info(f"Generadas {len(statements)} sentencias SQL. Ejecutando en lotes a D1...")
+    batch_size = 50
+    temp_dir = Path("temp_sql")
+    temp_dir.mkdir(exist_ok=True)
+    for i in range(0, len(statements), batch_size):
+        chunk = statements[i:i + batch_size]
+        batch_file = temp_dir / f"batch_{i}.sql"
+        batch_file.write_text("\n".join(chunk), encoding="utf-8")
+        try:
+            res = subprocess.run(
+                ["npx", "wrangler", "d1", "execute", "ark-sales-db", "--remote", "--file", str(batch_file)],
+                env=env,
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            if res.returncode != 0:
+                logger.error(f"Error en lote {i}: {res.stderr}")
+            else:
+                logger.info(f"Lote {i} - {i + len(chunk)} aplicado con éxito a D1.")
+        finally:
+            if batch_file.exists():
+                batch_file.unlink()
+    if temp_dir.exists():
+        try:
+            temp_dir.rmdir()
+        except Exception:
+            pass
 
 
 async def main():
