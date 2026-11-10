@@ -81,14 +81,19 @@ def clean_phone(raw: str) -> Optional[str]:
 
 def extract_emails(text: str) -> List[str]:
     """Extrae emails reales descartando dominios placeholder y técnicos."""
-    regex = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
+    regex = r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b"
     matches = re.findall(regex, text)
     valid = []
     for m in matches:
         m_lower = m.lower()
         if any(d in m_lower for d in DISCARD_EMAILS):
             continue
-        if m_lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".svg", ".js", ".css")):
+        if m_lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".svg", ".js", ".css", ".gif", ".woff", ".woff2")):
+            continue
+        # Descartar paquetes de npm (ej: react@16.14.0) o versiones
+        domain = m_lower.split("@")[-1]
+        tld = domain.split(".")[-1]
+        if tld.isdigit() or len(tld) < 2 or not tld.isalpha():
             continue
         valid.append(m)
     return list(dict.fromkeys(valid))
@@ -223,6 +228,7 @@ class LeadEnricher:
             "source_url": None,
         }
 
+        serper_matched = False
         # Nivel 1: Serper si hay API Key
         places = await self.search_serper(f"{account_name} {normalized_city}")
         if places:
@@ -230,10 +236,12 @@ class LeadEnricher:
             top_title = top.get("title", "")
             raw_phone = top.get("phoneNumber")
             website = top.get("website")
+            address = top.get("address")
             source_url = f"https://www.google.com/maps/place/?q=place_id:{top.get('placeId')}" if top.get("placeId") else None
 
             sim = fuzz.token_set_ratio(top_title.lower(), account_name.lower())
-            if sim >= 70:
+            if sim >= 70 or top_title.lower() in account_name.lower() or account_name.lower() in top_title.lower():
+                serper_matched = True
                 phone_norm = clean_phone(raw_phone)
                 if phone_norm:
                     found_data["phone"] = phone_norm
@@ -252,6 +260,16 @@ class LeadEnricher:
                         "field": "website",
                         "raw": website,
                         "normalized": website,
+                        "source_type": "google_places",
+                        "source_url": source_url,
+                        "confidence": int(sim),
+                    })
+                if address:
+                    found_data["address"] = address
+                    evidence_items.append({
+                        "field": "address",
+                        "raw": address,
+                        "normalized": address,
                         "source_type": "google_places",
                         "source_url": source_url,
                         "confidence": int(sim),
@@ -394,14 +412,24 @@ class LeadEnricher:
         # Confidence
         acc_lower = account_name.lower().strip()
         conf_score = 50  # Base
-        is_generic = acc_lower in GENERIC_NAMES or len(acc_lower.split()) <= 2
+        
+        # Penalizar si es un término genérico real sin nombre de marca
+        stop_words = {"clinica", "consultorio", "dental", "medico", "medica", "salud", "especialidades", "doctor", "y", "de", "en", "psicologia", "psicologa", "laboratorio", "laboratorios"}
+        words_in_name = [w for w in acc_lower.split() if w not in stop_words]
+        is_generic = acc_lower in GENERIC_NAMES or len(words_in_name) == 0
         if is_generic:
-            conf_score -= 25
+            conf_score -= 30
         else:
             conf_score += 15
 
+        # Si Serper (Google Places) encontró coincidencia fuerte
+        if serper_matched:
+            conf_score += 25
+
         if city and city.strip() and city != "-":
             conf_score += 15
+        elif found_data.get("address"):
+            conf_score += 10
 
         if found_data["website"]:
             # Verificar si el dominio contiene alguna palabra de la razón social
@@ -460,6 +488,9 @@ def get_candidate_leads(limit: int, tenant_id: str) -> List[Dict[str, Any]]:
         except Exception as e:
             logger.warning(f"Error parseando JSON de stdout: {e}")
 
+    logger.warning(f"D1 stdout (len {len(stdout)}): {stdout[:300]}")
+    if res.stderr:
+        logger.warning(f"D1 stderr: {res.stderr}")
     return []
 
 
