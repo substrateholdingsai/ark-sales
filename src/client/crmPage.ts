@@ -2846,7 +2846,7 @@ async function renderContactos() {
         const waDisplay = c.whatsapp_url
           ? ('<a href="' + c.whatsapp_url + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 text-xs font-mono border border-emerald-500/30 transition-colors" title="Abrir WhatsApp Web directo"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> ' + (c.whatsapp || c.phone || 'WhatsApp') + '</a>')
           : (c.whatsapp && c.whatsapp !== '-'
-            ? ('<button onclick="accionWhatsApp(\'' + c.whatsapp + '\', \'' + c.id + '\')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-mono transition-colors" title="Abrir WhatsApp Studio"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> ' + c.whatsapp + '</button>')
+            ? ('<button onclick="accionWhatsApp(\\'' + c.whatsapp + '\\', \\'' + c.id + '\\')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-mono transition-colors" title="Abrir WhatsApp Studio"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> ' + c.whatsapp + '</button>')
             : '<span class="text-xs text-slate-600 font-mono">-</span>');
 
         return \`
@@ -4245,24 +4245,24 @@ function abrirModalEditarContacto(id, modalAccountId = null) {
     detailsEl.innerHTML = '<p>Certificado con huella digital verificada en Google Places / Serper.</p>' +
       (c.raw_phone ? '<p class="text-[11px] font-mono text-slate-300">📞 Formato original: ' + c.raw_phone + '</p>' : '') +
       (c.whatsapp_url ? '<p class="text-[11px]"><a href="' + c.whatsapp_url + '" target="_blank" class="text-emerald-400 hover:underline flex items-center gap-1"><i data-lucide="message-circle" class="w-3 h-3"></i> Enlace directo WhatsApp activo</a></p>' : '');
-    actionsEl.innerHTML = '<button type="button" onclick="cambiarCuarentenaContacto(\'' + c.id + '\', \'quarantined\')" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors border border-rose-500/30 flex items-center gap-1"><i data-lucide="shield-alert" class="w-3 h-3"></i> Mover a cuarentena</button>';
+    actionsEl.innerHTML = '<button type="button" onclick="cambiarCuarentenaContacto(\\'' + c.id + '\\', \\'quarantined\\')" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors border border-rose-500/30 flex items-center gap-1"><i data-lucide="shield-alert" class="w-3 h-3"></i> Mover a cuarentena</button>';
   } else if (c.enrichment_status === 'needs_review') {
     badgeEl.className = 'text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30';
     badgeEl.textContent = '⚠️ Revisión Manual (' + (c.confidence_score || 50) + '%)';
     detailsEl.innerHTML = '<p>Se hallaron datos pero requieren confirmación de nombre o sucursal.</p>';
-    actionsEl.innerHTML = '<button type="button" onclick="cambiarCuarentenaContacto(\'' + c.id + '\', \'enriched\')" class="text-xs px-2.5 py-1 rounded bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-colors border border-emerald-500/30 flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i> Validar como rescatado</button>' +
-      '<button type="button" onclick="cambiarCuarentenaContacto(\'' + c.id + '\', \'quarantined\')" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors border border-rose-500/30 flex items-center gap-1 ml-2"><i data-lucide="shield-alert" class="w-3 h-3"></i> Cuarentena</button>';
+    actionsEl.innerHTML = '<button type="button" onclick="cambiarCuarentenaContacto(\\'' + c.id + '\\', \\'enriched\\')" class="text-xs px-2.5 py-1 rounded bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-colors border border-emerald-500/30 flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i> Validar como rescatado</button>' +
+      '<button type="button" onclick="cambiarCuarentenaContacto(\\'' + c.id + '\\', \\'quarantined\\')" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors border border-rose-500/30 flex items-center gap-1 ml-2"><i data-lucide="shield-alert" class="w-3 h-3"></i> Cuarentena</button>';
   } else if (c.enrichment_status === 'quarantined') {
     badgeEl.className = 'text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30';
     badgeEl.textContent = '📦 En Cuarentena';
     detailsEl.innerHTML = '<p class="text-rose-300/90 font-medium">Motivo: ' + (c.quarantine_reason || 'Sin contacto digital verificable') + '</p><p class="text-[11px] text-slate-500">Aislado de la bandeja comercial para proteger la productividad del vendedor.</p>';
-    actionsEl.innerHTML = '<button type="button" onclick="cambiarCuarentenaContacto(\'' + c.id + '\', \'enriched\')" class="text-xs px-2.5 py-1 rounded bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-colors border border-emerald-500/30 flex items-center gap-1"><i data-lucide="unlock" class="w-3 h-3"></i> 🔓 Sacar de cuarentena y reactivar</button>';
+    actionsEl.innerHTML = '<button type="button" onclick="cambiarCuarentenaContacto(\\'' + c.id + '\\', \\'enriched\\')" class="text-xs px-2.5 py-1 rounded bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-colors border border-emerald-500/30 flex items-center gap-1"><i data-lucide="unlock" class="w-3 h-3"></i> 🔓 Sacar de cuarentena y reactivar</button>';
   } else {
     badgeEl.className = 'text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-slate-800 text-slate-400 border border-slate-700';
     badgeEl.textContent = 'Pendiente de Enriquecer';
     detailsEl.innerHTML = '<p>No se ha ejecutado el enriquecimiento digital sobre este prospecto.</p>';
     actionsEl.innerHTML = '<button type="button" onclick="autoEnriquecerModalContacto()" class="text-xs px-2.5 py-1 rounded bg-ark-blue/15 text-ark-blue_hi hover:bg-ark-blue/25 transition-colors border border-ark-blue/30 flex items-center gap-1"><i data-lucide="sparkles" class="w-3 h-3"></i> Investigar con AI ahora</button>' +
-      '<button type="button" onclick="cambiarCuarentenaContacto(\'' + c.id + '\', \'quarantined\')" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors border border-rose-500/30 flex items-center gap-1 ml-2"><i data-lucide="shield-alert" class="w-3 h-3"></i> Enviar a cuarentena</button>';
+      '<button type="button" onclick="cambiarCuarentenaContacto(\\'' + c.id + '\\', \\'quarantined\\')" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors border border-rose-500/30 flex items-center gap-1 ml-2"><i data-lucide="shield-alert" class="w-3 h-3"></i> Enviar a cuarentena</button>';
   }
 
   // Cargar evidencia si existe
