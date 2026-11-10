@@ -123,7 +123,7 @@ class LeadEnricher:
                 ),
                 "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
             },
-            timeout=20.0,
+            timeout=8.0,
             follow_redirects=True,
         )
 
@@ -313,64 +313,6 @@ class LeadEnricher:
                     "source_url": doc_res.get("profile_url"),
                     "confidence": 80,
                 })
-
-        # Nivel 3: DuckDuckGo HTML / Redes si aún falta teléfono o web
-        if not found_data["phone"] or not found_data["website"]:
-            html, links = await self.search_duckduckgo(query)
-            if html:
-                # Buscar teléfono en snippets de texto
-                phone_candidates = re.findall(r"(?:\+?52\s*)?(?:\(?\d{2,3}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{4}", html)
-                for pc in phone_candidates:
-                    norm = clean_phone(pc)
-                    if norm and not found_data["phone"]:
-                        found_data["phone"] = norm
-                        found_data["raw_phone"] = pc
-                        evidence_items.append({
-                            "field": "phone",
-                            "raw": pc,
-                            "normalized": norm,
-                            "source_type": "search_snippet",
-                            "source_url": f"https://html.duckduckgo.com/html/?q={query}",
-                            "confidence": 65,
-                        })
-                        break
-
-                # Buscar perfil de Doctoralia o web oficial en links
-                for link in links:
-                    if "doctoralia.com.mx/perfil/" in link or ("doctoralia.com.mx" in link and not "/buscar" in link):
-                        found_data["website"] = link
-                        evidence_items.append({
-                            "field": "website",
-                            "raw": link,
-                            "normalized": link,
-                            "source_type": "doctoralia",
-                            "source_url": link,
-                            "confidence": 75,
-                        })
-                        break
-                    elif not any(x in link for x in ["facebook.com", "instagram.com", "linkedin.com", "inegi.org", "directorios"]):
-                        if not found_data["website"]:
-                            found_data["website"] = link
-                            evidence_items.append({
-                                "field": "website",
-                                "raw": link,
-                                "normalized": link,
-                                "source_type": "official_website",
-                                "source_url": link,
-                                "confidence": 70,
-                            })
-
-                doc_name = extract_doctor_name(html)
-                if doc_name and not found_data["doctor_name"]:
-                    found_data["doctor_name"] = doc_name
-                    evidence_items.append({
-                        "field": "doctor_name",
-                        "raw": doc_name,
-                        "normalized": doc_name,
-                        "source_type": "search_snippet",
-                        "source_url": f"https://html.duckduckgo.com/html/?q={query}",
-                        "confidence": 60,
-                    })
 
         # Nivel 3: Si se encontró sitio web, hacer crawl ligero para rescatar correo y WhatsApp
         if found_data["website"] and ("http://" in found_data["website"] or "https://" in found_data["website"]):
@@ -616,6 +558,7 @@ async def main():
 
     enricher = LeadEnricher()
     processed_results: List[Dict[str, Any]] = []
+    pending_d1_batch: List[Dict[str, Any]] = []
 
     rescatados = 0
     needs_review = 0
@@ -648,6 +591,7 @@ async def main():
                 }
 
                 processed_results.append(combined)
+                pending_d1_batch.append(combined)
                 rf.write(json.dumps(combined, ensure_ascii=False) + "\n")
                 rf.flush()
 
@@ -662,8 +606,20 @@ async def main():
                     cuarentena += 1
                     logger.info(f"   --> CUARENTENA: Sin datos suficientes | Score: {result['actionability_score']}/{result['confidence_score']}")
 
-                # Jitter respetuoso entre 1.0 y 2.0 segundos
-                await asyncio.sleep(random.uniform(1.0, 2.0))
+                # Escritura incremental a Cloudflare D1 cada 25 registros
+                if not is_dry_run and len(pending_d1_batch) >= 25:
+                    logger.info(f"💾 Guardando lote incremental de {len(pending_d1_batch)} registros en Cloudflare D1 ({idx}/{len(candidates)})...")
+                    apply_d1_updates(pending_d1_batch, run_id)
+                    pending_d1_batch = []
+
+                # Jitter rápido y cortés
+                await asyncio.sleep(random.uniform(0.3, 0.6))
+
+            # Guardar registros remanentes
+            if not is_dry_run and pending_d1_batch:
+                logger.info(f"💾 Guardando último lote de {len(pending_d1_batch)} registros en Cloudflare D1...")
+                apply_d1_updates(pending_d1_batch, run_id)
+                pending_d1_batch = []
 
     finally:
         await enricher.close()
@@ -690,8 +646,7 @@ async def main():
     print("="*60 + "\n")
 
     if not is_dry_run:
-        apply_d1_updates(processed_results, run_id)
-        logger.info("Cambios y evidencias persistidos exitosamente en Cloudflare D1.")
+        logger.info("Todos los cambios y evidencias quedaron persistidos exitosamente en Cloudflare D1.")
     else:
         logger.info("Modo Dry-Run completado: No se modificó ningún dato en D1. Revisa el reporte JSONL.")
 
