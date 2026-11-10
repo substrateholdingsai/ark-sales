@@ -444,8 +444,10 @@ tailwind.config = {
             <option value="">📍 Ciudad (Todas)</option>
           </select>
           <button data-ct-tab="todos" onclick="cambiarTabContactos('todos')" class="ct-tab-btn active text-xs font-semibold px-3 py-1.5 rounded-full bg-ark-blue/15 text-ark-blue_hi border border-ark-blue/30">Todos</button>
+          <button data-ct-tab="enriquecidos" onclick="cambiarTabContactos('enriquecidos')" class="ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-emerald-400">✨ Rescatados AI</button>
           <button data-ct-tab="con_whatsapp" onclick="cambiarTabContactos('con_whatsapp')" class="ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-emerald-400">🟢 Con WhatsApp</button>
           <button data-ct-tab="pendientes" onclick="cambiarTabContactos('pendientes')" class="ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-300">Pendientes</button>
+          <button data-ct-tab="cuarentena" onclick="cambiarTabContactos('cuarentena')" class="ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-rose-400">📦 En Cuarentena</button>
           <button onclick="alternarOrdenContactos('name')" class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors ml-1" title="Ordenar A-Z / Z-A">
             <i data-lucide="arrow-down-a-z" class="w-3.5 h-3.5"></i> <span id="lblOrdenContactos">A-Z</span>
           </button>
@@ -996,6 +998,19 @@ tailwind.config = {
           <option value="opt_out">Opt-out (No contactar)</option>
         </select>
       </div>
+
+      <!-- Panel de Inteligencia Comercial y Evidencia AI -->
+      <div id="editCtEnrichmentPanel" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-ark-blue_hi"></i> Certificación & Evidencia Digital AI
+          </span>
+          <span id="editCtEnrichmentBadge" class="text-[10px] font-mono px-2 py-0.5 rounded font-semibold"></span>
+        </div>
+        <div id="editCtEnrichmentDetails" class="text-xs text-slate-400 space-y-1"></div>
+        <div id="editCtQuarantineActions" class="flex items-center gap-2 pt-1 border-t border-slate-800/60"></div>
+      </div>
+
       <section class="space-y-3 border-t border-slate-800 pt-4" aria-labelledby="editCtNotesHeading">
         <div class="flex items-center justify-between">
           <div>
@@ -1559,6 +1574,14 @@ async function loadContacts(page = 1, tenant = '') {
     if (tVal) params.set('tenant', tVal);
     if (qVal) params.set('q', qVal);
     if (cityVal) params.set('city', cityVal);
+    if (typeof filtroContactosTab !== 'undefined') {
+      if (filtroContactosTab === 'enriquecidos') {
+        params.set('enrichment_status', 'enriched');
+      } else if (filtroContactosTab === 'cuarentena') {
+        params.set('enrichment_status', 'quarantined');
+        params.set('include_quarantined', 'true');
+      }
+    }
 
     const url = '/api/crm/contacts?' + params.toString();
     const data = await apiCall(url);
@@ -2459,7 +2482,7 @@ function buscarContactosEnTabla(e) {
   }, 300);
 }
 
-function cambiarTabContactos(tab) {
+async function cambiarTabContactos(tab) {
   filtroContactosTab = tab;
   paginaContactos = 1;
   document.querySelectorAll('.ct-tab-btn').forEach(btn => {
@@ -2469,6 +2492,7 @@ function cambiarTabContactos(tab) {
       btn.className = 'ct-tab-btn text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 hover:text-white';
     }
   });
+  await loadContacts(1);
   renderContactos();
 }
 
@@ -2807,8 +2831,24 @@ async function renderContactos() {
           (state.opportunities || []).some(o => (o.contact_id === c.id || (o.account_id && o.account_id === c.account_id)) && o.stage === 'propuesta_enviada')
         );
         const propuestaBadge = hasPropuesta
-          ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap ml-1.5" title="Propuesta enviada"><i data-lucide="mail-check" class="w-2.5 h-2.5"></i> ✉️ Propuesta enviada</span>'
+          ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap ml-1.5" title="Propuesta enviada"><i data-lucide="mail-check" class="w-2.5 h-2.5"></i> ✉️ Propuesta</span>'
           : '';
+
+        let enrichBadge = '';
+        if (c.enrichment_status === 'enriched') {
+          enrichBadge = '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap ml-1" title="Verificado con Google Places / Serper (Score ' + (c.confidence_score || 100) + '%)"><i data-lucide="check-circle" class="w-2.5 h-2.5"></i> ✨ Verificado (' + (c.confidence_score || 100) + '%)</span>';
+        } else if (c.enrichment_status === 'needs_review') {
+          enrichBadge = '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 whitespace-nowrap ml-1" title="Requiere confirmación manual"><i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i> ⚠️ Revisión</span>';
+        } else if (c.enrichment_status === 'quarantined') {
+          enrichBadge = '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 whitespace-nowrap ml-1" title="En cuarentena: ' + (c.quarantine_reason || 'Sin datos') + '"><i data-lucide="shield-alert" class="w-2.5 h-2.5"></i> 📦 Cuarentena</span>';
+        }
+
+        const waDisplay = c.whatsapp_url
+          ? ('<a href="' + c.whatsapp_url + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 text-xs font-mono border border-emerald-500/30 transition-colors" title="Abrir WhatsApp Web directo"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> ' + (c.whatsapp || c.phone || 'WhatsApp') + '</a>')
+          : (c.whatsapp && c.whatsapp !== '-'
+            ? ('<button onclick="accionWhatsApp(\'' + c.whatsapp + '\', \'' + c.id + '\')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-mono transition-colors" title="Abrir WhatsApp Studio"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> ' + c.whatsapp + '</button>')
+            : '<span class="text-xs text-slate-600 font-mono">-</span>');
+
         return \`
         <tr class="hover:bg-slate-800/30 transition-colors">
           <td class="px-3 py-3 text-center sticky left-0 bg-slate-900/90 backdrop-blur-sm z-10 border-r border-slate-800/80">
@@ -2817,6 +2857,7 @@ async function renderContactos() {
           <td class="px-4 py-3 font-medium text-white">
             <div class="flex items-center flex-wrap gap-1">
               <span>\${c.name || 'Sin nombre'}</span>
+              \${enrichBadge}
               \${propuestaBadge}
             </div>
           </td>
@@ -2824,13 +2865,7 @@ async function renderContactos() {
           <td class="px-4 py-3">\${cityBadge}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.email || '-'}</td>
           <td class="px-4 py-3 font-mono text-xs text-slate-400">\${c.phone || '-'}</td>
-          <td class="px-4 py-3">
-            \${c.whatsapp && c.whatsapp !== '-'
-              ? \`<button onclick="accionWhatsApp('\${c.whatsapp}', '\${c.id}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-mono transition-colors" title="Abrir WhatsApp Studio">
-                  <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> \${c.whatsapp}
-                </button>\`
-              : '<span class="text-xs text-slate-600 font-mono">-</span>'}
-          </td>
+          <td class="px-4 py-3">\${waDisplay}</td>
           <td class="px-4 py-3">
             \${c.title && c.title !== '-'
               ? \`<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-ark-blue/10 text-ark-blue_hi border border-ark-blue/25 max-w-[200px] truncate" title="\${c.title}">\${c.title}</span>\`
@@ -4199,9 +4234,82 @@ function abrirModalEditarContacto(id, modalAccountId = null) {
   document.getElementById('editCtNoteInput').disabled = !canWriteNotes;
   document.getElementById('editCtNoteSaveButton').classList.toggle('hidden', !canWriteNotes);
 
+  // Poblar Panel de Enriquecimiento y Cuarentena
+  const badgeEl = document.getElementById('editCtEnrichmentBadge');
+  const detailsEl = document.getElementById('editCtEnrichmentDetails');
+  const actionsEl = document.getElementById('editCtQuarantineActions');
+
+  if (c.enrichment_status === 'enriched') {
+    badgeEl.className = 'text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+    badgeEl.textContent = '✨ Rescatado (' + (c.confidence_score || 100) + '%)';
+    detailsEl.innerHTML = '<p>Certificado con huella digital verificada en Google Places / Serper.</p>' +
+      (c.raw_phone ? '<p class="text-[11px] font-mono text-slate-300">📞 Formato original: ' + c.raw_phone + '</p>' : '') +
+      (c.whatsapp_url ? '<p class="text-[11px]"><a href="' + c.whatsapp_url + '" target="_blank" class="text-emerald-400 hover:underline flex items-center gap-1"><i data-lucide="message-circle" class="w-3 h-3"></i> Enlace directo WhatsApp activo</a></p>' : '');
+    actionsEl.innerHTML = '<button type="button" onclick="cambiarCuarentenaContacto(\'' + c.id + '\', \'quarantined\')" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors border border-rose-500/30 flex items-center gap-1"><i data-lucide="shield-alert" class="w-3 h-3"></i> Mover a cuarentena</button>';
+  } else if (c.enrichment_status === 'needs_review') {
+    badgeEl.className = 'text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30';
+    badgeEl.textContent = '⚠️ Revisión Manual (' + (c.confidence_score || 50) + '%)';
+    detailsEl.innerHTML = '<p>Se hallaron datos pero requieren confirmación de nombre o sucursal.</p>';
+    actionsEl.innerHTML = '<button type="button" onclick="cambiarCuarentenaContacto(\'' + c.id + '\', \'enriched\')" class="text-xs px-2.5 py-1 rounded bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-colors border border-emerald-500/30 flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i> Validar como rescatado</button>' +
+      '<button type="button" onclick="cambiarCuarentenaContacto(\'' + c.id + '\', \'quarantined\')" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors border border-rose-500/30 flex items-center gap-1 ml-2"><i data-lucide="shield-alert" class="w-3 h-3"></i> Cuarentena</button>';
+  } else if (c.enrichment_status === 'quarantined') {
+    badgeEl.className = 'text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30';
+    badgeEl.textContent = '📦 En Cuarentena';
+    detailsEl.innerHTML = '<p class="text-rose-300/90 font-medium">Motivo: ' + (c.quarantine_reason || 'Sin contacto digital verificable') + '</p><p class="text-[11px] text-slate-500">Aislado de la bandeja comercial para proteger la productividad del vendedor.</p>';
+    actionsEl.innerHTML = '<button type="button" onclick="cambiarCuarentenaContacto(\'' + c.id + '\', \'enriched\')" class="text-xs px-2.5 py-1 rounded bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-colors border border-emerald-500/30 flex items-center gap-1"><i data-lucide="unlock" class="w-3 h-3"></i> 🔓 Sacar de cuarentena y reactivar</button>';
+  } else {
+    badgeEl.className = 'text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-slate-800 text-slate-400 border border-slate-700';
+    badgeEl.textContent = 'Pendiente de Enriquecer';
+    detailsEl.innerHTML = '<p>No se ha ejecutado el enriquecimiento digital sobre este prospecto.</p>';
+    actionsEl.innerHTML = '<button type="button" onclick="autoEnriquecerModalContacto()" class="text-xs px-2.5 py-1 rounded bg-ark-blue/15 text-ark-blue_hi hover:bg-ark-blue/25 transition-colors border border-ark-blue/30 flex items-center gap-1"><i data-lucide="sparkles" class="w-3 h-3"></i> Investigar con AI ahora</button>' +
+      '<button type="button" onclick="cambiarCuarentenaContacto(\'' + c.id + '\', \'quarantined\')" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors border border-rose-500/30 flex items-center gap-1 ml-2"><i data-lucide="shield-alert" class="w-3 h-3"></i> Enviar a cuarentena</button>';
+  }
+
+  // Cargar evidencia si existe
+  cargarEvidenciaModalContacto(c.id);
+
   document.getElementById('modalEditarContacto').classList.remove('hidden');
   lucide.createIcons();
   cargarNotasContacto(c.id);
+}
+
+async function cargarEvidenciaModalContacto(contactId) {
+  try {
+    const res = await apiCall('/api/crm/contacts/' + contactId + '/evidence');
+    const items = res?.evidence || [];
+    if (items.length > 0) {
+      const detailsEl = document.getElementById('editCtEnrichmentDetails');
+      let evHtml = '<div class="pt-1.5 border-t border-slate-800/60"><span class="text-[11px] font-semibold text-slate-300">Fuentes y Trazabilidad:</span><ul class="mt-1 space-y-1">';
+      items.forEach(ev => {
+        const link = ev.source_url ? '<a href="' + ev.source_url + '" target="_blank" class="text-ark-blue_hi hover:underline text-[10px] ml-1">[' + ev.source_type + '] ↗</a>' : '<span class="text-slate-500 text-[10px] ml-1">[' + ev.source_type + ']</span>';
+        evHtml += '<li class="text-[11px] flex items-center gap-1 font-mono text-slate-400"><span class="text-slate-200">' + ev.field_name + ':</span> ' + (ev.normalized_value || ev.raw_value) + link + '</li>';
+      });
+      evHtml += '</ul></div>';
+      detailsEl.innerHTML += evHtml;
+    }
+  } catch(e) {}
+}
+
+async function cambiarCuarentenaContacto(id, nuevoEstado, motivo = '') {
+  try {
+    toast(nuevoEstado === 'quarantined' ? '⏳ Moviendo a cuarentena…' : '⏳ Actualizando prospecto…');
+    const res = await apiCall('/api/crm/contacts/' + id, 'PATCH', {
+      enrichment_status: nuevoEstado,
+      quarantine_reason: motivo || (nuevoEstado === 'quarantined' ? 'aislado_manualmente_vendedor' : null)
+    });
+    if (res && res.contact) {
+      const idx = state.contacts.findIndex(c => c.id === id);
+      if (idx !== -1) {
+        state.contacts[idx] = { ...state.contacts[idx], ...res.contact };
+      }
+      cerrarModalEditarContacto();
+      await loadContacts(paginaContactos);
+      renderContactos();
+      toast(nuevoEstado === 'quarantined' ? '📦 Contacto enviado a cuarentena' : '✨ Contacto restaurado y activado');
+    }
+  } catch (err) {
+    toast('Error: ' + (err.message || 'Error de red'));
+  }
 }
 
 function cerrarModalEditarContacto() {

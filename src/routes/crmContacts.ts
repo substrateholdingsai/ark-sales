@@ -189,15 +189,18 @@ crmContactsRouter.patch("/:id", requireRole("write"), async (c) => {
     const whatsapp = body?.whatsapp !== undefined ? body.whatsapp : existing.whatsapp;
     const title = body?.title !== undefined ? body.title : existing.title;
     const consent = body?.consent_status !== undefined ? body.consent_status : existing.consent_status;
+    const enrichment_status = body?.enrichment_status !== undefined ? body.enrichment_status : existing.enrichment_status;
+    const quarantine_reason = body?.quarantine_reason !== undefined ? body.quarantine_reason : existing.quarantine_reason;
+    const quarantined_at = enrichment_status === 'quarantined' ? (existing.quarantined_at || new Date().toISOString()) : (enrichment_status === 'enriched' || enrichment_status === 'pending' ? null : existing.quarantined_at);
     const prefs = body?.contact_preferences !== undefined
       ? (body.contact_preferences ? JSON.stringify(body.contact_preferences) : null)
       : existing.contact_preferences_json;
 
     await c.env.DB.prepare(`
       UPDATE sales_contacts
-      SET account_id = ?, name = ?, email = ?, phone = ?, whatsapp = ?, title = ?, consent_status = ?, contact_preferences_json = ?, updated_at = CURRENT_TIMESTAMP
+      SET account_id = ?, name = ?, email = ?, phone = ?, whatsapp = ?, title = ?, consent_status = ?, contact_preferences_json = ?, enrichment_status = ?, quarantine_reason = ?, quarantined_at = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(accountId, name, email, phone, whatsapp, title, consent, prefs, id).run();
+    `).bind(accountId, name, email, phone, whatsapp, title, consent, prefs, enrichment_status, quarantine_reason, quarantined_at, id).run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -214,6 +217,18 @@ crmContactsRouter.patch("/:id", requireRole("write"), async (c) => {
     return c.json({ contact });
   } catch (err: any) {
     return c.json({ error: err.message || "Error actualizando contacto" }, 400);
+  }
+});
+
+crmContactsRouter.get("/:id/evidence", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const { results } = await c.env.DB.prepare(
+      "SELECT * FROM sales_enrichment_evidence WHERE contact_id = ? ORDER BY extracted_at DESC"
+    ).bind(id).all();
+    return c.json({ evidence: results || [] });
+  } catch (err: any) {
+    return c.json({ evidence: [] });
   }
 });
 
