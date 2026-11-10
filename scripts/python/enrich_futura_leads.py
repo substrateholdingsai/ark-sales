@@ -110,7 +110,11 @@ def extract_doctor_name(text: str) -> Optional[str]:
 
 class LeadEnricher:
     def __init__(self, serper_key: Optional[str] = None):
-        self.serper_key = serper_key or os.getenv("SERPER_API_KEY")
+        self.serper_key = serper_key or os.getenv("SERPER_API_KEY") or "e1f5fbd21b24edc6710490b4ce03afa8f6018683"
+        if self.serper_key:
+            logger.info("Motor Serper.dev Places / Search ACTIVO con API Key.")
+        else:
+            logger.warning("Motor Serper.dev NO tiene API Key. Modo degradado.")
         self.client = httpx.AsyncClient(
             headers={
                 "User-Agent": (
