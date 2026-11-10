@@ -91,6 +91,18 @@ crmContactsRouter.get("/", async (c) => {
     cparams.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
 
+  const statusFilter = c.req.query("enrichment_status");
+  if (statusFilter) {
+    sql += " AND c.enrichment_status = ?";
+    params.push(statusFilter);
+    countSql += " AND c.enrichment_status = ?";
+    cparams.push(statusFilter);
+  } else if (c.req.query("include_quarantined") !== "true") {
+    // Por defecto ocultar prospectos en cuarentena para no ensuciar la bandeja de ventas
+    sql += " AND (c.enrichment_status IS NULL OR c.enrichment_status != 'quarantined')";
+    countSql += " AND (c.enrichment_status IS NULL OR c.enrichment_status != 'quarantined')";
+  }
+
   sql += " ORDER BY c.created_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
 
