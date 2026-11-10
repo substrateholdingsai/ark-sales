@@ -44,8 +44,8 @@ async def _finish_run(run_id: str, status: str, metrics: dict, error: str | None
 
 async def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="lead_harvester")
-    parser.add_argument("--source", default="denue", choices=["denue", "sipres"])
-    parser.add_argument("--profile", default=None, choices=["ark", "futura_capital", "ark_ledger", "fintech_credit_app", "sipres_sofom"])
+    parser.add_argument("--source", default="denue", choices=["denue", "sipres", "canaco"])
+    parser.add_argument("--profile", default=None, choices=["ark", "futura_capital", "ark_ledger", "fintech_credit_app", "sipres_sofom", "canaco_chamber"])
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--fixture", default=None)
     parser.add_argument("--base-url", default=None)
@@ -62,7 +62,12 @@ async def main(argv=None) -> int:
     if base_url:
         BASE_URL = base_url
 
-    profile = args.profile or ("sipres_sofom" if args.source == "sipres" else "ark")
+    default_profile = "ark"
+    if args.source == "sipres":
+        default_profile = "sipres_sofom"
+    elif args.source == "canaco":
+        default_profile = "canaco_chamber"
+    profile = args.profile or default_profile
     if args.source == "sipres" and profile != "sipres_sofom":
         parser.error("--source sipres requires --profile sipres_sofom")
     if args.source == "sipres" and args.plaza:

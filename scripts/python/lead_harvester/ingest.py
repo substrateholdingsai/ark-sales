@@ -76,6 +76,8 @@ VERTICAL_TO_DEST = {
 def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
     if lead.harvest_profile in ("fintech_credit_app", "sipres_sofom"):
         vertical, destination = (Vertical.COBRANZA, Destination.ANGEL)
+    elif lead.harvest_profile == "canaco_chamber":
+        vertical, destination = (Vertical.FISCAL, Destination.LEDGER)
     elif lead.tenant_id == "acc_futura_capital":
         vertical, destination = (Vertical.BUNDLE, Destination.BUNDLE)
     elif lead.tenant_id == "acc_ark_ledger":
@@ -101,10 +103,14 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
         dolor = "cobranza_credito_digital"
     elif lead.harvest_profile == "sipres_sofom":
         dolor = "cobranza_sofom"
+    elif lead.harvest_profile == "canaco_chamber":
+        dolor = lead.dolor_principal or "afiliacion_siem_digitalizacion_contable"
     else:
         dolor = lead.dolor_principal or lead.actividad or "sin datos"
     if lead.harvest_profile in ("fintech_credit_app", "sipres_sofom"):
         productos_interes = ["angel", "ledger"]
+    elif lead.harvest_profile == "canaco_chamber":
+        productos_interes = ["ledger_pro", "ledger_freemium", "siem_landing_white_label"]
     elif lead.productos_interes:
         productos_interes = lead.productos_interes
     elif lead.tenant_id == "acc_futura_capital":
@@ -129,6 +135,17 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
             "sipres_registry_url": lead.raw.get("registry_url"),
             "rfc": lead.rfc,
         })
+    elif lead.harvest_profile == "canaco_chamber":
+        account_ctx.update({
+            "siglas": lead.raw.get("siglas"),
+            "direccion": lead.raw.get("direccion"),
+            "presidente": lead.raw.get("presidente"),
+            "director_general": lead.raw.get("director_general"),
+            "cargo_clave": lead.raw.get("cargo_clave"),
+            "afiliados_estimados": lead.raw.get("afiliados_estimados"),
+            "operador_siem": True,
+            "rfc": lead.rfc,
+        })
     if lead.harvest_profile != "general":
         account_ctx["harvest_profile"] = lead.harvest_profile
     if lead.ciudad or lead.estado:
@@ -136,20 +153,28 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
     if lead.tenant_id:
         account_ctx["tenant_id"] = lead.tenant_id
 
+    source_tag = getattr(lead, "source", "denue") or "denue"
+    summary_prefix = "CANACO" if source_tag == "canaco" else source_tag.upper()
+    contact_name = (
+        lead.raw.get("contacto_clave")
+        if lead.harvest_profile == "canaco_chamber"
+        else "Contacto Corporativo"
+    )
+
     return IngestPayload(
         lead_id=lead.lead_id,
         email=email,
         destination=destination,
         vertical=vertical,
         score=score,
-        conversation_summary=f"Cosecha DENUE: {lead.razon_social} ({lead.actividad})",
+        conversation_summary=f"Cosecha {summary_prefix}: {lead.razon_social} ({lead.ciudad or lead.estado or lead.actividad})",
         account_context=account_ctx,
         scian_code=lead.scian_code,
-        harvest_source=getattr(lead, "source", "denue") or "denue",
+        harvest_source=source_tag,
         sitio_web=lead.sitio_web,
         contact_email=contact_email,
         contact_phone=lead.telefono,
-        contact_name="Contacto Corporativo",
+        contact_name=contact_name,
         tenant_id=lead.tenant_id,
         harvest_profile=lead.harvest_profile,
     )

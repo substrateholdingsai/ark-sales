@@ -5,6 +5,7 @@ import json
 import os
 from typing import Optional
 
+from .canaco import CanacoHarvester
 from .denue import DenueHarvester
 from .ingest import ingest_lead
 from .models import RawLead, HarvestResult
@@ -24,7 +25,7 @@ async def run_pipeline(
     require_email: bool = False,
     preview_only: bool = False,
 ) -> HarvestResult:
-    if source not in ("denue", "sipres"):
+    if source not in ("denue", "sipres", "canaco"):
         raise ValueError(f"Unsupported source: {source}")
     if source == "denue":
         harvester = DenueHarvester(
@@ -32,6 +33,13 @@ async def run_pipeline(
             profile=profile,
             plaza=plaza,
             custom_query=query,
+        )
+    elif source == "canaco":
+        harvester = CanacoHarvester(
+            fixture_path=fixture_path,
+            plaza=plaza,
+            custom_query=query,
+            limit=limit,
         )
     else:
         if profile != "sipres_sofom":
