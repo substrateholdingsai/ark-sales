@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import app from "../src/index";
-import { resolveTenantId, isFuturaAccount } from "../src/routes/crmAccounts";
+import { futuraAccountSqlPredicate, resolveTenantId, isFuturaAccount } from "../src/routes/crmAccounts";
 import { signJwt } from "../src/auth/jwt";
 
 function createMockD1() {
@@ -93,9 +93,60 @@ describe("Medical Leads & Tenant Isolation Suite (Futura Capital)", () => {
     expect(isFuturaAccount({ scian_code: "621211" })).toBe(true);
     expect(isFuturaAccount({ scian_code: "621399" })).toBe(true);
     expect(isFuturaAccount({ scian_code: "622111" })).toBe(true);
+    expect(isFuturaAccount({ origin: "proptech" })).toBe(true);
+    expect(isFuturaAccount({ origin: "inmobiliaria" })).toBe(true);
+    expect(isFuturaAccount({ origin: "hermes" })).toBe(true);
     expect(resolveTenantId({ scian_code: "621111", tenant_id: "acc_ark_ledger" })).toBe("acc_futura_capital");
     expect(resolveTenantId({ scian_code: "621399" })).toBe("acc_futura_capital");
     expect(resolveTenantId({ scian_code: "541211", tenant_id: "acc_ark_ledger" })).toBe("acc_ark_ledger");
+  });
+
+  it("cuentas y contactos usan el mismo predicado SQL de tenant, seguro ante columnas nulas", async () => {
+    const queries: string[] = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind() { return this; },
+          async all() {
+            queries.push(sql);
+            return { results: [] };
+          },
+          async first() {
+            queries.push(sql);
+            return { n: 0 };
+          }
+        };
+      }
+    };
+    const env: any = { DB: db, CRM_JWT_SECRET: secret };
+    for (const [path, alias] of [
+      ["/api/crm/accounts", "sales_accounts"],
+      ["/api/crm/contacts", "a"]
+    ]) {
+      for (const tenant of ["acc_futura_capital", "acc_ark_ledger"]) {
+        const res = await app.fetch(
+          new Request(`https://sales.arksystems.site${path}?tenant=${tenant}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          env
+        );
+        expect(res.status).toBe(200);
+      }
+    }
+
+    for (const alias of ["sales_accounts", "a"]) {
+      const predicate = futuraAccountSqlPredicate(alias);
+      expect(predicate).toContain(`COALESCE(${alias}.origin, '')`);
+      expect(predicate).toContain(`COALESCE(NULLIF(${alias}.harvest_source, ''), ${alias}.origin, '')`);
+      expect(predicate).toContain("LIKE '%proptech%'");
+      expect(predicate).toContain("LIKE '%inmobiliaria%'");
+      expect(predicate).toContain("LIKE '%hermes%'");
+      expect(predicate).toContain("LIKE '%vektor%'");
+      const relatedQueries = queries.filter(sql => sql.includes(alias === "a" ? "FROM sales_contacts c" : "FROM sales_accounts"));
+      expect(relatedQueries.length).toBeGreaterThanOrEqual(4);
+      expect(relatedQueries.every(sql => sql.includes(predicate))).toBe(true);
+      expect(relatedQueries.some(sql => sql.includes("NOT " + predicate))).toBe(true);
+    }
   });
 
   it("GET /api/crm/accounts?tenant=acc_futura_capital filtra a nivel base de datos y devuelve leads médicos", async () => {
@@ -139,6 +190,48 @@ describe("Medical Leads & Tenant Isolation Suite (Futura Capital)", () => {
     expect(body.items.length).toBe(1);
     expect(body.items[0].name).toBe("Dr. Roberto");
     expect(body.items[0].tenant_id).toBe("acc_futura_capital");
+  });
+
+  it("GET /api/crm/contacts?city=merida busca variantes con y sin acento y teléfonos de Mérida", async () => {
+    const queries: Array<{ sql: string; params: any[] }> = [];
+    const db = {
+      prepare(sql: string) {
+        const statement = {
+          params: [] as any[],
+          bind(...args: any[]) {
+            this.params = args;
+            return this;
+          },
+          async all() {
+            queries.push({ sql, params: this.params });
+            return { results: [] };
+          },
+          async first() {
+            queries.push({ sql, params: this.params });
+            return { n: 0 };
+          }
+        };
+        return statement;
+      }
+    };
+    const env: any = { DB: db, CRM_JWT_SECRET: secret };
+    const res = await app.fetch(
+      new Request("https://sales.arksystems.site/api/crm/contacts?city=merida", {
+        headers: { Authorization: `Bearer ${token}` }
+      }),
+      env
+    );
+
+    expect(res.status).toBe(200);
+    const contactQueries = queries.filter(query => query.sql.includes("FROM sales_contacts c"));
+    expect(contactQueries).toHaveLength(2);
+    for (const query of contactQueries) {
+      expect(query.sql).toContain("a.city LIKE ?");
+      expect(query.params).toContain("%Mérida%");
+      expect(query.params).toContain("%Merida%");
+      expect(query.params).toContain("%Yucatán%");
+      expect(query.params).toContain("%999%");
+    }
   });
 
   it("GET /api/superadmin/tenants/overview?tenant=acc_futura_capital devuelve únicamente cuentas de Futura Capital", async () => {

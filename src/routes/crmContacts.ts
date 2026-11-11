@@ -4,7 +4,7 @@ import { AuthVariables } from "../auth/middleware";
 import { requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
 import { enrichLeadByVertical } from "../services/contactEnrichment";
-import { resolveTenantId } from "./crmAccounts";
+import { futuraAccountSqlPredicate, resolveTenantId } from "./crmAccounts";
 
 export const crmContactsRouter = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 crmContactsRouter.use("*", requireAuth());
@@ -13,6 +13,39 @@ function parsePagination(c: any) {
   const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "20", 10) || 20, 1), 100);
   const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
   return { limit, offset };
+}
+
+const CONTACT_CITY_FILTERS: Record<string, { cities: string[]; phones?: string[]; emails?: string[] }> = {
+  cancun: { cities: ["Cancún", "Cancun", "Benito Juárez", "Benito Juarez", "Isla Mujeres", "Quintana"], phones: ["998"], emails: ["cancun", "caribe"] },
+  playa: { cities: ["Playa", "Solidaridad", "Tulum", "Cozumel"], phones: ["984", "987"] },
+  merida: { cities: ["Mérida", "Merida", "Progreso", "Valladolid", "Yucatán", "Yucatan"], phones: ["999"] },
+  campeche: { cities: ["Campeche", "Carmen"], phones: ["981", "938"] },
+  cdmx: { cities: ["CDMX", "Ciudad de México", "Ciudad de Mexico", "Distrito Federal", "Polanco", "Reforma", "Insurgentes"], phones: ["55 ", "+5255"] },
+  monterrey: { cities: ["Monterrey", "San Pedro", "Nuevo León", "Nuevo Leon"], phones: ["81 ", "+5281"] },
+  guadalajara: { cities: ["Guadalajara", "Zapopan", "Jalisco"], phones: ["33 ", "+5233"] }
+};
+
+function contactCityFilter(city: string, params: any[]) {
+  const filter = CONTACT_CITY_FILTERS[city.toLowerCase()];
+  if (!filter) {
+    params.push(`%${city}%`);
+    return "a.city LIKE ?";
+  }
+
+  const clauses: string[] = [];
+  for (const value of filter.cities) {
+    clauses.push("a.city LIKE ?");
+    params.push(`%${value}%`);
+  }
+  for (const value of filter.phones || []) {
+    clauses.push("COALESCE(NULLIF(c.phone, ''), c.whatsapp, '') LIKE ?");
+    params.push(`%${value}%`);
+  }
+  for (const value of filter.emails || []) {
+    clauses.push("c.email LIKE ?");
+    params.push(`%${value}%`);
+  }
+  return `(${clauses.join(" OR ")})`;
 }
 
 crmContactsRouter.get("/", async (c) => {
@@ -42,30 +75,13 @@ crmContactsRouter.get("/", async (c) => {
   const cparams: any[] = [];
 
   if (tenantFilter === "acc_futura_capital") {
-    const clause = ` AND (
-      a.tenant_id = 'acc_futura_capital' OR 
-      a.scian_code LIKE '62%' OR 
-      a.scian_code IN ('531210', '531311', '523920', '484111', '484121', '493111', '488511', '721111', '721190', '531110', '551110', '621111', '621112', '621211', '621399', '621511', '622111') OR
-      a.id LIKE '%futura%' OR
-      a.name LIKE '%futura capital%' OR
-      a.origin LIKE '%futura%' OR
-      a.origin LIKE '%proptech%' OR
-      a.origin LIKE '%inmobiliaria%' OR
-      a.harvest_source LIKE '%hermes%' OR
-      a.harvest_source LIKE '%vektor%'
-    )`;
+    const clause = ` AND ${futuraAccountSqlPredicate("a")}`;
     sql += clause;
     countSql += clause;
   } else if (tenantFilter === "acc_ark_ledger") {
     const clause = ` AND (
-      (a.tenant_id = 'acc_ark_ledger' OR a.tenant_id IS NULL) AND
-      (a.scian_code NOT LIKE '62%' OR a.scian_code IS NULL) AND
-      (a.scian_code NOT IN ('531210', '531311', '523920', '484111', '484121', '493111', '488511', '721111', '721190', '531110', '551110') OR a.scian_code IS NULL) AND
-      a.id NOT LIKE '%futura%' AND
-      a.name NOT LIKE '%futura capital%' AND
-      a.origin NOT LIKE '%futura%' AND
-      a.harvest_source NOT LIKE '%hermes%' AND
-      a.harvest_source NOT LIKE '%vektor%'
+      COALESCE(NULLIF(a.tenant_id, ''), 'acc_ark_ledger') = 'acc_ark_ledger' AND
+      NOT ${futuraAccountSqlPredicate("a")}
     )`;
     sql += clause;
     countSql += clause;
@@ -81,8 +97,8 @@ crmContactsRouter.get("/", async (c) => {
     countSql += " AND c.account_id = ?"; cparams.push(accountId);
   }
   if (city) {
-    sql += " AND a.city LIKE ?"; params.push(`%${city}%`);
-    countSql += " AND a.city LIKE ?"; cparams.push(`%${city}%`);
+    sql += ` AND ${contactCityFilter(city, params)}`;
+    countSql += ` AND ${contactCityFilter(city, cparams)}`;
   }
   if (q) {
     sql += " AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.whatsapp LIKE ? OR a.name LIKE ? OR a.city LIKE ?)";

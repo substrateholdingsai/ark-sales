@@ -16,6 +16,22 @@ const FUTURA_SCIANS = new Set([
   "721111", "721190", "531110", "551110"
 ]);
 
+export function futuraAccountSqlPredicate(alias: string): string {
+  const scianCodes = [...FUTURA_SCIANS].filter(code => !code.startsWith("62"));
+  return `(
+    ${alias}.tenant_id = 'acc_futura_capital' OR
+    TRIM(COALESCE(${alias}.scian_code, '')) LIKE '62%' OR
+    TRIM(COALESCE(${alias}.scian_code, '')) IN (${scianCodes.map(code => `'${code}'`).join(", ")}) OR
+    LOWER(COALESCE(${alias}.id, '')) LIKE '%futura%' OR
+    LOWER(COALESCE(${alias}.name, '')) LIKE '%futura capital%' OR
+    LOWER(COALESCE(${alias}.origin, '')) LIKE '%futura%' OR
+    LOWER(COALESCE(${alias}.origin, '')) LIKE '%proptech%' OR
+    LOWER(COALESCE(${alias}.origin, '')) LIKE '%inmobiliaria%' OR
+    LOWER(COALESCE(NULLIF(${alias}.harvest_source, ''), ${alias}.origin, '')) LIKE '%hermes%' OR
+    LOWER(COALESCE(NULLIF(${alias}.harvest_source, ''), ${alias}.origin, '')) LIKE '%vektor%'
+  )`;
+}
+
 export function isFuturaAccount(a: any): boolean {
   if (!a) return false;
   if (a.tenant_id === "acc_futura_capital") return true;
@@ -74,30 +90,13 @@ crmAccountsRouter.get("/", async (c) => {
   const cparams: any[] = [];
 
   if (tenantFilter === "acc_futura_capital") {
-    const clause = ` AND (
-      sales_accounts.tenant_id = 'acc_futura_capital' OR 
-      sales_accounts.scian_code LIKE '62%' OR 
-      sales_accounts.scian_code IN ('531210', '531311', '523920', '484111', '484121', '493111', '488511', '721111', '721190', '531110', '551110', '621111', '621112', '621211', '621399', '621511', '622111') OR
-      sales_accounts.id LIKE '%futura%' OR
-      sales_accounts.name LIKE '%futura capital%' OR
-      sales_accounts.origin LIKE '%futura%' OR
-      sales_accounts.origin LIKE '%proptech%' OR
-      sales_accounts.origin LIKE '%inmobiliaria%' OR
-      sales_accounts.harvest_source LIKE '%hermes%' OR
-      sales_accounts.harvest_source LIKE '%vektor%'
-    )`;
+    const clause = ` AND ${futuraAccountSqlPredicate("sales_accounts")}`;
     sql += clause;
     countSql += clause;
   } else if (tenantFilter === "acc_ark_ledger") {
     const clause = ` AND (
-      (sales_accounts.tenant_id = 'acc_ark_ledger' OR sales_accounts.tenant_id IS NULL) AND
-      (sales_accounts.scian_code NOT LIKE '62%' OR sales_accounts.scian_code IS NULL) AND
-      (sales_accounts.scian_code NOT IN ('531210', '531311', '523920', '484111', '484121', '493111', '488511', '721111', '721190', '531110', '551110') OR sales_accounts.scian_code IS NULL) AND
-      sales_accounts.id NOT LIKE '%futura%' AND
-      sales_accounts.name NOT LIKE '%futura capital%' AND
-      sales_accounts.origin NOT LIKE '%futura%' AND
-      sales_accounts.harvest_source NOT LIKE '%hermes%' AND
-      sales_accounts.harvest_source NOT LIKE '%vektor%'
+      COALESCE(NULLIF(sales_accounts.tenant_id, ''), 'acc_ark_ledger') = 'acc_ark_ledger' AND
+      NOT ${futuraAccountSqlPredicate("sales_accounts")}
     )`;
     sql += clause;
     countSql += clause;
@@ -138,14 +137,10 @@ crmAccountsRouter.get("/", async (c) => {
   const countBound = cparams.length ? countStmt.bind(...cparams) : countStmt;
   const countRow: any = await countBound.first();
 
-  let items = (results || []).map((row: any) => ({
+  const items = (results || []).map((row: any) => ({
     ...row,
     tenant_id: resolveTenantId(row)
   }));
-
-  if (tenantFilter) {
-    items = items.filter((row: any) => row.tenant_id === tenantFilter);
-  }
 
   return c.json({ items, total: countRow?.n ?? (results?.length ?? 0), limit, offset });
 });
