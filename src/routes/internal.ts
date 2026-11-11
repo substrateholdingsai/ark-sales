@@ -301,6 +301,205 @@ internalRouter.post("/leads/ingest", async (c) => {
 });
 
 /**
+ * Rate limiting en memoria para creación de leads uno a uno:
+ * máximo 60 creates por hora por clave de operador (X-StayPuft-Key).
+ * Evita uso accidental masivo a través del endpoint single-lead.
+ */
+const singleLeadRateLimits = new Map<string, number[]>();
+function checkSingleLeadRateLimit(key: string): boolean {
+  const now = Date.now();
+  const windowMs = 60 * 60 * 1000;
+  const limit = 60;
+  const times = (singleLeadRateLimits.get(key) || []).filter((t) => now - t < windowMs);
+  if (times.length >= limit) return false;
+  times.push(now);
+  singleLeadRateLimits.set(key, times);
+  return true;
+}
+
+const ALLOWED_TENANTS = new Set(["acc_ark_ledger", "acc_futura_capital"]);
+const ALLOWED_SOURCES = new Set(["instagram_manual", "facebook_manual", "web_manual", "referral", "harvester"]);
+const REJECTED_SOURCES = new Set(["x", "twitter", "x_manual"]);
+
+function normalizeInstagramHandle(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  const handle = raw.trim().replace(/^@+/, "").toLowerCase();
+  return handle || null;
+}
+
+function extractWebsiteDomain(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    const url = raw.startsWith("http") ? raw : `https://${raw}`;
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /api/internal/leads
+ * Crea ÚNICAMENTE un lead nuevo (fail-closed, totalmente auditado, sin efectos colaterales).
+ * Auth: X-StayPuft-Key (misma que los demás /api/internal/*).
+ */
+internalRouter.post("/leads", async (c) => {
+  if (!c.env.DB) return c.json({ error: "D1 no disponible" }, 503);
+
+  const providedKey = c.req.header("X-StayPuft-Key") || c.req.header("X-Ark-Internal-Key") || "";
+  if (!checkSingleLeadRateLimit(providedKey)) {
+    return c.json({ error: "Too Many Requests: límite de 60 leads únicos por hora por clave de operador." }, 429);
+  }
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Cuerpo JSON inválido." }, 400);
+  }
+
+  // Un solo lead por request: rechaza arreglos y payloads masivos
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return c.json({ error: "Se espera un único objeto de lead. No se aceptan arreglos ni payloads masivos." }, 400);
+  }
+
+  const {
+    tenant_id, cohort, firm_name, contact_name, contact_role, city, state,
+    phone, whatsapp, email, website, instagram, instagram_url, facebook, facebook_url,
+    source, source_url, score, pain, products, notes,
+  } = body;
+
+  // Campos obligatorios
+  if (!tenant_id || typeof tenant_id !== "string") {
+    return c.json({ error: "tenant_id es obligatorio." }, 400);
+  }
+  if (!cohort || typeof cohort !== "string") {
+    return c.json({ error: "cohort es obligatorio." }, 400);
+  }
+  if (!firm_name || typeof firm_name !== "string") {
+    return c.json({ error: "firm_name es obligatorio." }, 400);
+  }
+  if (!source || typeof source !== "string") {
+    return c.json({ error: "source es obligatorio." }, 400);
+  }
+  if (!source_url || typeof source_url !== "string") {
+    return c.json({ error: "source_url es obligatorio." }, 400);
+  }
+
+  // Source: allowlist estricta; X.com explícitamente excluido
+  const sourceLower = source.toLowerCase();
+  if (REJECTED_SOURCES.has(sourceLower)) {
+    return c.json({ error: "Fuente no permitida: X.com no es un origen válido para este target." }, 400);
+  }
+  if (!ALLOWED_SOURCES.has(source)) {
+    return c.json({ error: "Fuente no permitida." }, 400);
+  }
+
+  // Teléfono: solo México E.164; malformed → null, nunca se prefiere +52 ciegamente, nunca se inventa
+  const telNorm = normalizeMexicanPhone(typeof phone === "string" ? phone : null);
+  const normalizedPhone = telNorm.malformed || !telNorm.telefono ? null : telNorm.telefono;
+
+  const normalizedEmail = typeof email === "string" && email.trim() ? email.trim().toLowerCase() : null;
+  const normalizedInstagram = normalizeInstagramHandle(instagram);
+  const rawInstagram = typeof instagram === "string" && instagram.trim() ? instagram.trim() : null;
+  const normalizedFacebook = typeof facebook_url === "string" && facebook_url.trim() ? facebook_url.trim() : null;
+  const normalizedWebsite = typeof website === "string" && website.trim() ? website.trim() : null;
+  const websiteDomain = normalizedWebsite ? extractWebsiteDomain(normalizedWebsite) : null;
+
+  // Al menos un canal de contacto válido después de normalización (teléfono malformado no cuenta)
+  const hasNormalizedChannel = Boolean(
+    normalizedPhone || normalizedEmail || normalizedWebsite || normalizedInstagram || normalizedFacebook || rawInstagram,
+  );
+  if (!hasNormalizedChannel) {
+    return c.json({ error: "Se requiere al menos un canal de contacto válido: phone, email, website, instagram o facebook." }, 400);
+  }
+
+  // Tenant isolation: allowlist estricta + existencia verificada en sales_accounts (índice, LIMIT 1)
+  if (!ALLOWED_TENANTS.has(tenant_id)) {
+    return c.json({ error: "Tenant no permitido." }, 400);
+  }
+  const tenantRow = await c.env.DB.prepare("SELECT id FROM sales_accounts WHERE id = ? LIMIT 1").bind(tenant_id).first<any>();
+  if (!tenantRow) {
+    return c.json({ error: "Tenant no encontrado." }, 400);
+  }
+
+  // Cohort: debe existir en sales_cohorts (índice, LIMIT 1)
+  const cohortRow = await c.env.DB.prepare("SELECT cohort_id FROM sales_cohorts WHERE cohort_id = ? LIMIT 1").bind(cohort).first<any>();
+  if (!cohortRow) {
+    return c.json({ error: "Cohorte desconocida." }, 400);
+  }
+
+  // Deduplicación antes de insertar (lookups indexados, LIMIT 1 cada uno)
+  if (normalizedPhone) {
+    const existing = await c.env.DB.prepare("SELECT id FROM sales_leads WHERE phone = ? LIMIT 1").bind(normalizedPhone).first<any>();
+    if (existing) return c.json({ created: false, duplicate: true, lead_id: existing.id }, 200);
+  }
+  if (normalizedEmail) {
+    const existing = await c.env.DB.prepare("SELECT id FROM sales_leads WHERE email = ? LIMIT 1").bind(normalizedEmail).first<any>();
+    if (existing) return c.json({ created: false, duplicate: true, lead_id: existing.id }, 200);
+  }
+  if (normalizedInstagram) {
+    const existing = await c.env.DB.prepare("SELECT id FROM sales_leads WHERE lower(instagram_handle) = lower(?) LIMIT 1").bind(normalizedInstagram).first<any>();
+    if (existing) return c.json({ created: false, duplicate: true, lead_id: existing.id }, 200);
+  }
+  if (normalizedFacebook) {
+    const existing = await c.env.DB.prepare("SELECT id FROM sales_leads WHERE facebook_url = ? LIMIT 1").bind(normalizedFacebook).first<any>();
+    if (existing) return c.json({ created: false, duplicate: true, lead_id: existing.id }, 200);
+  }
+  if (normalizedWebsite && websiteDomain) {
+    const candidates = await c.env.DB.prepare("SELECT id, website_url, despacho_nombre FROM sales_leads WHERE lower(despacho_nombre) = lower(?) AND website_url IS NOT NULL LIMIT 100").bind(firm_name).all<any>();
+    const dup = (candidates?.results || []).find((row: any) =>
+      extractWebsiteDomain(row.website_url) === websiteDomain &&
+      String(row.despacho_nombre || "").trim().toLowerCase() === firm_name.trim().toLowerCase()
+    );
+    if (dup) return c.json({ created: false, duplicate: true, lead_id: dup.id }, 200);
+  }
+
+  const leadId = `lead_manual_${crypto.randomUUID().slice(0, 12)}`;
+  const summary = {
+    contact_name: typeof contact_name === "string" ? contact_name.trim() : null,
+    contact_role: typeof contact_role === "string" ? contact_role.trim() : null,
+    city: typeof city === "string" ? city.trim() : null,
+    state: typeof state === "string" ? state.trim() : null,
+    whatsapp: typeof whatsapp === "string" ? whatsapp.trim() : null,
+    instagram_url: typeof instagram_url === "string" ? instagram_url.trim() : null,
+    facebook: typeof facebook === "string" ? facebook.trim() : null,
+    source,
+    source_url,
+    pain: typeof pain === "string" ? pain.trim() : null,
+    products: Array.isArray(products) ? products : (typeof products === "string" ? [products] : null),
+    notes: typeof notes === "string" ? notes.trim() : null,
+    phone_raw: typeof phone === "string" ? phone : null,
+  };
+  const scoreNum = typeof score === "number" ? Math.max(0, Math.min(100, score)) : 0;
+
+  await c.env.DB.prepare(`
+    INSERT INTO sales_leads (
+      id, tenant_id, despacho_nombre, email, phone, website_url, instagram_handle, facebook_url,
+      especialista_asignado, estado, score, dolor_detectado, conversation_summary, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'intake', 'nuevo', ?, 'otro', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `).bind(
+    leadId,
+    tenant_id,
+    firm_name.trim(),
+    normalizedEmail ?? "",
+    normalizedPhone,
+    normalizedWebsite,
+    normalizedInstagram,
+    normalizedFacebook,
+    scoreNum,
+    JSON.stringify(summary)
+  ).run();
+
+  // Auditoría inmutable: una entrada por lead creado
+  const auditId = "audit_" + crypto.randomUUID().slice(0, 12);
+  await c.env.DB.prepare(
+    "INSERT INTO crm_audit_log (id, actor_user_id, actor_email, action, entity_type, entity_id, metadata_json, ip, created_at) VALUES (?, ?, NULL, 'lead_create_single', 'lead', ?, ?, NULL, CURRENT_TIMESTAMP)"
+  ).bind(auditId, "staypuft", leadId, JSON.stringify({ tenant_id, cohort, source, source_url })).run();
+
+  return c.json({ lead_id: leadId, status: "nuevo", created: true, duplicate: false }, 201);
+});
+
+/**
  * 3. Endpoint de Ingesta de Contexto (/api/internal/context)
  * Grok Bot consulta este endpoint para obtener el Resumen Ejecutivo del Cliente
  * antes de abrir el CRM o interactuar con el prospecto en la computadora.

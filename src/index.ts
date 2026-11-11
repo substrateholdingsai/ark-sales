@@ -49,7 +49,7 @@ app.use("*", cors({
     return "https://arksystems.site";
   },
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-Ark-Internal-Key"],
+  allowHeaders: ["Content-Type", "Authorization", "X-Ark-Internal-Key", "X-StayPuft-Key"],
   credentials: true,
 }));
 
