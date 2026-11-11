@@ -35,6 +35,7 @@ class RawLead(BaseModel):
     lon: Optional[float] = None
     sitio_web: Optional[str] = None
     telefono: Optional[str] = None
+    whatsapp: Optional[str] = None
     email: Optional[str] = None
     productos_interes: list[str] = Field(default_factory=list)
     tenant_id: Optional[str] = None
@@ -61,15 +62,18 @@ class IngestPayload(BaseModel):
     sitio_web: Optional[str] = None
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
-    contact_name: str = "Contacto Corporativo"
+    contact_name: Optional[str] = None
     tenant_id: Optional[str] = None
     harvest_profile: Optional[str] = None
+    contact_whatsapp: Optional[str] = None
 
 
 class HarvestResult(BaseModel):
     total: int = 0
     ingested: int = 0
     deduped: int = 0
+    deduped_by_phone: int = 0
+    deduped_by_name_municipality: int = 0
     errors: int = 0
     source: str = "denue"
     candidates: list[dict] = Field(default_factory=list)

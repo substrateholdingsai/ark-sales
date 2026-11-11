@@ -155,11 +155,15 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
 
     source_tag = getattr(lead, "source", "denue") or "denue"
     summary_prefix = "CANACO" if source_tag == "canaco" else source_tag.upper()
-    contact_name = (
-        lead.raw.get("contacto_clave")
-        if lead.harvest_profile == "canaco_chamber"
-        else "Contacto Corporativo"
-    )
+    contact_name = None
+    if lead.harvest_profile == "canaco_chamber":
+        candidate_name = lead.raw.get("contacto_clave")
+        if candidate_name and candidate_name.strip().casefold() not in {
+            "titular de dirección general",
+            "titular de direccion general",
+            "director general / presidente",
+        }:
+            contact_name = candidate_name.strip()
 
     return IngestPayload(
         lead_id=lead.lead_id,
@@ -175,6 +179,7 @@ def build_payload(lead: RawLead, score: int = 50) -> IngestPayload:
         contact_email=contact_email,
         contact_phone=lead.telefono,
         contact_name=contact_name,
+        contact_whatsapp=lead.whatsapp,
         tenant_id=lead.tenant_id,
         harvest_profile=lead.harvest_profile,
     )

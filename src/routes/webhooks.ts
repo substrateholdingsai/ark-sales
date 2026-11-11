@@ -47,12 +47,24 @@ webhookRouter.post("/", async (c) => {
     const scian_code = body.scian_code || (hLead.investorType ? "531110" : null);
     const sitio_web = body.sitio_web;
     const contact_email = body.contact_email || hLead.email;
-    const contact_name = body.contact_name || hLead.fullName || hLead.uboName;
+    const rawContactName = body.contact_name || hLead.fullName || hLead.uboName || null;
+    const normalizedContactName = typeof rawContactName === "string" ? rawContactName.trim() : "";
+    const contact_name = normalizedContactName &&
+      !["contacto corporativo", "sin nombre", "titular de dirección general", "titular de direccion general", "director general / presidente"]
+        .includes(normalizedContactName.toLowerCase())
+      ? normalizedContactName
+      : null;
     const rawPhone = body.contact_phone || body.telefono || body.phone || ctx.telefono || hLead.phone || null;
+    const rawWhatsapp = body.contact_whatsapp || body.whatsapp || ctx.whatsapp || hLead.whatsapp || null;
     let normalizedPhone: string | null = null;
     if (rawPhone) {
       const normRes = normalizarTelefonoE164(String(rawPhone));
       normalizedPhone = normRes.valid && normRes.e164 ? normRes.e164 : String(rawPhone).trim();
+    }
+    let normalizedWhatsapp: string | null = null;
+    if (rawWhatsapp) {
+      const normRes = normalizarTelefonoE164(String(rawWhatsapp));
+      normalizedWhatsapp = normRes.valid && normRes.e164 ? normRes.e164 : String(rawWhatsapp).trim();
     }
 
     // Filtro duro Fail-Closed: validación de nombre y email antes de entrar a sales_leads
@@ -173,10 +185,10 @@ webhookRouter.post("/", async (c) => {
       targetAccountId = ensured.accountId;
       targetContactId = ensured.contactId;
 
-      if (normalizedPhone) {
+      if (normalizedPhone || normalizedWhatsapp) {
         try {
-          await c.env.DB.prepare(`UPDATE sales_contacts SET phone = COALESCE(?, phone), name = COALESCE(?, name) WHERE id = ? OR account_id = ?`)
-            .bind(normalizedPhone, contact_name || "Contacto Corporativo", targetContactId, targetAccountId).run();
+          await c.env.DB.prepare(`UPDATE sales_contacts SET phone = COALESCE(?, phone), whatsapp = COALESCE(?, whatsapp) WHERE id = ? OR account_id = ?`)
+            .bind(normalizedPhone, normalizedWhatsapp, targetContactId, targetAccountId).run();
         } catch {}
       }
       const ubicacion = ctx.ubicacion || body.ciudad || null;
@@ -239,18 +251,26 @@ webhookRouter.post("/", async (c) => {
           if (existingCt) {
             await c.env.DB.prepare(`
               UPDATE sales_contacts
-              SET name = COALESCE(name, ?),
+              SET name = CASE
+                    WHEN name IS NULL OR TRIM(name) = '' OR LOWER(name) IN (
+                      'contacto corporativo', 'sin nombre', 'titular de dirección general',
+                      'titular de direccion general', 'director general / presidente'
+                    )
+                    THEN ?
+                    ELSE name
+                  END,
                   email = CASE WHEN email LIKE '%@harvest.arksystems.local' THEN ? ELSE email END,
                   phone = COALESCE(phone, ?),
+                  whatsapp = COALESCE(whatsapp, ?),
                   title = COALESCE(title, 'Dirección General'),
                   updated_at = CURRENT_TIMESTAMP
               WHERE id = ?
-            `).bind(contact_name || "Contacto Corporativo", contact_email, normalizedPhone, existingCt.id).run();
+            `).bind(contact_name, contact_email, normalizedPhone, normalizedWhatsapp, existingCt.id).run();
           } else {
             await c.env.DB.prepare(`
-              INSERT OR IGNORE INTO sales_contacts (id, account_id, name, email, phone, title, consent_status, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            `).bind(targetContactId, targetAccountId, contact_name || "Contacto Corporativo", contact_email, normalizedPhone, "Dirección General").run();
+              INSERT OR IGNORE INTO sales_contacts (id, account_id, name, email, phone, whatsapp, title, consent_status, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `).bind(targetContactId, targetAccountId, contact_name, contact_email, normalizedPhone, normalizedWhatsapp, "Dirección General").run();
           }
         } catch {}
       }

@@ -14,7 +14,8 @@ export type LeadIngestPayload = {
   sitio_web?: string | null;
   contact_email?: string | null;
   contact_phone?: string | null;
-  contact_name?: string;
+  contact_whatsapp?: string | null;
+  contact_name?: string | null;
   account_context: {
     despacho_nombre: string;
     tamano: "1-5" | "6-20" | "21-50" | "50+";

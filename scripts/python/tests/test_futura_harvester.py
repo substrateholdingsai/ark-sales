@@ -4,7 +4,12 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lead_harvester.denue import DenueHarvester, PROFILES_SCIAN, PROFILES_ENTIDADES
+from lead_harvester.denue import (
+    DenueHarvester,
+    GUADALAJARA_FUTURA_GEO_CLUSTERS,
+    PROFILES_SCIAN,
+    PROFILES_ENTIDADES,
+)
 from lead_harvester.profile import HTTPProfiler, PATS_FUTURA
 from lead_harvester.scoring import calcular_score_con_observaciones, recomendar_desarrollos_futura
 from lead_harvester.ingest import build_payload
@@ -17,6 +22,17 @@ def test_futura_profile_scian_and_entidades():
     assert "621111" in PROFILES_SCIAN["futura_capital"]  # Médicos especialistas
     assert "493111" in PROFILES_SCIAN["futura_capital"]  # Almacenes y CEDIS
     assert "531210" in PROFILES_SCIAN["futura_capital"]  # Brokers e inmobiliarias
+
+
+def test_futura_guadalajara_clusters_target_private_plastic_surgery():
+    assert len(GUADALAJARA_FUTURA_GEO_CLUSTERS) == 9
+    assert {cluster["scian_default"] for cluster in GUADALAJARA_FUTURA_GEO_CLUSTERS} == {"621112"}
+    assert all(cluster["require_private"] for cluster in GUADALAJARA_FUTURA_GEO_CLUSTERS)
+    assert {cluster["zona"] for cluster in GUADALAJARA_FUTURA_GEO_CLUSTERS} == {
+        "Puerta de Hierro / Andares",
+        "Providencia / Country",
+        "Chapalita",
+    }
 
 
 def test_futura_fixture_extracts_phone_email_and_recommends_products():
@@ -71,6 +87,35 @@ def test_http_profiler_futura_signals_and_contacts():
     emails = profiler._extract_emails(html)
     assert "529991112233" in phones
     assert "contacto@clinicamerida.mx" in emails
+
+
+def test_http_profiler_separates_whatsapp_from_office_phone():
+    async def run():
+        profiler = HTTPProfiler()
+
+        async def fetch(_url):
+            return """
+            <a href="https://wa.me/529991112233">WhatsApp</a>
+            <a href="tel:+529994445566">Teléfono</a>
+            """
+
+        profiler._fetch = fetch
+        try:
+            result = await profiler.profile_company("clinic.example")
+            assert result.whatsapp_detectado == "529991112233"
+            assert result.telefonos_detectados == ["529994445566"]
+            assert any(
+                observation["signal_code"] == "WHATSAPP_CORPORATIVO"
+                for observation in result.observaciones
+            )
+            assert any(
+                observation["signal_code"] == "TELEFONO_CORPORATIVO"
+                for observation in result.observaciones
+            )
+        finally:
+            await profiler.close()
+
+    asyncio.run(run())
 
 
 def test_scoring_with_futura_observations():
@@ -145,5 +190,3 @@ def test_campeche_clusters_and_entidades():
     assert len(CAMPECHE_GEO_CLUSTERS) >= 10
     for c in CAMPECHE_GEO_CLUSTERS:
         assert any(term in c["query"] for term in ("clinica", "medico", "hospital", "dental", "laboratorio", "cirugia", "salud"))
-
-

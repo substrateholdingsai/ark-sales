@@ -138,6 +138,31 @@ CDMX_FUTURA_GEO_CLUSTERS = [
     for zona, coords in CDMX_FUTURA_ZONAS
 ]
 
+# Futura Capital — cirujanos plásticos privados en Guadalajara y Zapopan.
+GUADALAJARA_FUTURA_ZONAS = [
+    ("Puerta de Hierro / Andares", "20.7106,-103.4124"),
+    ("Providencia / Country", "20.7046,-103.3764"),
+    ("Chapalita", "20.6669,-103.3910"),
+]
+GUADALAJARA_FUTURA_QUERIES = (
+    "cirujano plastico",
+    "cirugia plastica",
+    "cirugia estetica",
+)
+GUADALAJARA_FUTURA_GEO_CLUSTERS = [
+    {
+        "query": query,
+        "coords": coords,
+        "radio": 4000,
+        "scian_default": "621112",
+        "zona": zona,
+        "cap": 5,
+        "require_private": True,
+    }
+    for query in GUADALAJARA_FUTURA_QUERIES
+    for zona, coords in GUADALAJARA_FUTURA_ZONAS
+]
+
 # Señales de sector público a excluir por nombre
 PUBLIC_SECTOR_MARKERS = ("IMSS", "ISSSTE", "SEDENA", "PEMEX", "SECRETARIA DE SALUD", "SECRETARÍA DE SALUD", "CENTRO DE SALUD", "DIF ")
 
@@ -362,6 +387,8 @@ class DenueHarvester(BaseHarvester):
                     clusters = list(CDMX_LEDGER_GEO_CLUSTERS)
                 elif self.plaza == "cdmx" and self.profile == "futura_capital":
                     clusters = list(CDMX_FUTURA_GEO_CLUSTERS)
+                elif self.plaza in ("guadalajara", "gdl") and self.profile == "futura_capital":
+                    clusters = list(GUADALAJARA_FUTURA_GEO_CLUSTERS)
                 else:
                     clusters = list(FUTURA_GEO_CLUSTERS if self.profile == "futura_capital" else ARK_LEDGER_GEO_CLUSTERS)
                 if self.plaza and self.plaza not in ("all", "campeche", "cdmx"):
@@ -481,6 +508,7 @@ class DenueHarvester(BaseHarvester):
             # La API real de DENUE devuelve "Sitio_internet"; "Sitio_Web" se mantiene por los fixtures
             sitio_web=(item.get("Sitio_Web") or item.get("Sitio_internet") or item.get("sitio_web") or "").strip() or None,
             telefono=raw_tel,
+            whatsapp=(item.get("WhatsApp") or item.get("whatsapp") or "").strip() or None,
             email=raw_email,
             tenant_id=tenant_id,
             harvest_profile=self.profile,

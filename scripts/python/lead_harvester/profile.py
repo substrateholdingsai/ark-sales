@@ -63,6 +63,7 @@ class ProfileResult:
     senales_futura: list[str] = field(default_factory=list)
     senales_fintech: list[str] = field(default_factory=list)
     telefonos_detectados: list[str] = field(default_factory=list)
+    whatsapp_detectado: Optional[str] = None
     emails_detectados: list[str] = field(default_factory=list)
     tamano_estimado: str = "desconocido"
     observaciones: list[dict] = field(default_factory=list)
@@ -81,7 +82,12 @@ class HTTPProfiler:
             res.senales_dolor = self._detect(html, PATS_DOLOR)
             res.senales_futura = self._detect(html, PATS_FUTURA)
             res.senales_fintech = self._detect(html, PATS_FINTECH)
-            res.telefonos_detectados = self._extract_phones(html)
+            whatsapp_numbers = self._extract_whatsapp(html)
+            res.whatsapp_detectado = whatsapp_numbers[0] if whatsapp_numbers else None
+            res.telefonos_detectados = [
+                phone for phone in self._extract_phones(html)
+                if phone not in whatsapp_numbers
+            ]
             res.emails_detectados = self._extract_emails(html)
             res.tamano_estimado = self._tamano(html) or "desconocido"
             for sw in res.software_usado:
@@ -114,8 +120,15 @@ class HTTPProfiler:
                 })
             for phone in res.telefonos_detectados[:2]:
                 res.observaciones.append({
-                    "signal_code": "WHATSAPP_CORPORATIVO",
+                    "signal_code": "TELEFONO_CORPORATIVO",
                     "value_text": phone,
+                    "confidence": 0.95,
+                    "evidence_url": f"https://{dominio}",
+                })
+            if res.whatsapp_detectado:
+                res.observaciones.append({
+                    "signal_code": "WHATSAPP_CORPORATIVO",
+                    "value_text": res.whatsapp_detectado,
                     "confidence": 0.95,
                     "evidence_url": f"https://{dominio}",
                 })
@@ -157,6 +170,14 @@ class HTTPProfiler:
                 found.append(digits)
         for m in RE_TEL.findall(html):
             digits = re.sub(r"\D", "", m)
+            if len(digits) >= 10 and digits not in found:
+                found.append(digits)
+        return found
+
+    def _extract_whatsapp(self, html: str) -> list[str]:
+        found: list[str] = []
+        for match in RE_WHATSAPP.findall(html):
+            digits = re.sub(r"\D", "", match)
             if len(digits) >= 10 and digits not in found:
                 found.append(digits)
         return found

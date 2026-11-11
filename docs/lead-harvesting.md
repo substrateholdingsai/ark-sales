@@ -18,6 +18,21 @@ Motor de descubrimiento, perfilamiento HTTP gratuito y calificación híbrida (R
    - Cohortes SQL dinámicas en `sales_cohorts` accionables por Email (Resend) y Voz AI (Telnyx) desde Super Admin (`/superadmin`).
    - Telemetría de ejecuciones en `harvest_runs`. La cosecha programada está desactivada; el workflow es manual.
 
+## Mapeo de datos de contacto
+
+- El nombre de la clínica o empresa pertenece a la cuenta. El contacto solo recibe un nombre personal cuando la fuente lo identifica; las etiquetas genéricas no se guardan como personas.
+- Teléfono de consultorio, WhatsApp y correo se envían y persisten en sus campos separados. Los enlaces `wa.me` alimentan `sales_contacts.whatsapp`; los enlaces `tel:` alimentan el teléfono.
+- El enriquecimiento aplica campos respaldados por evidencia con confianza de al menos 70 en estados `enriched` y `needs_review`, sin reemplazar valores ya informados. Los registros `quarantined` conservan la evidencia para revisión, pero no actualizan los datos de contacto.
+- El perfil Futura admite `--plaza guadalajara` (`gdl`) para una vista geográfica de cirujanos plásticos y estéticos en zonas médicas de Guadalajara/Zapopan; el preview no ingiere prospectos.
+
+Para enriquecer candidatos Futura en memoria sin ingestión ni escrituras a CRM, D1 u observaciones:
+
+```powershell
+python -m lead_harvester.main --profile futura_capital --plaza guadalajara --limit 25 --preview-enriched
+```
+
+`--preview-enriched` es exclusivo del perfil Futura Capital y la fuente DENUE. Solo consulta Serper si `SERPER_API_KEY` está configurada y hace solicitudes GET a sitios HTTPS públicos; las respuestas incluyen evidencia por campo y verificación explícita del municipio Guadalajara/Zapopan, usando el municipio y estado de DENUE o una ubicación DENUE que los nombre explícitamente. El estado Jalisco por sí solo no verifica el municipio. Sitios inseguros, fallos de consulta y campos sin evidencia se reportan como omitidos. Se deduplica por teléfono E.164 y por nombre normalizado + municipio verificado. El modo `--preview` tradicional sigue sin enriquecer; `--skip-enrich` sigue disponible para cosechas normales.
+
 ## Piloto fintech de crédito por app
 
 `fintech_credit_app` es un perfil de **candidatos**, no una confirmación de que cada empresa tenga una app o preste directamente. DENUE registra establecimientos, puede no capturar empresas digitales y sus búsquedas pueden incluir falsos positivos. El perfil consulta cinco términos de búsqueda en CDMX, Monterrey, Guadalajara, Querétaro, Puebla, Mérida, Tijuana y León; el filtro `--plaza` permite limitar una corrida. No usa un SCIAN predeterminado. El perfilamiento web conserva señales encontradas, pero la ausencia de sitio o evidencia no descarta automáticamente al candidato.

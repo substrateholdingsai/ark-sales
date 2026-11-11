@@ -52,10 +52,17 @@ async def main(argv=None) -> int:
     parser.add_argument("--skip-enrich", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--preview", action="store_true", help="Harvest and print a local preview without CRM writes")
+    parser.add_argument(
+        "--preview-enriched",
+        action="store_true",
+        help="Read-only DENUE preview with in-memory contact enrichment (Futura Capital only)",
+    )
     parser.add_argument("--plaza", default=None)
     parser.add_argument("--query", default=None)
     parser.add_argument("--require-email", action="store_true", help="Descartar prospectos sin correo electrónico corporativo")
     args = parser.parse_args(argv)
+    if args.preview_enriched and args.skip_enrich:
+        parser.error("--preview-enriched cannot be combined with --skip-enrich")
 
     base_url = args.base_url or os.getenv("ARK_SALES_BASE_URL")
     global BASE_URL
@@ -86,7 +93,8 @@ async def main(argv=None) -> int:
             "query": args.query,
             "limit": args.limit,
             "enrich": not args.skip_enrich,
-            "preview": args.preview,
+            "preview": args.preview or args.preview_enriched,
+            "preview_enriched": args.preview_enriched,
         }))
         return 0
 
@@ -100,8 +108,9 @@ async def main(argv=None) -> int:
         github_run_url = f"{os.getenv('GITHUB_SERVER_URL')}/{os.getenv('GITHUB_REPOSITORY')}/actions/runs/{os.getenv('GITHUB_RUN_ID')}"
 
     enrich = not args.skip_enrich
+    preview_only = args.preview or args.preview_enriched
 
-    if not args.preview:
+    if not preview_only:
         try:
             await _register_run(run_id, f"{args.source}:{profile}", github_run_url)
         except Exception:
@@ -114,6 +123,9 @@ async def main(argv=None) -> int:
         "leads_enriched": 0,
     }
 
+    if args.preview_enriched:
+        print("PREVIEW ONLY — 0 writes", file=__import__("sys").stderr)
+
     try:
         result = await run_pipeline(
             source=args.source,
@@ -125,13 +137,14 @@ async def main(argv=None) -> int:
             plaza=args.plaza,
             query=args.query,
             require_email=args.require_email,
-            preview_only=args.preview,
+            preview_only=preview_only,
+            preview_enriched=args.preview_enriched,
         )
         metrics["leads_discovered"] = result.total + result.deduped
         metrics["leads_ingested"] = result.ingested
         metrics["leads_deduped"] = result.deduped
         metrics["leads_enriched"] = result.total if enrich else 0
-        if args.preview:
+        if preview_only:
             print(result.model_dump_json(indent=2))
             return 0
         write_report(result, "harvest_report.json")
@@ -144,14 +157,18 @@ async def main(argv=None) -> int:
     except Exception as e:
         # Incluir el tipo de excepción: httpx.ReadTimeout y similares tienen str(e) vacío
         err_msg = f"{type(e).__name__}: {e}"
-        try:
-            await _finish_run(run_id, "failed", metrics, err_msg)
-        except Exception:
-            pass
+        if not preview_only:
+            try:
+                await _finish_run(run_id, "failed", metrics, err_msg)
+            except Exception:
+                pass
         import traceback
         traceback.print_exc()
         print(f"ERROR: {err_msg}", file=__import__("sys").stderr)
         return 1
+    finally:
+        if args.preview_enriched:
+            print("PREVIEW ONLY — 0 writes", file=__import__("sys").stderr)
 
 
 def run() -> None:

@@ -63,8 +63,14 @@ class BaseHarvester(ABC):
                     })
                 if raw_lead.telefono:
                     observaciones.append({
-                        "signal_code": "WHATSAPP_CORPORATIVO",
+                        "signal_code": "TELEFONO_CORPORATIVO",
                         "value_text": raw_lead.telefono,
+                        "confidence": 0.9,
+                    })
+                if raw_lead.whatsapp:
+                    observaciones.append({
+                        "signal_code": "WHATSAPP_CORPORATIVO",
+                        "value_text": raw_lead.whatsapp,
                         "confidence": 0.9,
                         "evidence_url": None,
                     })
@@ -81,6 +87,8 @@ class BaseHarvester(ABC):
                     observaciones.extend(profile_result.observaciones)
                     if not raw_lead.telefono and profile_result.telefonos_detectados:
                         raw_lead.telefono = profile_result.telefonos_detectados[0]
+                    if not raw_lead.whatsapp and profile_result.whatsapp_detectado:
+                        raw_lead.whatsapp = profile_result.whatsapp_detectado
                     if not raw_lead.email and profile_result.emails_detectados:
                         raw_lead.email = profile_result.emails_detectados[0]
                 if observaciones:

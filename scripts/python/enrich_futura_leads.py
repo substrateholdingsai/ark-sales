@@ -55,6 +55,8 @@ DISCARD_EMAILS = {
     "cloudflare.com",
 }
 
+CONTACT_FIELD_MIN_CONFIDENCE = 70
+
 
 def clean_phone(raw: str) -> Optional[str]:
     """Valida y normaliza un teléfono a formato E.164 internacional para México (+52...)."""
@@ -416,10 +418,17 @@ def get_candidate_leads(limit: int, tenant_id: str) -> List[Dict[str, Any]]:
 
     cmd = f'npx wrangler d1 execute ark-sales-db --remote --json --command "{sql}"'
     env = os.environ.copy()
-    env["CLOUDFLARE_ACCOUNT_ID"] = "ccab12c2e99a74d45eda626cb81c5c0c"
 
     logger.info(f"Consultando Cloudflare D1 para {tenant_id} (límite {limit})...")
-    res = subprocess.run(cmd, capture_output=True, text=True, env=env, shell=True)
+    res = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        shell=True,
+    )
 
     stdout = res.stdout or ""
     if "[" in stdout and "]" in stdout:
@@ -440,55 +449,105 @@ def get_candidate_leads(limit: int, tenant_id: str) -> List[Dict[str, Any]]:
     return []
 
 
+def build_contact_update_sql(item: Dict[str, Any], run_id: str) -> str:
+    """Build a guarded contact update, keeping review status separate from field evidence."""
+    contact_id = str(item["contact_id"]).replace("'", "''")
+    decision = item["decision"]
+    data = item["data"]
+    updates = []
+
+    if decision != "quarantined":
+        verified = {}
+        for field in ("phone", "email", "whatsapp", "doctor_name"):
+            value = data.get(field)
+            if not value:
+                continue
+            confidence = max(
+                (
+                    int(evidence.get("confidence") or 0)
+                    for evidence in item.get("evidence", [])
+                    if evidence.get("field") == field
+                    and evidence.get("normalized") == value
+                ),
+                default=0,
+            )
+            if confidence >= CONTACT_FIELD_MIN_CONFIDENCE:
+                verified[field] = str(value).replace("'", "''")
+
+        if "phone" in verified:
+            updates.append(
+                f"phone = CASE WHEN phone IS NULL OR TRIM(phone) = '' OR phone = '-' "
+                f"THEN '{verified['phone']}' ELSE phone END"
+            )
+            raw_phone = str(data.get("raw_phone") or data["phone"]).replace("'", "''")
+            updates.append(
+                f"raw_phone = CASE WHEN phone IS NULL OR TRIM(phone) = '' OR phone = '-' "
+                f"THEN '{raw_phone}' ELSE raw_phone END"
+            )
+        if "email" in verified:
+            updates.append(
+                f"email = CASE WHEN email IS NULL OR TRIM(email) = '' "
+                f"OR LOWER(email) LIKE '%@harvest.arksystems.local' "
+                f"THEN '{verified['email']}' ELSE email END"
+            )
+        if "whatsapp" in verified:
+            updates.append(
+                f"whatsapp = CASE WHEN whatsapp IS NULL OR TRIM(whatsapp) = '' OR whatsapp = '-' "
+                f"THEN '{verified['whatsapp']}' ELSE whatsapp END"
+            )
+        if "doctor_name" in verified:
+            updates.append(
+                f"name = CASE WHEN name IS NULL OR TRIM(name) = '' "
+                f"OR LOWER(name) IN ('contacto corporativo', 'sin nombre', "
+                f"'titular de dirección general', 'titular de direccion general') "
+                f"THEN '{verified['doctor_name']}' ELSE name END"
+            )
+            updates.append(
+                "title = CASE WHEN title IS NULL OR TRIM(title) = '' "
+                "OR LOWER(title) IN ('dirección general', 'direccion general') "
+                "THEN 'Titular / Director Médico' ELSE title END"
+            )
+
+    act_score = int(item["actionability_score"])
+    conf_score = int(item["confidence_score"])
+    escaped_run_id = run_id.replace("'", "''")
+    if decision == "enriched":
+        updates.extend([
+            "enrichment_status = 'enriched'",
+            f"actionability_score = {act_score}",
+            f"confidence_score = {conf_score}",
+            f"enrichment_run_id = '{escaped_run_id}'",
+        ])
+    elif decision == "needs_review":
+        updates.extend([
+            "enrichment_status = CASE WHEN enrichment_status = 'enriched' THEN 'enriched' ELSE 'needs_review' END",
+            f"actionability_score = MAX(COALESCE(actionability_score, 0), {act_score})",
+            f"confidence_score = MAX(COALESCE(confidence_score, 0), {conf_score})",
+            f"enrichment_run_id = '{escaped_run_id}'",
+        ])
+    else:
+        updates.extend([
+            "enrichment_status = 'quarantined'",
+            "quarantined_at = CURRENT_TIMESTAMP",
+            "quarantine_reason = 'sin_contacto_digital_verificable'",
+            f"actionability_score = {act_score}",
+            f"confidence_score = {conf_score}",
+            f"enrichment_run_id = '{escaped_run_id}'",
+        ])
+    updates.append("updated_at = CURRENT_TIMESTAMP")
+    return f"UPDATE sales_contacts SET {', '.join(updates)} WHERE id = '{contact_id}';"
+
+
 def apply_d1_updates(results: List[Dict[str, Any]], run_id: str):
     """Aplica las actualizaciones de enriquecimiento, cuarentena y evidencia a Cloudflare D1 en lotes optimizados."""
     env = os.environ.copy()
-    env["CLOUDFLARE_ACCOUNT_ID"] = "ccab12c2e99a74d45eda626cb81c5c0c"
 
     statements = []
     for item in results:
         contact_id = item["contact_id"]
         account_id = item["account_id"]
         tenant_id = item["tenant_id"]
-        decision = item["decision"]
-        act_score = item["actionability_score"]
-        conf_score = item["confidence_score"]
-        data = item["data"]
-
-        if decision == "enriched":
-            updates = []
-            if data.get("phone"):
-                safe_ph = data['phone'].replace("'", "''")
-                updates.append(f"phone = '{safe_ph}'")
-                safe_raw = (data.get('raw_phone') or data['phone']).replace("'", "''")
-                updates.append(f"raw_phone = '{safe_raw}'")
-            if data.get("email"):
-                safe_em = data['email'].replace("'", "''")
-                updates.append(f"email = '{safe_em}'")
-            if data.get("whatsapp"):
-                safe_wa = data['whatsapp'].replace("'", "''")
-                updates.append(f"whatsapp_url = '{safe_wa}'")
-            if data.get("doctor_name"):
-                safe_doc = data['doctor_name'].replace("'", "''")
-                updates.append(f"name = '{safe_doc}'")
-                updates.append("title = 'Titular / Director Médico'")
-
-            updates.append("enrichment_status = 'enriched'")
-            updates.append(f"actionability_score = {act_score}")
-            updates.append(f"confidence_score = {conf_score}")
-            updates.append(f"enrichment_run_id = '{run_id}'")
-            updates.append("updated_at = CURRENT_TIMESTAMP")
-
-            sql = f"UPDATE sales_contacts SET {', '.join(updates)} WHERE id = '{contact_id}';"
-            statements.append(sql)
-
-        elif decision == "needs_review":
-            sql = f"UPDATE sales_contacts SET enrichment_status = 'needs_review', actionability_score = {act_score}, confidence_score = {conf_score}, enrichment_run_id = '{run_id}', updated_at = CURRENT_TIMESTAMP WHERE id = '{contact_id}';"
-            statements.append(sql)
-
-        else:  # quarantined
-            sql = f"UPDATE sales_contacts SET enrichment_status = 'quarantined', quarantined_at = CURRENT_TIMESTAMP, quarantine_reason = 'sin_contacto_digital_verificable', actionability_score = {act_score}, confidence_score = {conf_score}, enrichment_run_id = '{run_id}', updated_at = CURRENT_TIMESTAMP WHERE id = '{contact_id}';"
-            statements.append(sql)
+        statements.append(build_contact_update_sql(item, run_id))
 
         # Insertar evidencias
         for ev in item.get("evidence", []):
@@ -498,7 +557,19 @@ def apply_d1_updates(results: List[Dict[str, Any]], run_id: str):
             s_norm = (ev.get('normalized') or '').replace("'", "''")
             s_field = (ev.get('field') or '').replace("'", "''")
             s_type = (ev.get('source_type') or '').replace("'", "''")
-            ins_ev = f"INSERT INTO sales_enrichment_evidence (id, tenant_id, contact_id, account_id, source_type, source_url, field_name, raw_value, normalized_value, confidence_score, run_id) VALUES ('{ev_id}', '{tenant_id}', '{contact_id}', '{account_id}', '{s_type}', '{s_url}', '{s_field}', '{s_raw}', '{s_norm}', {ev.get('confidence', 0)}, '{run_id}');"
+            evidence_run_id = str(ev.get("run_id") or item.get("run_id") or run_id).replace("'", "''")
+            ins_ev = (
+                "INSERT INTO sales_enrichment_evidence "
+                "(id, tenant_id, contact_id, account_id, source_type, source_url, field_name, "
+                "raw_value, normalized_value, confidence_score, run_id) "
+                f"SELECT '{ev_id}', '{tenant_id}', '{contact_id}', '{account_id}', '{s_type}', "
+                f"'{s_url}', '{s_field}', '{s_raw}', '{s_norm}', {ev.get('confidence', 0)}, "
+                f"'{evidence_run_id}' WHERE NOT EXISTS ("
+                "SELECT 1 FROM sales_enrichment_evidence "
+                f"WHERE contact_id = '{contact_id}' AND run_id = '{evidence_run_id}' "
+                f"AND field_name = '{s_field}' AND COALESCE(normalized_value, '') = '{s_norm}'"
+                ");"
+            )
             statements.append(ins_ev)
 
     logger.info(f"Generadas {len(statements)} sentencias SQL. Ejecutando en lotes a D1...")
@@ -515,12 +586,14 @@ def apply_d1_updates(results: List[Dict[str, Any]], run_id: str):
                 env=env,
                 shell=True,
                 capture_output=True,
-                text=True
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if res.returncode != 0:
                 logger.error(f"Error en lote {i}: {res.stderr}")
-            else:
-                logger.info(f"Lote {i} - {i + len(chunk)} aplicado con éxito a D1.")
+                raise RuntimeError(f"No se pudo aplicar el lote {i} a D1 (exit code {res.returncode}).")
+            logger.info(f"Lote {i} - {i + len(chunk)} aplicado con éxito a D1.")
         finally:
             if batch_file.exists():
                 batch_file.unlink()

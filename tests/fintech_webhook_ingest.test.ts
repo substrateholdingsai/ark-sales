@@ -3,6 +3,55 @@ import { Hono } from "hono";
 import { webhookRouter } from "../src/routes/webhooks";
 
 describe("harvester webhook ingestion", () => {
+  it("keeps corporate phone and WhatsApp separate and does not store a placeholder as a person", async () => {
+    const statements: Array<{ sql: string; params: unknown[] }> = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...params: unknown[]) => {
+          statements.push({ sql, params });
+          return {
+            run: vi.fn().mockResolvedValue({ success: true }),
+            first: vi.fn().mockResolvedValue(null),
+          };
+        }),
+      })),
+      batch: vi.fn().mockResolvedValue([{ success: true }]),
+    };
+    const app = new Hono();
+    app.route("/webhooks/ingest", webhookRouter);
+
+    const response = await app.fetch(
+      new Request("http://localhost/webhooks/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: "lead_contact_mapping_test",
+          email: "contacto1@example.com",
+          contact_email: "contacto1@example.com",
+          contact_name: "Ana Ejemplo",
+          contact_phone: "+523331234567",
+          contact_whatsapp: "+523331234568",
+          destination: "bundle",
+          vertical: "bundle",
+          account_context: {
+            despacho_nombre: "Hospital San Gabriel del Mayab",
+            tamano: "50+",
+            productos_interes: ["bundle"],
+            dolor_principal: "inversion_patrimonial",
+          },
+        }),
+      }),
+      { DB: db, ENVIRONMENT: "test" } as any,
+    );
+
+    expect(response.status).toBe(201);
+    const contactInsert = statements.find(({ sql }) => sql.includes("INSERT OR IGNORE INTO sales_contacts"));
+    expect(contactInsert?.sql).toContain("whatsapp");
+    expect(contactInsert?.params[2]).toBeNull();
+    expect(contactInsert?.params[4]).toBe("+523331234567");
+    expect(contactInsert?.params[5]).toBe("+523331234568");
+  });
+
   it("persists Ark Ledger tenancy and a candidate segment while routing to Angel", async () => {
     const statements: Array<{ sql: string; params: unknown[] }> = [];
     const db = {
@@ -26,7 +75,7 @@ describe("harvester webhook ingestion", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: "lead_fintech_test",
-          email: "contacto@credito.example.test",
+          email: "contacto2@example.com",
           destination: "angel",
           vertical: "cobranza",
           tenant_id: "acc_ark_ledger",
@@ -80,7 +129,7 @@ describe("harvester webhook ingestion", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: "lead_sipres_14981",
-          email: "contacto@bancrea.example",
+          email: "contacto3@example.com",
           destination: "angel",
           vertical: "cobranza",
           tenant_id: "acc_ark_ledger",
