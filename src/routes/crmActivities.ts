@@ -27,11 +27,26 @@ crmActivitiesRouter.get("/", async (c) => {
     WHERE 1=1
   `;
   const params: any[] = [];
-  if (accountId) { sql += " AND a.account_id = ?"; params.push(accountId); }
-  if (opportunityId) { sql += " AND a.opportunity_id = ?"; params.push(opportunityId); }
-  if (leadId) { sql += " AND a.lead_id = ?"; params.push(leadId); }
-  if (contactId) { sql += " AND a.contact_id = ?"; params.push(contactId); }
-  if (type) { sql += " AND a.type = ?"; params.push(type); }
+  if (accountId) {
+    sql += " AND a.account_id = ?";
+    params.push(accountId);
+  }
+  if (opportunityId) {
+    sql += " AND a.opportunity_id = ?";
+    params.push(opportunityId);
+  }
+  if (leadId) {
+    sql += " AND a.lead_id = ?";
+    params.push(leadId);
+  }
+  if (contactId) {
+    sql += " AND a.contact_id = ?";
+    params.push(contactId);
+  }
+  if (type) {
+    sql += " AND a.type = ?";
+    params.push(type);
+  }
   sql += " ORDER BY a.created_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
   const stmt = c.env.DB.prepare(sql);
@@ -44,7 +59,7 @@ crmActivitiesRouter.post("/", requireRole("write"), async (c) => {
   try {
     const body = await c.req.json();
     const type = body?.type || "note";
-    const validTypes = ["note","call","email","demo","stage_change","task","system"];
+    const validTypes = ["note", "call", "email", "demo", "stage_change", "task", "system"];
     if (!validTypes.includes(type)) return c.json({ error: "Tipo de actividad inválido." }, 400);
 
     const rawContent = typeof body?.content === "string" ? body.content : null;
@@ -92,10 +107,14 @@ crmActivitiesRouter.post("/", requireRole("write"), async (c) => {
     const id = `act_${crypto.randomUUID()}`;
     const metadata = body?.metadata ? JSON.stringify(body.metadata) : null;
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       INSERT INTO sales_activities (id, account_id, contact_id, opportunity_id, lead_id, type, author_user_id, content, metadata_json, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `).bind(id, accountId, contactId, opportunityId, leadId, type, c.get("user")!.sub, content, metadata).run();
+    `,
+    )
+      .bind(id, accountId, contactId, opportunityId, leadId, type, c.get("user")!.sub, content, metadata)
+      .run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -108,12 +127,16 @@ crmActivitiesRouter.post("/", requireRole("write"), async (c) => {
       ip: clientIp(c),
     });
 
-    const activity = await c.env.DB.prepare(`
+    const activity = await c.env.DB.prepare(
+      `
       SELECT a.*, u.name AS author_name
       FROM sales_activities a
       LEFT JOIN crm_users u ON u.id = a.author_user_id
       WHERE a.id = ?
-    `).bind(id).first();
+    `,
+    )
+      .bind(id)
+      .first();
     return c.json({ activity }, 201);
   } catch (err: any) {
     return c.json({ error: err.message || "Error registrando actividad" }, 400);

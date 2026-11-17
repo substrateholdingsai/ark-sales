@@ -112,12 +112,17 @@ export async function executeAdminTool(name: string, args: any, env: Env, user: 
     if (name === "enrich_contact") {
       const contactId = String(args?.contact_id || "").trim();
       if (!contactId) return { success: false, error: "contact_id requerido" };
-      const contact: any = await db.prepare(`
+      const contact: any = await db
+        .prepare(
+          `
         SELECT c.*, a.name AS account_name, a.city AS account_city
         FROM sales_contacts c
         LEFT JOIN sales_accounts a ON c.account_id = a.id
         WHERE c.id = ?
-      `).bind(contactId).first();
+      `,
+        )
+        .bind(contactId)
+        .first();
       if (!contact) return { success: false, error: "Contacto no encontrado en BD" };
 
       const enrichment = await enrichDoctorLead({
@@ -128,16 +133,21 @@ export async function executeAdminTool(name: string, args: any, env: Env, user: 
 
       if (enrichment.found && args?.auto_apply !== false) {
         const isPlaceholder = !contact.name || contact.name === "Sin nombre" || contact.name.toLowerCase().includes("contacto corporativo");
-        const newName = (isPlaceholder && enrichment.doctor_name) ? enrichment.doctor_name : contact.name;
+        const newName = isPlaceholder && enrichment.doctor_name ? enrichment.doctor_name : contact.name;
         const newPhone = enrichment.phone || contact.phone;
         const newWa = enrichment.whatsapp || contact.whatsapp;
         const newTitle = enrichment.title || contact.title;
 
-        await db.prepare(`
+        await db
+          .prepare(
+            `
           UPDATE sales_contacts
           SET name = ?, phone = ?, whatsapp = ?, title = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(newName, newPhone, newWa, newTitle, contactId).run();
+        `,
+          )
+          .bind(newName, newPhone, newWa, newTitle, contactId)
+          .run();
 
         await writeAudit(db, user, "enrich_contact", contactId, {
           previous: { name: contact.name, phone: contact.phone, whatsapp: contact.whatsapp },
@@ -161,13 +171,15 @@ export async function executeAdminTool(name: string, args: any, env: Env, user: 
     }
 
     if (name === "create_lead") {
-      const email = String(args?.email || "").trim().toLowerCase();
+      const email = String(args?.email || "")
+        .trim()
+        .toLowerCase();
       if (!email || !email.includes("@")) return { success: false, error: "Email inválido" };
       const id = `lead_${crypto.randomUUID()}`;
       await db
         .prepare(
           `INSERT INTO sales_leads (id, email, despacho_nombre, tamano, especialista_asignado, estado, score, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'intake', 'nuevo', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+           VALUES (?, ?, ?, ?, 'intake', 'nuevo', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         )
         .bind(id, email, args?.despacho_nombre ?? null, args?.tamano ?? null)
         .run();
@@ -236,7 +248,7 @@ async function writeAudit(db: any, user: any, action: string, entityId: string, 
     await db
       .prepare(
         `INSERT INTO crm_audit_log (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
-         VALUES (?, ?, ?, 'assistant', ?, ?, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, 'assistant', ?, ?, CURRENT_TIMESTAMP)`,
       )
       .bind(`aud_${crypto.randomUUID()}`, user?.sub || user?.id || null, action, entityId, JSON.stringify(payload || {}))
       .run();
@@ -245,24 +257,13 @@ async function writeAudit(db: any, user: any, action: string, entityId: string, 
   }
 }
 
-export async function runDeterministicFallback(
-  message: string,
-  tenantId: string | null,
-  env: Env,
-  user: any
-): Promise<{ reply: string; toolsCalled: any[] }> {
+export async function runDeterministicFallback(message: string, tenantId: string | null, env: Env, user: any): Promise<{ reply: string; toolsCalled: any[] }> {
   const lower = message.toLowerCase().trim();
   const toolsCalled: any[] = [];
   const db = env?.DB;
 
   // 1. Acceso a BD / Estado del sistema / Saludo inicial
-  if (
-    lower.includes("base de datos") ||
-    lower.includes("acceso") ||
-    lower.includes("conectado") ||
-    lower.includes("conexion") ||
-    lower.includes("conexión")
-  ) {
+  if (lower.includes("base de datos") || lower.includes("acceso") || lower.includes("conectado") || lower.includes("conexion") || lower.includes("conexión")) {
     if (db) {
       const metricsRes = await executeAdminTool("get_metrics", {}, env, user);
       toolsCalled.push({ name: "get_metrics", args: {}, result: metricsRes });
@@ -340,12 +341,7 @@ export async function runDeterministicFallback(
   if (lower.includes("contacto") || lower.includes("doctor") || lower.includes("medico") || lower.includes("médico")) {
     const res = await executeAdminTool("list_contacts", { limit: 5 }, env, user);
     toolsCalled.push({ name: "list_contacts", args: { limit: 5 }, result: res });
-    const list = (res.contacts || [])
-      .map(
-        (ct: any) =>
-          `• **${ct.name || "Sin nombre"}** | Tel: ${ct.phone || "-"} | WA: ${ct.whatsapp || "-"}`
-      )
-      .join("\n");
+    const list = (res.contacts || []).map((ct: any) => `• **${ct.name || "Sin nombre"}** | Tel: ${ct.phone || "-"} | WA: ${ct.whatsapp || "-"}`).join("\n");
     return {
       reply: `📋 **Últimos contactos registrados:**\n\n${list || "Sin contactos registrados."}\n\n*(Mostrando los 5 más recientes)*`,
       toolsCalled,
@@ -359,9 +355,7 @@ export async function runDeterministicFallback(
     const res = await executeAdminTool("create_lead", { email }, env, user);
     toolsCalled.push({ name: "create_lead", args: { email }, result: res });
     return {
-      reply: res.success
-        ? `✅ Lead creado exitosamente con ID **${res.lead_id}** (${res.email}).`
-        : `Error creando lead: ${res.error}`,
+      reply: res.success ? `✅ Lead creado exitosamente con ID **${res.lead_id}** (${res.email}).` : `Error creando lead: ${res.error}`,
       toolsCalled,
     };
   }
@@ -370,12 +364,7 @@ export async function runDeterministicFallback(
   if (lower.includes("enviar correo") || lower.includes("mandar email")) {
     const toMatch = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
     if (toMatch) {
-      const res = await executeAdminTool(
-        "send_email",
-        { to: toMatch[0], subject: "Contacto ARK Systems" },
-        env,
-        user
-      );
+      const res = await executeAdminTool("send_email", { to: toMatch[0], subject: "Contacto ARK Systems" }, env, user);
       toolsCalled.push({ name: "send_email", args: { to: toMatch[0] }, result: res });
       return {
         reply: res.success ? `✉️ Correo enviado a **${toMatch[0]}**.` : `Error: ${res.error}`,

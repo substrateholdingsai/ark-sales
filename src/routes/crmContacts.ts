@@ -22,7 +22,7 @@ const CONTACT_CITY_FILTERS: Record<string, { cities: string[]; phones?: string[]
   campeche: { cities: ["Campeche", "Carmen"], phones: ["981", "938"] },
   cdmx: { cities: ["CDMX", "Ciudad de México", "Ciudad de Mexico", "Distrito Federal", "Polanco", "Reforma", "Insurgentes"], phones: ["55 ", "+5255"] },
   monterrey: { cities: ["Monterrey", "San Pedro", "Nuevo León", "Nuevo Leon"], phones: ["81 ", "+5281"] },
-  guadalajara: { cities: ["Guadalajara", "Zapopan", "Jalisco"], phones: ["33 ", "+5233"] }
+  guadalajara: { cities: ["Guadalajara", "Zapopan", "Jalisco"], phones: ["33 ", "+5233"] },
 };
 
 function contactCityFilter(city: string, params: any[]) {
@@ -93,8 +93,10 @@ crmContactsRouter.get("/", async (c) => {
   }
 
   if (accountId) {
-    sql += " AND c.account_id = ?"; params.push(accountId);
-    countSql += " AND c.account_id = ?"; cparams.push(accountId);
+    sql += " AND c.account_id = ?";
+    params.push(accountId);
+    countSql += " AND c.account_id = ?";
+    cparams.push(accountId);
   }
   if (city) {
     sql += ` AND ${contactCityFilter(city, params)}`;
@@ -137,11 +139,11 @@ crmContactsRouter.get("/", async (c) => {
       name: row.account_name,
       tenant_id: row.account_tenant_id,
       scian_code: row.account_scian,
-      origin: row.account_origin
-    })
+      origin: row.account_origin,
+    }),
   }));
 
-  return c.json({ items, total: countRow?.n ?? (results?.length ?? 0), limit, offset });
+  return c.json({ items, total: countRow?.n ?? results?.length ?? 0, limit, offset });
 });
 
 crmContactsRouter.get("/:id", async (c) => {
@@ -168,10 +170,14 @@ crmContactsRouter.post("/", requireRole("write"), async (c) => {
     const consent = body?.consent_status ?? null;
     const prefs = body?.contact_preferences ? JSON.stringify(body.contact_preferences) : null;
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       INSERT INTO sales_contacts (id, account_id, name, email, phone, whatsapp, title, consent_status, contact_preferences_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(id, accountId, name, email, phone, whatsapp, title, consent, prefs).run();
+    `,
+    )
+      .bind(id, accountId, name, email, phone, whatsapp, title, consent, prefs)
+      .run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -207,16 +213,28 @@ crmContactsRouter.patch("/:id", requireRole("write"), async (c) => {
     const consent = body?.consent_status !== undefined ? body.consent_status : existing.consent_status;
     const enrichment_status = body?.enrichment_status !== undefined ? body.enrichment_status : existing.enrichment_status;
     const quarantine_reason = body?.quarantine_reason !== undefined ? body.quarantine_reason : existing.quarantine_reason;
-    const quarantined_at = enrichment_status === 'quarantined' ? (existing.quarantined_at || new Date().toISOString()) : (enrichment_status === 'enriched' || enrichment_status === 'pending' ? null : existing.quarantined_at);
-    const prefs = body?.contact_preferences !== undefined
-      ? (body.contact_preferences ? JSON.stringify(body.contact_preferences) : null)
-      : existing.contact_preferences_json;
+    const quarantined_at =
+      enrichment_status === "quarantined"
+        ? existing.quarantined_at || new Date().toISOString()
+        : enrichment_status === "enriched" || enrichment_status === "pending"
+          ? null
+          : existing.quarantined_at;
+    const prefs =
+      body?.contact_preferences !== undefined
+        ? body.contact_preferences
+          ? JSON.stringify(body.contact_preferences)
+          : null
+        : existing.contact_preferences_json;
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       UPDATE sales_contacts
       SET account_id = ?, name = ?, email = ?, phone = ?, whatsapp = ?, title = ?, consent_status = ?, contact_preferences_json = ?, enrichment_status = ?, quarantine_reason = ?, quarantined_at = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(accountId, name, email, phone, whatsapp, title, consent, prefs, enrichment_status, quarantine_reason, quarantined_at, id).run();
+    `,
+    )
+      .bind(accountId, name, email, phone, whatsapp, title, consent, prefs, enrichment_status, quarantine_reason, quarantined_at, id)
+      .run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -239,9 +257,7 @@ crmContactsRouter.patch("/:id", requireRole("write"), async (c) => {
 crmContactsRouter.get("/:id/evidence", async (c) => {
   const id = c.req.param("id");
   try {
-    const { results } = await c.env.DB.prepare(
-      "SELECT * FROM sales_enrichment_evidence WHERE contact_id = ? ORDER BY extracted_at DESC"
-    ).bind(id).all();
+    const { results } = await c.env.DB.prepare("SELECT * FROM sales_enrichment_evidence WHERE contact_id = ? ORDER BY extracted_at DESC").bind(id).all();
     return c.json({ evidence: results || [] });
   } catch (err: any) {
     return c.json({ evidence: [] });
@@ -252,16 +268,22 @@ crmContactsRouter.get("/:id/evidence", async (c) => {
 crmContactsRouter.post("/:id/enrich", requireRole("write"), async (c) => {
   try {
     const id = c.req.param("id");
-    const existing: any = await c.env.DB.prepare(`
+    const existing: any = await c.env.DB.prepare(
+      `
 SELECT c.*, a.name AS account_name, a.city AS account_city, a.scian_code AS account_scian
       FROM sales_contacts c
       LEFT JOIN sales_accounts a ON c.account_id = a.id
       WHERE c.id = ?
-    `).bind(id).first();
+    `,
+    )
+      .bind(id)
+      .first();
     if (!existing) return c.json({ error: "Contacto no encontrado." }, 404);
 
     let body: any = {};
-    try { body = await c.req.json(); } catch {}
+    try {
+      body = await c.req.json();
+    } catch {}
     const autoApply = body?.auto_apply !== false;
 
     const enrichment = await enrichLeadByVertical({
@@ -275,17 +297,21 @@ SELECT c.*, a.name AS account_name, a.city AS account_city, a.scian_code AS acco
     if (autoApply && enrichment.found) {
       const titularName = (enrichment as any).titular_name || (enrichment as any).doctor_name || (enrichment as any).contact_name;
       const isPlaceholder = !existing.name || existing.name === "Sin nombre" || existing.name.toLowerCase().includes("contacto corporativo");
-      const newName = (isPlaceholder && titularName) ? titularName : (titularName || existing.name);
+      const newName = isPlaceholder && titularName ? titularName : titularName || existing.name;
       const newPhone = enrichment.phone || existing.phone;
       const newWhatsapp = enrichment.whatsapp || existing.whatsapp;
       const newTitle = (enrichment as any).title || existing.title;
       const newEmail = (enrichment as any).email || existing.email;
 
-      await c.env.DB.prepare(`
+      await c.env.DB.prepare(
+        `
         UPDATE sales_contacts
         SET name = ?, phone = COALESCE(?, phone), whatsapp = COALESCE(?, whatsapp), email = COALESCE(?, email), title = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(newName, enrichment.phone || null, enrichment.whatsapp || null, newEmail, newTitle, id).run();
+      `,
+      )
+        .bind(newName, enrichment.phone || null, enrichment.whatsapp || null, newEmail, newTitle, id)
+        .run();
 
       const audit = new AuditService(c.env.DB);
       await audit.record({
@@ -361,10 +387,18 @@ crmContactsRouter.post("/bulk-delete", requireRole("write"), async (c) => {
 
     for (const chunk of chunks) {
       const placeholders = chunk.map(() => "?").join(",");
-      await c.env.DB.prepare(`UPDATE sales_leads SET contact_id = NULL WHERE contact_id IN (${placeholders})`).bind(...chunk).run();
-      await c.env.DB.prepare(`UPDATE sales_opportunities SET contact_id = NULL WHERE contact_id IN (${placeholders})`).bind(...chunk).run();
-      await c.env.DB.prepare(`UPDATE sales_activities SET contact_id = NULL WHERE contact_id IN (${placeholders})`).bind(...chunk).run();
-      await c.env.DB.prepare(`DELETE FROM sales_contacts WHERE id IN (${placeholders})`).bind(...chunk).run();
+      await c.env.DB.prepare(`UPDATE sales_leads SET contact_id = NULL WHERE contact_id IN (${placeholders})`)
+        .bind(...chunk)
+        .run();
+      await c.env.DB.prepare(`UPDATE sales_opportunities SET contact_id = NULL WHERE contact_id IN (${placeholders})`)
+        .bind(...chunk)
+        .run();
+      await c.env.DB.prepare(`UPDATE sales_activities SET contact_id = NULL WHERE contact_id IN (${placeholders})`)
+        .bind(...chunk)
+        .run();
+      await c.env.DB.prepare(`DELETE FROM sales_contacts WHERE id IN (${placeholders})`)
+        .bind(...chunk)
+        .run();
     }
 
     const audit = new AuditService(c.env.DB);

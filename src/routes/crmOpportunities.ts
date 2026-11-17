@@ -34,10 +34,22 @@ crmOpportunitiesRouter.get("/", async (c) => {
   const leadId = c.req.query("lead_id");
   let sql = "SELECT * FROM sales_opportunities WHERE 1=1";
   const params: any[] = [];
-  if (stage) { sql += " AND stage = ?"; params.push(stage); }
-  if (owner) { sql += " AND owner_user_id = ?"; params.push(owner); }
-  if (accountId) { sql += " AND account_id = ?"; params.push(accountId); }
-  if (leadId) { sql += " AND lead_id = ?"; params.push(leadId); }
+  if (stage) {
+    sql += " AND stage = ?";
+    params.push(stage);
+  }
+  if (owner) {
+    sql += " AND owner_user_id = ?";
+    params.push(owner);
+  }
+  if (accountId) {
+    sql += " AND account_id = ?";
+    params.push(accountId);
+  }
+  if (leadId) {
+    sql += " AND lead_id = ?";
+    params.push(leadId);
+  }
   sql += " ORDER BY updated_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
   const stmt = c.env.DB.prepare(sql);
@@ -61,7 +73,7 @@ crmOpportunitiesRouter.post("/", requireRole("write"), async (c) => {
     const parsed = z.record(z.any()).safeParse(body);
     if (!parsed.success) return c.json({ error: "Payload inválido." }, 400);
     const stage = body?.stage || "nuevo";
-    const validStages = ["nuevo","contactado","calificado","demo_agendada","propuesta_enviada","negociacion","ganado","perdido"];
+    const validStages = ["nuevo", "contactado", "calificado", "demo_agendada", "propuesta_enviada", "negociacion", "ganado", "perdido"];
     if (!validStages.includes(stage)) return c.json({ error: "Etapa inválida." }, 400);
     if (stage === "perdido" && !body?.loss_reason) {
       // allow but warn? require reason
@@ -83,10 +95,14 @@ crmOpportunitiesRouter.post("/", requireRole("write"), async (c) => {
       if (!acc) return c.json({ error: "La cuenta no existe." }, 400);
     }
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       INSERT INTO sales_opportunities (id, account_id, contact_id, lead_id, stage, owner_user_id, products_interest_json, estimated_value, currency, expected_close_date, loss_reason, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(id, accountId, contactId, leadId, stage, owner, products, value, currency, closeDate, lossReason).run();
+    `,
+    )
+      .bind(id, accountId, contactId, leadId, stage, owner, products, value, currency, closeDate, lossReason)
+      .run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -126,17 +142,31 @@ crmOpportunitiesRouter.patch("/:id", requireRole("write"), async (c) => {
       stage = newStage;
 
       // log stage change as activity
-      await c.env.DB.prepare(`
+      await c.env.DB.prepare(
+        `
         INSERT INTO sales_activities (id, account_id, opportunity_id, lead_id, type, author_user_id, content, created_at)
         VALUES (?, ?, ?, ?, 'stage_change', ?, ?, CURRENT_TIMESTAMP)
-      `).bind(`act_${crypto.randomUUID()}`, existing.account_id, id, existing.lead_id, c.get("user")!.sub, `Etapa: ${existing.stage} -> ${stage}`).run();
+      `,
+      )
+        .bind(`act_${crypto.randomUUID()}`, existing.account_id, id, existing.lead_id, c.get("user")!.sub, `Etapa: ${existing.stage} -> ${stage}`)
+        .run();
 
       // Automatizaciones (Fase 5)
       try {
         if (stage === "demo_agendada") {
-          await autoTaskOnDemoScheduled(c.env.DB, { opportunityId: id, accountId: existing.account_id, leadId: existing.lead_id, ownerUserId: existing.owner_user_id });
+          await autoTaskOnDemoScheduled(c.env.DB, {
+            opportunityId: id,
+            accountId: existing.account_id,
+            leadId: existing.lead_id,
+            ownerUserId: existing.owner_user_id,
+          });
         } else if (stage === "propuesta_enviada") {
-          await autoTaskOnProposalSent(c.env.DB, { opportunityId: id, accountId: existing.account_id, leadId: existing.lead_id, ownerUserId: existing.owner_user_id });
+          await autoTaskOnProposalSent(c.env.DB, {
+            opportunityId: id,
+            accountId: existing.account_id,
+            leadId: existing.lead_id,
+            ownerUserId: existing.owner_user_id,
+          });
         } else if (stage === "ganado" && existing.lead_id) {
           const lead: any = await c.env.DB.prepare("SELECT * FROM sales_leads WHERE id = ?").bind(existing.lead_id).first();
           if (lead) {
@@ -154,13 +184,14 @@ crmOpportunitiesRouter.patch("/:id", requireRole("write"), async (c) => {
             });
           }
         }
-      } catch (e) { console.warn("[crmOpportunities] automation error:", e); }
+      } catch (e) {
+        console.warn("[crmOpportunities] automation error:", e);
+      }
     }
 
     const owner = body?.owner_user_id !== undefined ? body.owner_user_id : existing.owner_user_id;
-    const products = body?.products_interest !== undefined
-      ? (body.products_interest ? JSON.stringify(body.products_interest) : null)
-      : existing.products_interest_json;
+    const products =
+      body?.products_interest !== undefined ? (body.products_interest ? JSON.stringify(body.products_interest) : null) : existing.products_interest_json;
     const value = body?.estimated_value !== undefined ? body.estimated_value : existing.estimated_value;
     const currency = body?.currency !== undefined ? body.currency : existing.currency;
     const closeDate = body?.expected_close_date !== undefined ? body.expected_close_date : existing.expected_close_date;
@@ -168,11 +199,15 @@ crmOpportunitiesRouter.patch("/:id", requireRole("write"), async (c) => {
     const accountId = body?.account_id !== undefined ? body.account_id : existing.account_id;
     const contactId = body?.contact_id !== undefined ? body.contact_id : existing.contact_id;
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       UPDATE sales_opportunities
       SET account_id = ?, contact_id = ?, stage = ?, owner_user_id = ?, products_interest_json = ?, estimated_value = ?, currency = ?, expected_close_date = ?, loss_reason = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(accountId, contactId, stage, owner, products, value, currency, closeDate, lossReason, id).run();
+    `,
+    )
+      .bind(accountId, contactId, stage, owner, products, value, currency, closeDate, lossReason, id)
+      .run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -210,21 +245,39 @@ const handleStageUpdate = async (c: any) => {
     }
     const lossReason = body?.loss_reason !== undefined ? body.loss_reason : existing.loss_reason;
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       UPDATE sales_opportunities SET stage = ?, loss_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `).bind(newStage, lossReason, id).run();
+    `,
+    )
+      .bind(newStage, lossReason, id)
+      .run();
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       INSERT INTO sales_activities (id, account_id, opportunity_id, lead_id, type, author_user_id, content, created_at)
       VALUES (?, ?, ?, ?, 'stage_change', ?, ?, CURRENT_TIMESTAMP)
-    `).bind(`act_${crypto.randomUUID()}`, existing.account_id, id, existing.lead_id, c.get("user")!.sub, `Etapa: ${existing.stage} -> ${newStage}`).run();
+    `,
+    )
+      .bind(`act_${crypto.randomUUID()}`, existing.account_id, id, existing.lead_id, c.get("user")!.sub, `Etapa: ${existing.stage} -> ${newStage}`)
+      .run();
 
     // Automatizaciones controladas (Fase 5)
     try {
       if (newStage === "demo_agendada") {
-        await autoTaskOnDemoScheduled(c.env.DB, { opportunityId: id, accountId: existing.account_id, leadId: existing.lead_id, ownerUserId: existing.owner_user_id });
+        await autoTaskOnDemoScheduled(c.env.DB, {
+          opportunityId: id,
+          accountId: existing.account_id,
+          leadId: existing.lead_id,
+          ownerUserId: existing.owner_user_id,
+        });
       } else if (newStage === "propuesta_enviada") {
-        await autoTaskOnProposalSent(c.env.DB, { opportunityId: id, accountId: existing.account_id, leadId: existing.lead_id, ownerUserId: existing.owner_user_id });
+        await autoTaskOnProposalSent(c.env.DB, {
+          opportunityId: id,
+          accountId: existing.account_id,
+          leadId: existing.lead_id,
+          ownerUserId: existing.owner_user_id,
+        });
       } else if (newStage === "ganado" && existing.lead_id) {
         // Integrar cierre ganado con flujo federado (idempotente)
         const lead: any = await c.env.DB.prepare("SELECT * FROM sales_leads WHERE id = ?").bind(existing.lead_id).first();

@@ -10,18 +10,39 @@ export const crmAccountsRouter = new Hono<{ Bindings: Env; Variables: AuthVariab
 crmAccountsRouter.use("*", requireAuth());
 
 const FUTURA_SCIANS = new Set([
-  "531210", "531311", "523920",
-  "621111", "621112", "621113", "621211", "621399", "621410", "621420", "621490", "621511", "621990", "622111", "622110", "622210", "622310",
-  "484111", "484121", "493111", "488511",
-  "721111", "721190", "531110", "551110"
+  "531210",
+  "531311",
+  "523920",
+  "621111",
+  "621112",
+  "621113",
+  "621211",
+  "621399",
+  "621410",
+  "621420",
+  "621490",
+  "621511",
+  "621990",
+  "622111",
+  "622110",
+  "622210",
+  "622310",
+  "484111",
+  "484121",
+  "493111",
+  "488511",
+  "721111",
+  "721190",
+  "531110",
+  "551110",
 ]);
 
 export function futuraAccountSqlPredicate(alias: string): string {
-  const scianCodes = [...FUTURA_SCIANS].filter(code => !code.startsWith("62"));
+  const scianCodes = [...FUTURA_SCIANS].filter((code) => !code.startsWith("62"));
   return `(
     ${alias}.tenant_id = 'acc_futura_capital' OR
     TRIM(COALESCE(${alias}.scian_code, '')) LIKE '62%' OR
-    TRIM(COALESCE(${alias}.scian_code, '')) IN (${scianCodes.map(code => `'${code}'`).join(", ")}) OR
+    TRIM(COALESCE(${alias}.scian_code, '')) IN (${scianCodes.map((code) => `'${code}'`).join(", ")}) OR
     LOWER(COALESCE(${alias}.id, '')) LIKE '%futura%' OR
     LOWER(COALESCE(${alias}.name, '')) LIKE '%futura capital%' OR
     LOWER(COALESCE(${alias}.origin, '')) LIKE '%futura%' OR
@@ -114,16 +135,22 @@ crmAccountsRouter.get("/", async (c) => {
     cparams.push(`%${q}%`, `%${q.toLowerCase()}%`);
   }
   if (origin) {
-    sql += " AND origin = ?"; params.push(origin);
-    countSql += " AND origin = ?"; cparams.push(origin);
+    sql += " AND origin = ?";
+    params.push(origin);
+    countSql += " AND origin = ?";
+    cparams.push(origin);
   }
   if (size) {
-    sql += " AND size = ?"; params.push(size);
-    countSql += " AND size = ?"; cparams.push(size);
+    sql += " AND size = ?";
+    params.push(size);
+    countSql += " AND size = ?";
+    cparams.push(size);
   }
   if (duplicate) {
-    sql += " AND duplicate_review_status = ?"; params.push(duplicate);
-    countSql += " AND duplicate_review_status = ?"; cparams.push(duplicate);
+    sql += " AND duplicate_review_status = ?";
+    params.push(duplicate);
+    countSql += " AND duplicate_review_status = ?";
+    cparams.push(duplicate);
   }
 
   sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
@@ -139,27 +166,29 @@ crmAccountsRouter.get("/", async (c) => {
 
   const items = (results || []).map((row: any) => ({
     ...row,
-    tenant_id: resolveTenantId(row)
+    tenant_id: resolveTenantId(row),
   }));
 
-  return c.json({ items, total: countRow?.n ?? (results?.length ?? 0), limit, offset });
+  return c.json({ items, total: countRow?.n ?? results?.length ?? 0, limit, offset });
 });
 
 // Duplicate detection groups
 crmAccountsRouter.get("/duplicates", requireRole("write"), async (c) => {
-  const { results } = await c.env.DB.prepare(`
+  const { results } = await c.env.DB.prepare(
+    `
     SELECT normalized_name, COUNT(*) as n
     FROM sales_accounts
     WHERE normalized_name IS NOT NULL AND normalized_name != ''
     GROUP BY normalized_name
     HAVING COUNT(*) > 1
     ORDER BY n DESC
-  `).all();
+  `,
+  ).all();
   const groups: any[] = [];
   for (const r of results || []) {
-    const { results: accs } = await c.env.DB.prepare(
-      "SELECT * FROM sales_accounts WHERE normalized_name = ?"
-    ).bind((r as any).normalized_name).all();
+    const { results: accs } = await c.env.DB.prepare("SELECT * FROM sales_accounts WHERE normalized_name = ?")
+      .bind((r as any).normalized_name)
+      .all();
     groups.push({ normalized_name: (r as any).normalized_name, count: (r as any).n, accounts: accs || [] });
   }
   return c.json({ groups });
@@ -174,18 +203,29 @@ crmAccountsRouter.get("/:id", async (c) => {
 
   const { results: contacts } = await c.env.DB.prepare("SELECT * FROM sales_contacts WHERE account_id = ? ORDER BY created_at DESC").bind(id).all();
   const { results: opportunities } = await c.env.DB.prepare("SELECT * FROM sales_opportunities WHERE account_id = ? ORDER BY created_at DESC").bind(id).all();
-  const { results: activities } = await c.env.DB.prepare(`
+  const { results: activities } = await c.env.DB.prepare(
+    `
     SELECT a.*, u.name AS author_name
     FROM sales_activities a
     LEFT JOIN crm_users u ON u.id = a.author_user_id
     WHERE a.account_id = ?
     ORDER BY a.created_at DESC
     LIMIT 50
-  `).bind(id).all();
+  `,
+  )
+    .bind(id)
+    .all();
   const { results: tasks } = await c.env.DB.prepare("SELECT * FROM sales_tasks WHERE account_id = ? ORDER BY created_at DESC").bind(id).all();
   const { results: leads } = await c.env.DB.prepare("SELECT * FROM sales_leads WHERE account_id = ? ORDER BY created_at DESC").bind(id).all();
 
-  return c.json({ account, contacts: contacts || [], opportunities: opportunities || [], activities: activities || [], tasks: tasks || [], leads: leads || [] });
+  return c.json({
+    account,
+    contacts: contacts || [],
+    opportunities: opportunities || [],
+    activities: activities || [],
+    tasks: tasks || [],
+    leads: leads || [],
+  });
 });
 
 // Create account
@@ -199,10 +239,14 @@ crmAccountsRouter.post("/", requireRole("write"), async (c) => {
     const origin = body?.origin ?? null;
     const id = `acc_${crypto.randomUUID()}`;
     const normalized = name.toLowerCase().trim();
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       INSERT INTO sales_accounts (id, name, normalized_name, size, city, origin, duplicate_review_status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(id, name, normalized, size, city, origin).run();
+    `,
+    )
+      .bind(id, name, normalized, size, city, origin)
+      .run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -233,14 +277,21 @@ crmAccountsRouter.post("/bulk", requireRole("write"), async (c) => {
     for (let i = 0; i < items.length; i++) {
       const it = items[i] || {};
       const name = String(it.name || "").trim();
-      if (!name) { errors.push({ index: i, error: "name obligatorio" }); continue; }
+      if (!name) {
+        errors.push({ index: i, error: "name obligatorio" });
+        continue;
+      }
       try {
         const id = `acc_${crypto.randomUUID()}`;
         const normalized = name.toLowerCase().trim();
-        await c.env.DB.prepare(`
+        await c.env.DB.prepare(
+          `
           INSERT INTO sales_accounts (id, name, normalized_name, size, city, origin, duplicate_review_status, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `).bind(id, name, normalized, it.size ?? null, it.city ?? null, it.origin ?? null).run();
+        `,
+        )
+          .bind(id, name, normalized, it.size ?? null, it.city ?? null, it.origin ?? null)
+          .run();
         created.push(id);
       } catch (e: any) {
         errors.push({ index: i, error: e.message || "error insertando" });
@@ -279,11 +330,15 @@ crmAccountsRouter.patch("/:id", requireRole("write"), async (c) => {
     const mergedInto = body?.merged_into_account_id !== undefined ? body.merged_into_account_id : existing.merged_into_account_id;
     const normalized = name.toLowerCase().trim();
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       UPDATE sales_accounts
       SET name = ?, normalized_name = ?, size = ?, city = ?, origin = ?, duplicate_review_status = ?, merged_into_account_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(name, normalized, size, city, origin, status, mergedInto, id).run();
+    `,
+    )
+      .bind(name, normalized, size, city, origin, status, mergedInto, id)
+      .run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -323,9 +378,13 @@ crmAccountsRouter.post("/:id/merge", requireRole("admin"), async (c) => {
     await c.env.DB.prepare("UPDATE sales_activities SET account_id = ? WHERE account_id = ?").bind(targetId, sourceId).run();
     await c.env.DB.prepare("UPDATE sales_tasks SET account_id = ? WHERE account_id = ?").bind(targetId, sourceId).run();
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       UPDATE sales_accounts SET duplicate_review_status = 'merged', merged_into_account_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `).bind(targetId, sourceId).run();
+    `,
+    )
+      .bind(targetId, sourceId)
+      .run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -352,13 +411,13 @@ crmAccountsRouter.post("/:id/enrich", requireRole("write"), async (c) => {
     if (!existing) return c.json({ error: "Cuenta no encontrada." }, 404);
 
     let body: any = {};
-    try { body = await c.req.json(); } catch {}
+    try {
+      body = await c.req.json();
+    } catch {}
     const autoApply = body?.auto_apply !== false;
 
     // Buscar si ya tiene contactos asociados
-    const { results: contacts } = await c.env.DB.prepare(
-      "SELECT * FROM sales_contacts WHERE account_id = ? ORDER BY created_at ASC"
-    ).bind(id).all();
+    const { results: contacts } = await c.env.DB.prepare("SELECT * FROM sales_contacts WHERE account_id = ? ORDER BY created_at ASC").bind(id).all();
 
     const primaryContact: any = contacts && contacts.length > 0 ? contacts[0] : null;
 
@@ -380,24 +439,33 @@ crmAccountsRouter.post("/:id/enrich", requireRole("write"), async (c) => {
       const email = (enrichment as any).email || primaryContact?.email || null;
 
       if (primaryContact) {
-        const isPlaceholder = !primaryContact.name || primaryContact.name === "Sin nombre" || primaryContact.name.toLowerCase().includes("contacto corporativo");
-        const newName = (isPlaceholder && titularName) ? titularName : (titularName || primaryContact.name);
+        const isPlaceholder =
+          !primaryContact.name || primaryContact.name === "Sin nombre" || primaryContact.name.toLowerCase().includes("contacto corporativo");
+        const newName = isPlaceholder && titularName ? titularName : titularName || primaryContact.name;
         const newTitle = title || primaryContact.title;
 
-        await c.env.DB.prepare(`
+        await c.env.DB.prepare(
+          `
           UPDATE sales_contacts
           SET name = ?, phone = COALESCE(?, phone), whatsapp = COALESCE(?, whatsapp), email = COALESCE(?, email), title = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(newName, phone, whatsapp, email, newTitle, primaryContact.id).run();
+        `,
+        )
+          .bind(newName, phone, whatsapp, email, newTitle, primaryContact.id)
+          .run();
 
         updatedContact = await c.env.DB.prepare("SELECT * FROM sales_contacts WHERE id = ?").bind(primaryContact.id).first();
       } else if (titularName || phone || email) {
         // Crear contacto titular para la cuenta si no existía ninguno
         const newContactId = `ct_${crypto.randomUUID()}`;
-        await c.env.DB.prepare(`
+        await c.env.DB.prepare(
+          `
           INSERT INTO sales_contacts (id, account_id, name, email, phone, whatsapp, title, consent_status, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `).bind(newContactId, id, titularName || "Titular", email, phone, whatsapp, title).run();
+        `,
+        )
+          .bind(newContactId, id, titularName || "Titular", email, phone, whatsapp, title)
+          .run();
 
         updatedContact = await c.env.DB.prepare("SELECT * FROM sales_contacts WHERE id = ?").bind(newContactId).first();
       }

@@ -86,10 +86,7 @@ authRouter.post("/login", async (c) => {
     }
     loginFailuresMap.delete(rateKey);
     const secret = requireJwtSecret(c.env);
-    const token = await signJwt(
-      { sub: user.id, email: user.email, role: user.role, name: user.name ?? undefined },
-      secret
-    );
+    const token = await signJwt({ sub: user.id, email: user.email, role: user.role, name: user.name ?? undefined }, secret);
     const audit = new AuditService(c.env.DB);
     await audit.record({
       actor_user_id: user.id,
@@ -99,10 +96,7 @@ authRouter.post("/login", async (c) => {
       ip: clientIp(c),
     });
     const isProd = (c.env.ENVIRONMENT || "development") === "production";
-    c.header(
-      "Set-Cookie",
-      `ark_sales_token=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax${isProd ? "; Secure" : ""}`
-    );
+    c.header("Set-Cookie", `ark_sales_token=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax${isProd ? "; Secure" : ""}`);
     return c.json({ token, access_token: token, user });
   } catch (err: any) {
     return c.json({ error: err.message || "Error en login" }, 500);
@@ -135,7 +129,9 @@ authRouter.get("/me", async (c) => {
 authRouter.post("/forgot-password", async (c) => {
   try {
     const body = await c.req.json();
-    const email = String(body?.email || "").trim().toLowerCase();
+    const email = String(body?.email || "")
+      .trim()
+      .toLowerCase();
     if (!email) return c.json({ error: "email es obligatorio." }, 400);
     const ip = clientIp(c) || "unknown_ip";
     const rateKey = `${ip}:${email}`;
@@ -148,11 +144,7 @@ authRouter.post("/forgot-password", async (c) => {
     const user = await svc.findByEmail(email);
     if (!user) return c.json({ success: true, message: "Si el correo existe, se enviará un enlace de recuperación." });
 
-    const token = await signJwt(
-      { sub: user.id, email: user.email, role: "reset", name: user.name ?? undefined },
-      requireJwtSecret(c.env),
-      15 * 60
-    );
+    const token = await signJwt({ sub: user.id, email: user.email, role: "reset", name: user.name ?? undefined }, requireJwtSecret(c.env), 15 * 60);
 
     if (c.env.RESEND_API_KEY) {
       try {
@@ -167,7 +159,9 @@ authRouter.post("/forgot-password", async (c) => {
             html: `<p>Usa este enlace para restablecer tu contraseña:</p><p><a href="${c.env.SALES_API_URL || "https://sales.arksystems.site"}/crm/login?reset=${encodeURIComponent(token)}">Restablecer contraseña</a></p><p>Expira en 15 minutos.</p>`,
           }),
         });
-      } catch (e) { console.warn("[auth] resend error:", e); }
+      } catch (e) {
+        console.warn("[auth] resend error:", e);
+      }
     }
 
     const audit = new AuditService(c.env.DB);
@@ -227,11 +221,7 @@ authRouter.post("/invite", requireAuth(), requireRole("admin"), async (c) => {
       user = existing;
     }
 
-    const token = await signJwt(
-      { sub: user.id, email: user.email, role: "reset", name: user.name ?? undefined },
-      requireJwtSecret(c.env),
-      24 * 60 * 60
-    );
+    const token = await signJwt({ sub: user.id, email: user.email, role: "reset", name: user.name ?? undefined }, requireJwtSecret(c.env), 24 * 60 * 60);
 
     if (c.env.RESEND_API_KEY) {
       try {
@@ -246,11 +236,21 @@ authRouter.post("/invite", requireAuth(), requireRole("admin"), async (c) => {
             html: `<p>Has sido invitado a ARK CRM.</p><p>Define tu contraseña aquí:</p><p><a href="${c.env.SALES_API_URL || "https://sales.arksystems.site"}/crm/login?reset=${encodeURIComponent(token)}">Aceptar invitación</a></p>`,
           }),
         });
-      } catch (e) { console.warn("[auth] resend error:", e); }
+      } catch (e) {
+        console.warn("[auth] resend error:", e);
+      }
     }
 
     const audit = new AuditService(c.env.DB);
-    await audit.record({ actor_user_id: c.get("user")!.sub, actor_email: c.get("user")!.email, action: "auth.user_invited", entity_type: "user", entity_id: user.id, metadata: { email: user.email, role }, ip: clientIp(c) });
+    await audit.record({
+      actor_user_id: c.get("user")!.sub,
+      actor_email: c.get("user")!.email,
+      action: "auth.user_invited",
+      entity_type: "user",
+      entity_id: user.id,
+      metadata: { email: user.email, role },
+      ip: clientIp(c),
+    });
 
     const devMode = !c.env.RESEND_API_KEY;
     return c.json({ success: true, user, ...(devMode ? { reset_token: token } : {}) }, 201);

@@ -23,11 +23,26 @@ crmTasksRouter.get("/", async (c) => {
   const overdue = c.req.query("overdue");
   let sql = "SELECT * FROM sales_tasks WHERE 1=1";
   const params: any[] = [];
-  if (status) { sql += " AND status = ?"; params.push(status); }
-  if (owner) { sql += " AND owner_user_id = ?"; params.push(owner); }
-  if (accountId) { sql += " AND account_id = ?"; params.push(accountId); }
-  if (opportunityId) { sql += " AND opportunity_id = ?"; params.push(opportunityId); }
-  if (leadId) { sql += " AND lead_id = ?"; params.push(leadId); }
+  if (status) {
+    sql += " AND status = ?";
+    params.push(status);
+  }
+  if (owner) {
+    sql += " AND owner_user_id = ?";
+    params.push(owner);
+  }
+  if (accountId) {
+    sql += " AND account_id = ?";
+    params.push(accountId);
+  }
+  if (opportunityId) {
+    sql += " AND opportunity_id = ?";
+    params.push(opportunityId);
+  }
+  if (leadId) {
+    sql += " AND lead_id = ?";
+    params.push(leadId);
+  }
   if (overdue === "true") {
     sql += " AND status IN ('pending','in_progress') AND due_date IS NOT NULL AND due_date < CURRENT_TIMESTAMP";
   }
@@ -60,13 +75,17 @@ crmTasksRouter.post("/", requireRole("write"), async (c) => {
     const owner = body?.owner_user_id ?? null;
     const dueDate = body?.due_date ?? null;
     const status = body?.status || "pending";
-    const validStatuses = ["pending","in_progress","done","cancelled"];
+    const validStatuses = ["pending", "in_progress", "done", "cancelled"];
     if (!validStatuses.includes(status)) return c.json({ error: "Estado inválido." }, 400);
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       INSERT INTO sales_tasks (id, account_id, contact_id, opportunity_id, lead_id, title, description, owner_user_id, due_date, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(id, accountId, contactId, opportunityId, leadId, title, description, owner, dueDate, status).run();
+    `,
+    )
+      .bind(id, accountId, contactId, opportunityId, leadId, title, description, owner, dueDate, status)
+      .run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({
@@ -99,14 +118,18 @@ crmTasksRouter.patch("/:id", requireRole("write"), async (c) => {
     const owner = body?.owner_user_id !== undefined ? body.owner_user_id : existing.owner_user_id;
     const dueDate = body?.due_date !== undefined ? body.due_date : existing.due_date;
     const status = body?.status !== undefined ? body.status : existing.status;
-    const validStatuses = ["pending","in_progress","done","cancelled"];
+    const validStatuses = ["pending", "in_progress", "done", "cancelled"];
     if (!validStatuses.includes(status)) return c.json({ error: "Estado inválido." }, 400);
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       UPDATE sales_tasks
       SET title = ?, description = ?, owner_user_id = ?, due_date = ?, status = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(title, description, owner, dueDate, status, id).run();
+    `,
+    )
+      .bind(title, description, owner, dueDate, status, id)
+      .run();
 
     const audit = new AuditService(c.env.DB);
     await audit.record({

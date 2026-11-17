@@ -37,12 +37,15 @@ conektaWebhookRouter.post("/", async (c) => {
       return c.json(result, 200);
     }
 
-    return c.json({
-      received: true,
-      event: result.event,
-      order_id: result.orderId,
-      opportunity_id: result.opportunityId,
-    }, 200);
+    return c.json(
+      {
+        received: true,
+        event: result.event,
+        order_id: result.orderId,
+        opportunity_id: result.opportunityId,
+      },
+      200,
+    );
   } catch (err: any) {
     console.error("[ConektaWebhookRouter] Excepción fatal en webhook:", err);
     return c.json({ error: err.message || "Error interno procesando webhook Conekta" }, 500);

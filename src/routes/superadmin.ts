@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { Env, EmailTemplate, EmailDispatch, VoiceCampaign, VoiceCampaignTarget } from "../types";
+import { Env } from "../types";
 import { AuthVariables, requireAuth, requireRole } from "../auth/middleware";
 import { AuditService, clientIp } from "../auth/audit";
 import { normalizarTelefonoE164 } from "../voice/telnyx";
@@ -36,7 +36,7 @@ export async function syncEmailDispatchToPipeline(
     resendId?: string | null;
     userId?: string | null;
     status: "sent" | "simulated";
-  }
+  },
 ) {
   if (!db) return;
   try {
@@ -45,9 +45,7 @@ export async function syncEmailDispatchToPipeline(
 
     if ((!accId || !ctId) && params.email) {
       try {
-        const foundContact: any = await db.prepare(
-          "SELECT id, account_id FROM sales_contacts WHERE email = ? LIMIT 1"
-        ).bind(params.email).first();
+        const foundContact: any = await db.prepare("SELECT id, account_id FROM sales_contacts WHERE email = ? LIMIT 1").bind(params.email).first();
         if (foundContact) {
           if (!ctId) ctId = foundContact.id;
           if (!accId) accId = foundContact.account_id;
@@ -61,17 +59,20 @@ export async function syncEmailDispatchToPipeline(
     let opp: any = null;
     try {
       if (accId && ctId) {
-        opp = await db.prepare(
-          "SELECT id, stage, products_interest_json FROM sales_opportunities WHERE account_id = ? OR contact_id = ? ORDER BY created_at DESC LIMIT 1"
-        ).bind(accId, ctId).first();
+        opp = await db
+          .prepare("SELECT id, stage, products_interest_json FROM sales_opportunities WHERE account_id = ? OR contact_id = ? ORDER BY created_at DESC LIMIT 1")
+          .bind(accId, ctId)
+          .first();
       } else if (accId) {
-        opp = await db.prepare(
-          "SELECT id, stage, products_interest_json FROM sales_opportunities WHERE account_id = ? ORDER BY created_at DESC LIMIT 1"
-        ).bind(accId).first();
+        opp = await db
+          .prepare("SELECT id, stage, products_interest_json FROM sales_opportunities WHERE account_id = ? ORDER BY created_at DESC LIMIT 1")
+          .bind(accId)
+          .first();
       } else if (ctId) {
-        opp = await db.prepare(
-          "SELECT id, stage, products_interest_json FROM sales_opportunities WHERE contact_id = ? ORDER BY created_at DESC LIMIT 1"
-        ).bind(ctId).first();
+        opp = await db
+          .prepare("SELECT id, stage, products_interest_json FROM sales_opportunities WHERE contact_id = ? ORDER BY created_at DESC LIMIT 1")
+          .bind(ctId)
+          .first();
       }
     } catch {}
 
@@ -79,38 +80,54 @@ export async function syncEmailDispatchToPipeline(
     const isClosed = opp && (opp.stage === "ganado" || opp.stage === "perdido");
     if (opp && !isClosed) {
       oppId = opp.id;
-      const products = (!opp.products_interest_json || opp.products_interest_json === "[]" || opp.products_interest_json === '""')
-        ? '["ledger_pro"]'
-        : opp.products_interest_json;
-      await db.prepare(`
+      const products =
+        !opp.products_interest_json || opp.products_interest_json === "[]" || opp.products_interest_json === '""'
+          ? '["ledger_pro"]'
+          : opp.products_interest_json;
+      await db
+        .prepare(
+          `
         UPDATE sales_opportunities
         SET stage = 'propuesta_enviada',
             products_interest_json = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(products, oppId).run();
+      `,
+        )
+        .bind(products, oppId)
+        .run();
     } else {
       oppId = `opp_${crypto.randomUUID().slice(0, 8)}`;
-      await db.prepare(`
+      await db
+        .prepare(
+          `
         INSERT INTO sales_opportunities (id, account_id, contact_id, stage, products_interest_json, estimated_value, currency, created_at, updated_at)
         VALUES (?, ?, ?, 'propuesta_enviada', '["ledger_pro"]', 399.0, 'MXN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `).bind(oppId, accId, ctId).run();
+      `,
+        )
+        .bind(oppId, accId, ctId)
+        .run();
     }
 
     // Registrar o actualizar en sales_activities el evento tipo email con asunto y fecha
     const activityId = `act_${crypto.randomUUID().slice(0, 8)}`;
-    await db.prepare(`
+    await db
+      .prepare(
+        `
       INSERT INTO sales_activities (id, account_id, contact_id, opportunity_id, type, author_user_id, content, metadata_json, created_at)
       VALUES (?, ?, ?, ?, 'email', ?, ?, ?, CURRENT_TIMESTAMP)
-    `).bind(
-      activityId,
-      accId,
-      ctId,
-      oppId,
-      params.userId || null,
-      `Correo enviado: ${params.subject} (Plantilla: ${params.templateSlug || "manual"})`,
-      JSON.stringify({ dispatch_id: params.dispatchId, resend_id: params.resendId, status: params.status, timestamp: new Date().toISOString() })
-    ).run();
+    `,
+      )
+      .bind(
+        activityId,
+        accId,
+        ctId,
+        oppId,
+        params.userId || null,
+        `Correo enviado: ${params.subject} (Plantilla: ${params.templateSlug || "manual"})`,
+        JSON.stringify({ dispatch_id: params.dispatchId, resend_id: params.resendId, status: params.status, timestamp: new Date().toISOString() }),
+      )
+      .run();
   } catch (err) {
     console.warn("[syncEmailDispatchToPipeline] Error syncing to pipeline:", err);
   }
@@ -122,9 +139,7 @@ export async function syncEmailDispatchToPipeline(
 superadminRouter.get("/resend/status", async (c) => {
   const hasKey = Boolean(c.env.RESEND_API_KEY && c.env.RESEND_API_KEY.trim());
   const fromEmail = c.env.RESEND_FROM_EMAIL || "ventas@mail.arksystems.site";
-  const maskedKey = hasKey
-    ? `${c.env.RESEND_API_KEY!.slice(0, 5)}...${c.env.RESEND_API_KEY!.slice(-4)}`
-    : null;
+  const maskedKey = hasKey ? `${c.env.RESEND_API_KEY!.slice(0, 5)}...${c.env.RESEND_API_KEY!.slice(-4)}` : null;
 
   let totalDispatches = 0;
   let sentCount = 0;
@@ -132,13 +147,15 @@ superadminRouter.get("/resend/status", async (c) => {
 
   if (c.env.DB) {
     try {
-      const stats = await c.env.DB.prepare(`
+      const stats = await c.env.DB.prepare(
+        `
         SELECT 
           COUNT(*) as total,
           SUM(CASE WHEN status IN ('sent', 'simulated') THEN 1 ELSE 0 END) as sent,
           SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
         FROM email_dispatches
-      `).first<any>();
+      `,
+      ).first<any>();
       if (stats) {
         totalDispatches = stats.total || 0;
         sentCount = stats.sent || 0;
@@ -174,10 +191,14 @@ superadminRouter.post("/resend/test", async (c) => {
       const dispatchId = `disp_sim_${crypto.randomUUID().slice(0, 8)}`;
       if (c.env.DB) {
         try {
-          await c.env.DB.prepare(`
+          await c.env.DB.prepare(
+            `
             INSERT INTO email_dispatches (id, recipient_email, recipient_name, subject, status, resend_id, created_at)
             VALUES (?, ?, ?, ?, 'simulated', ?, CURRENT_TIMESTAMP)
-          `).bind(dispatchId, toEmail, "Admin Tester", subject, dispatchId).run();
+          `,
+          )
+            .bind(dispatchId, toEmail, "Admin Tester", subject, dispatchId)
+            .run();
         } catch {}
       }
       return c.json({
@@ -220,10 +241,14 @@ superadminRouter.post("/resend/test", async (c) => {
     const dispatchId = `disp_${crypto.randomUUID().slice(0, 8)}`;
     if (c.env.DB) {
       try {
-        await c.env.DB.prepare(`
+        await c.env.DB.prepare(
+          `
           INSERT INTO email_dispatches (id, recipient_email, recipient_name, subject, status, resend_id, created_at)
           VALUES (?, ?, ?, ?, 'sent', ?, CURRENT_TIMESTAMP)
-        `).bind(dispatchId, toEmail, "Admin Tester", subject, data.id).run();
+        `,
+        )
+          .bind(dispatchId, toEmail, "Admin Tester", subject, data.id)
+          .run();
       } catch {}
     }
 
@@ -273,9 +298,7 @@ superadminRouter.get("/templates/:id", async (c) => {
   let template: any = null;
   if (c.env.DB) {
     try {
-      template = await c.env.DB.prepare("SELECT * FROM email_templates WHERE id = ? OR slug = ?")
-        .bind(id, id)
-        .first();
+      template = await c.env.DB.prepare("SELECT * FROM email_templates WHERE id = ? OR slug = ?").bind(id, id).first();
     } catch {}
   }
   if (!template) {
@@ -298,16 +321,23 @@ superadminRouter.post("/templates", async (c) => {
     const cat = category || "propuesta";
 
     if (c.env.DB) {
-      await c.env.DB.prepare(`
+      await c.env.DB.prepare(
+        `
         INSERT INTO email_templates (id, tenant_id, name, slug, category, subject, html_content, variables_json, is_active, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `).bind(id, tenant_id || null, name, slug, cat, subject, html_content, varsJson).run();
+      `,
+      )
+        .bind(id, tenant_id || null, name, slug, cat, subject, html_content, varsJson)
+        .run();
     }
 
-    return c.json({
-      success: true,
-      template: { id, tenant_id: tenant_id || null, name, slug, category: cat, subject, html_content, variables_json: varsJson },
-    }, 201);
+    return c.json(
+      {
+        success: true,
+        template: { id, tenant_id: tenant_id || null, name, slug, category: cat, subject, html_content, variables_json: varsJson },
+      },
+      201,
+    );
   } catch (err: any) {
     return c.json({ error: err.message || "Error al crear plantilla" }, 400);
   }
@@ -320,7 +350,8 @@ superadminRouter.put("/templates/:id", async (c) => {
     const { name, subject, html_content, variables, category, is_active } = body || {};
 
     if (c.env.DB) {
-      await c.env.DB.prepare(`
+      await c.env.DB.prepare(
+        `
         UPDATE email_templates
         SET 
           name = COALESCE(?, name),
@@ -331,16 +362,10 @@ superadminRouter.put("/templates/:id", async (c) => {
           is_active = COALESCE(?, is_active),
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ? OR slug = ?
-      `).bind(
-        name ?? null,
-        subject ?? null,
-        html_content ?? null,
-        variables ? JSON.stringify(variables) : null,
-        category ?? null,
-        is_active ?? null,
-        id,
-        id
-      ).run();
+      `,
+      )
+        .bind(name ?? null, subject ?? null, html_content ?? null, variables ? JSON.stringify(variables) : null, category ?? null, is_active ?? null, id, id)
+        .run();
     }
 
     return c.json({ success: true, message: "Plantilla actualizada correctamente" });
@@ -356,17 +381,13 @@ superadminRouter.delete("/templates/:id", async (c) => {
       return c.json({ error: "Base de datos D1 no disponible" }, 503);
     }
 
-    const template: any = await c.env.DB.prepare(
-      "SELECT id, name, slug FROM email_templates WHERE id = ? OR slug = ?"
-    ).bind(id, id).first();
+    const template: any = await c.env.DB.prepare("SELECT id, name, slug FROM email_templates WHERE id = ? OR slug = ?").bind(id, id).first();
 
     if (!template) {
       return c.json({ error: "Plantilla no encontrada" }, 404);
     }
 
-    await c.env.DB.prepare(
-      "DELETE FROM email_templates WHERE id = ? OR slug = ?"
-    ).bind(id, id).run();
+    await c.env.DB.prepare("DELETE FROM email_templates WHERE id = ? OR slug = ?").bind(id, id).run();
 
     try {
       await new AuditService(c.env.DB).record({
@@ -399,9 +420,7 @@ superadminRouter.post("/templates/:id/preview", async (c) => {
 
     let template: any = null;
     if (c.env.DB) {
-      template = await c.env.DB.prepare("SELECT * FROM email_templates WHERE id = ? OR slug = ?")
-        .bind(id, id)
-        .first();
+      template = await c.env.DB.prepare("SELECT * FROM email_templates WHERE id = ? OR slug = ?").bind(id, id).first();
     }
 
     if (!template) {
@@ -449,9 +468,7 @@ superadminRouter.post("/templates/:id/send", async (c) => {
 
     let template: any = null;
     if (c.env.DB) {
-      template = await c.env.DB.prepare("SELECT * FROM email_templates WHERE id = ? OR slug = ?")
-        .bind(id, id)
-        .first();
+      template = await c.env.DB.prepare("SELECT * FROM email_templates WHERE id = ? OR slug = ?").bind(id, id).first();
     }
 
     if (!template) {
@@ -462,10 +479,13 @@ superadminRouter.post("/templates/:id/send", async (c) => {
     const dncService = new DncService(c.env.DB);
     const isBlocked = await dncService.isBlocked(to, tenant_id);
     if (isBlocked) {
-      return c.json({
-        error: "RECIPIENT_IN_DNC_LIST",
-        details: "El destinatario ha solicitado la baja permanente (Do Not Contact). Despacho abortado por cumplimiento CAN-SPAM / PROFECO."
-      }, 403);
+      return c.json(
+        {
+          error: "RECIPIENT_IN_DNC_LIST",
+          details: "El destinatario ha solicitado la baja permanente (Do Not Contact). Despacho abortado por cumplimiento CAN-SPAM / PROFECO.",
+        },
+        403,
+      );
     }
 
     const vars = variables || {};
@@ -475,11 +495,14 @@ superadminRouter.post("/templates/:id/send", async (c) => {
     // 2. Pre-Send Deterministic Gate (Harvey Quality & Anti-AI Filter)
     const gate = PreSendGate.check(rawRenderedSubject, rawRenderedHtml);
     if (!gate.ok) {
-      return c.json({
-        error: "PRE_SEND_GATE_VIOLATION",
-        reasons: gate.reasons,
-        details: "El correo fue bloqueado por el Guardián Pre-Envío por violar directrices de calidad, variables rotas o frases cliché."
-      }, 422);
+      return c.json(
+        {
+          error: "PRE_SEND_GATE_VIOLATION",
+          reasons: gate.reasons,
+          details: "El correo fue bloqueado por el Guardián Pre-Envío por violar directrices de calidad, variables rotas o frases cliché.",
+        },
+        422,
+      );
     }
 
     const renderedSubject = gate.sanitizedSubject;
@@ -527,24 +550,28 @@ superadminRouter.post("/templates/:id/send", async (c) => {
     // Registrar en email_dispatches
     if (c.env.DB) {
       try {
-        await c.env.DB.prepare(`
+        await c.env.DB.prepare(
+          `
           INSERT INTO email_dispatches (
             id, tenant_id, account_id, contact_id, template_slug, recipient_email, recipient_name, subject, variables_payload_json, status, resend_id, error_message, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        `).bind(
-          dispatchId,
-          tenant_id || account_id || null,
-          account_id || null,
-          contact_id || null,
-          template.slug,
-          to,
-          recipient_name || null,
-          renderedSubject,
-          JSON.stringify(vars),
-          status,
-          resendId,
-          errorMessage
-        ).run();
+        `,
+        )
+          .bind(
+            dispatchId,
+            tenant_id || account_id || null,
+            account_id || null,
+            contact_id || null,
+            template.slug,
+            to,
+            recipient_name || null,
+            renderedSubject,
+            JSON.stringify(vars),
+            status,
+            resendId,
+            errorMessage,
+          )
+          .run();
 
         // Si el despacho fue exitoso o simulado, sincronizar al pipeline (oportunidad en propuesta_enviada) y bitácora de actividades
         if (status === "sent" || status === "simulated") {
@@ -560,17 +587,21 @@ superadminRouter.post("/templates/:id/send", async (c) => {
             status,
           });
         } else if (account_id) {
-          await c.env.DB.prepare(`
+          await c.env.DB.prepare(
+            `
             INSERT INTO sales_activities (id, account_id, contact_id, type, author_user_id, content, metadata_json, created_at)
             VALUES (?, ?, ?, 'email', ?, ?, ?, CURRENT_TIMESTAMP)
-          `).bind(
-            `act_${crypto.randomUUID().slice(0, 8)}`,
-            account_id,
-            contact_id || null,
-            c.get("user")?.sub || null,
-            `Fallo al enviar correo: ${renderedSubject} (Plantilla: ${template.slug})`,
-            JSON.stringify({ dispatch_id: dispatchId, resend_id: resendId, status, error: errorMessage })
-          ).run();
+          `,
+          )
+            .bind(
+              `act_${crypto.randomUUID().slice(0, 8)}`,
+              account_id,
+              contact_id || null,
+              c.get("user")?.sub || null,
+              `Fallo al enviar correo: ${renderedSubject} (Plantilla: ${template.slug})`,
+              JSON.stringify({ dispatch_id: dispatchId, resend_id: resendId, status, error: errorMessage }),
+            )
+            .run();
         }
       } catch (dbErr) {
         console.warn("[superadmin:send] Error guardando bitácora de correo:", dbErr);
@@ -610,7 +641,9 @@ superadminRouter.get("/email/dispatches", async (c) => {
   let dispatches: any[] = [];
   if (c.env.DB) {
     try {
-      const res = await c.env.DB.prepare(query).bind(...params).all();
+      const res = await c.env.DB.prepare(query)
+        .bind(...params)
+        .all();
       dispatches = res.results || [];
     } catch {}
   }
@@ -635,7 +668,9 @@ superadminRouter.get("/voice/campaigns", async (c) => {
   let campaigns: any[] = [];
   if (c.env.DB) {
     try {
-      const res = await c.env.DB.prepare(query).bind(...params).all();
+      const res = await c.env.DB.prepare(query)
+        .bind(...params)
+        .all();
       campaigns = res.results || [];
     } catch {}
   }
@@ -656,7 +691,7 @@ superadminRouter.post("/voice/call", async (c) => {
       despachoNombre: despacho_nombre || "Prospecto ARK",
       customMessage: message,
       industry: industry || "general",
-      accountId: account_id
+      accountId: account_id,
     });
     return c.json(result);
   } catch (err: any) {
@@ -677,31 +712,38 @@ superadminRouter.post("/voice/campaigns", async (c) => {
     const userId = c.get("user")?.sub || null;
 
     if (c.env.DB) {
-      await c.env.DB.prepare(`
+      await c.env.DB.prepare(
+        `
         INSERT INTO voice_campaigns (id, tenant_id, name, description, dolor_principal, assistant_id, status, created_by_user_id, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `).bind(
-        campaignId,
-        tenant_id || null,
-        name,
-        description || null,
-        dolor_principal || "sat_fiscal_calculo",
-        assistant_id || c.env.TELNYX_AI_ASSISTANT_ID || null,
-        userId
-      ).run();
+      `,
+      )
+        .bind(
+          campaignId,
+          tenant_id || null,
+          name,
+          description || null,
+          dolor_principal || "sat_fiscal_calculo",
+          assistant_id || c.env.TELNYX_AI_ASSISTANT_ID || null,
+          userId,
+        )
+        .run();
     }
 
-    return c.json({
-      success: true,
-      campaign: {
-        id: campaignId,
-        tenant_id: tenant_id || null,
-        name,
-        description,
-        dolor_principal: dolor_principal || "sat_fiscal_calculo",
-        status: "draft",
+    return c.json(
+      {
+        success: true,
+        campaign: {
+          id: campaignId,
+          tenant_id: tenant_id || null,
+          name,
+          description,
+          dolor_principal: dolor_principal || "sat_fiscal_calculo",
+          status: "draft",
+        },
       },
-    }, 201);
+      201,
+    );
   } catch (err: any) {
     return c.json({ error: err.message || "Error creando campaña de voz" }, 400);
   }
@@ -752,17 +794,23 @@ superadminRouter.post("/voice/campaigns/:id/targets", async (c) => {
         params.push(auto_populate_tenant_id);
       }
 
-      const { results } = await c.env.DB.prepare(query).bind(...params).all<any>();
+      const { results } = await c.env.DB.prepare(query)
+        .bind(...params)
+        .all<any>();
       if (results && results.length > 0) {
         for (const r of results) {
           const norm = normalizarTelefonoE164(r.phone);
           if (norm.valid && norm.e164) {
             const targetId = `vtar_${crypto.randomUUID().slice(0, 8)}`;
             try {
-              await c.env.DB.prepare(`
+              await c.env.DB.prepare(
+                `
                 INSERT INTO voice_campaign_targets (id, campaign_id, tenant_id, account_id, contact_id, despacho_nombre, to_phone, status, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              `).bind(targetId, id, r.account_id, r.account_id, r.contact_id, r.despacho_nombre || r.name, norm.e164).run();
+              `,
+              )
+                .bind(targetId, id, r.account_id, r.account_id, r.contact_id, r.despacho_nombre || r.name, norm.e164)
+                .run();
               addedCount++;
             } catch {}
           }
@@ -776,19 +824,23 @@ superadminRouter.post("/voice/campaigns/:id/targets", async (c) => {
           const targetId = `vtar_${crypto.randomUUID().slice(0, 8)}`;
           if (c.env.DB) {
             try {
-              await c.env.DB.prepare(`
+              await c.env.DB.prepare(
+                `
                 INSERT INTO voice_campaign_targets (id, campaign_id, tenant_id, account_id, contact_id, lead_id, despacho_nombre, to_phone, status, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              `).bind(
-                targetId,
-                id,
-                t.tenant_id || t.account_id || null,
-                t.account_id || null,
-                t.contact_id || null,
-                t.lead_id || null,
-                t.despacho_nombre || "Despacho Prospecto",
-                norm.e164
-              ).run();
+              `,
+              )
+                .bind(
+                  targetId,
+                  id,
+                  t.tenant_id || t.account_id || null,
+                  t.account_id || null,
+                  t.contact_id || null,
+                  t.lead_id || null,
+                  t.despacho_nombre || "Despacho Prospecto",
+                  norm.e164,
+                )
+                .run();
               addedCount++;
             } catch {}
           }
@@ -797,12 +849,16 @@ superadminRouter.post("/voice/campaigns/:id/targets", async (c) => {
     }
 
     if (c.env.DB) {
-      await c.env.DB.prepare(`
+      await c.env.DB.prepare(
+        `
         UPDATE voice_campaigns 
         SET total_targets = (SELECT COUNT(*) FROM voice_campaign_targets WHERE campaign_id = ?),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(id, id).run();
+      `,
+      )
+        .bind(id, id)
+        .run();
     }
 
     return c.json({ success: true, targets_added: addedCount });
@@ -821,11 +877,15 @@ superadminRouter.post("/voice/campaigns/:id/dispatch", async (c) => {
     if (c.env.DB) {
       campaign = await c.env.DB.prepare("SELECT * FROM voice_campaigns WHERE id = ?").bind(id).first();
       if (campaign) {
-        const res = await c.env.DB.prepare(`
+        const res = await c.env.DB.prepare(
+          `
           SELECT * FROM voice_campaign_targets 
           WHERE campaign_id = ? AND status IN ('pending', 'failed')
           LIMIT 50
-        `).bind(id).all();
+        `,
+        )
+          .bind(id)
+          .all();
         targets = res.results || [];
       }
     }
@@ -911,11 +971,15 @@ superadminRouter.post("/voice/campaigns/:id/dispatch", async (c) => {
 
       if (c.env.DB) {
         try {
-          await c.env.DB.prepare(`
+          await c.env.DB.prepare(
+            `
             UPDATE voice_campaign_targets 
             SET status = ?, call_control_id = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-          `).bind(status, callControlId, errorMsg, target.id).run();
+          `,
+          )
+            .bind(status, callControlId, errorMsg, target.id)
+            .run();
         } catch {}
       }
 
@@ -931,14 +995,18 @@ superadminRouter.post("/voice/campaigns/:id/dispatch", async (c) => {
 
     // Actualizar progreso final en campaña
     if (c.env.DB) {
-      await c.env.DB.prepare(`
+      await c.env.DB.prepare(
+        `
         UPDATE voice_campaigns 
         SET completed_calls = completed_calls + ?,
             failed_calls = failed_calls + ?,
             status = 'completed',
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(completedCount, failedCount, id).run();
+      `,
+      )
+        .bind(completedCount, failedCount, id)
+        .run();
     }
 
     return c.json({
@@ -960,11 +1028,15 @@ superadminRouter.get("/voice/sessions", async (c) => {
   let sessions: any[] = [];
   if (c.env.DB) {
     try {
-      const res = await c.env.DB.prepare(`
+      const res = await c.env.DB.prepare(
+        `
         SELECT * FROM sales_voice_sessions 
         ORDER BY created_at DESC 
         LIMIT ?
-      `).bind(limit).all();
+      `,
+      )
+        .bind(limit)
+        .all();
       sessions = res.results || [];
     } catch {}
   }
@@ -1009,7 +1081,8 @@ superadminRouter.get("/tenants/overview", async (c) => {
         whereClause += ` AND a.tenant_id = '${tenantFilter.replace(/'/g, "")}'`;
       }
 
-      const res = await c.env.DB.prepare(`
+      const res = await c.env.DB.prepare(
+        `
         SELECT 
           a.id, a.name, a.size, a.city, a.origin, a.scian_code, a.tenant_id, a.harvest_source, a.created_at,
           COUNT(DISTINCT c.id) as total_contacts,
@@ -1025,7 +1098,10 @@ superadminRouter.get("/tenants/overview", async (c) => {
         GROUP BY a.id
         ORDER BY a.name ASC
         LIMIT ? OFFSET ?
-      `).bind(limit, offset).all();
+      `,
+      )
+        .bind(limit, offset)
+        .all();
 
       accounts = (res.results || []).map((row: any) => ({
         ...row,
@@ -1044,7 +1120,7 @@ superadminRouter.get("/tenants/overview", async (c) => {
     count: accounts.length,
     tenants: accounts,
     limit,
-    offset
+    offset,
   });
 });
 
@@ -1055,9 +1131,7 @@ superadminRouter.get("/tenants/overview", async (c) => {
 // Estado de Conekta y resumen de cobranza
 superadminRouter.get("/billing/status", async (c) => {
   const hasKey = Boolean(c.env.CONEKTA_API_KEY && c.env.CONEKTA_API_KEY.trim());
-  const maskedKey = hasKey
-    ? `${c.env.CONEKTA_API_KEY!.slice(0, 6)}...${c.env.CONEKTA_API_KEY!.slice(-4)}`
-    : null;
+  const maskedKey = hasKey ? `${c.env.CONEKTA_API_KEY!.slice(0, 6)}...${c.env.CONEKTA_API_KEY!.slice(-4)}` : null;
 
   let totalOrders = 0;
   let paidOrders = 0;
@@ -1066,14 +1140,16 @@ superadminRouter.get("/billing/status", async (c) => {
 
   if (c.env.DB) {
     try {
-      const stats = await c.env.DB.prepare(`
+      const stats = await c.env.DB.prepare(
+        `
         SELECT 
           COUNT(*) as total,
           SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid,
           SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
           SUM(CASE WHEN status = 'paid' THEN amount_cents ELSE 0 END) as revenue_cents
         FROM sales_payment_orders
-      `).first<any>();
+      `,
+      ).first<any>();
       if (stats) {
         totalOrders = stats.total || 0;
         paidOrders = stats.paid || 0;
@@ -1102,7 +1178,8 @@ superadminRouter.get("/billing/orders", async (c) => {
   let orders: any[] = [];
   if (c.env.DB) {
     try {
-      const res = await c.env.DB.prepare(`
+      const res = await c.env.DB.prepare(
+        `
         SELECT 
           p.*,
           a.name as account_name,
@@ -1113,7 +1190,10 @@ superadminRouter.get("/billing/orders", async (c) => {
         LEFT JOIN sales_leads l ON l.id = p.lead_id
         ORDER BY p.created_at DESC 
         LIMIT ?
-      `).bind(limit).all();
+      `,
+      )
+        .bind(limit)
+        .all();
       orders = res.results || [];
     } catch (e) {
       console.warn("[superadmin:billing] Error querying orders:", e);
@@ -1126,18 +1206,7 @@ superadminRouter.get("/billing/orders", async (c) => {
 superadminRouter.post("/billing/create-order", async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => ({}));
-  const {
-    account_id,
-    lead_id,
-    opportunity_id,
-    contact_id,
-    customer_name,
-    customer_email,
-    customer_phone,
-    amount_mxn,
-    product_name,
-    method,
-  } = body;
+  const { account_id, lead_id, opportunity_id, contact_id, customer_name, customer_email, customer_phone, amount_mxn, product_name, method } = body;
 
   if (!customer_email) {
     return c.json({ error: "El correo del cliente/despacho es obligatorio." }, 400);
@@ -1183,22 +1252,23 @@ superadminRouter.post("/billing/simulate-paid", async (c) => {
   }
 
   const conekta = new ConektaService(c.env);
-  const webhookResult = await conekta.processWebhookEvent({
-    type: "order.paid",
-    data: {
-      object: {
-        id: conekta_order_id,
-        payment_status: "paid",
-        created_at: Math.floor(Date.now() / 1000),
+  const webhookResult = await conekta.processWebhookEvent(
+    {
+      type: "order.paid",
+      data: {
+        object: {
+          id: conekta_order_id,
+          payment_status: "paid",
+          created_at: Math.floor(Date.now() / 1000),
+        },
       },
     },
-  }, "__INTERNAL_SIMULATE__");
+    "__INTERNAL_SIMULATE__",
+  );
 
   return c.json({
     success: webhookResult.success,
-    message: webhookResult.success
-      ? `Orden ${conekta_order_id} marcada como PAGADA. Oportunidad avanzada a ganado.`
-      : webhookResult.error,
+    message: webhookResult.success ? `Orden ${conekta_order_id} marcada como PAGADA. Oportunidad avanzada a ganado.` : webhookResult.error,
     details: webhookResult,
   });
 });
@@ -1225,12 +1295,12 @@ superadminRouter.post("/intent/classify", async (c) => {
   }
   return c.json({
     intent: "question",
-    confidence: 0.70,
+    confidence: 0.7,
     deterministic: false,
     shouldAutoReply: true,
     requiresHumanEscalation: false,
     permanentDnc: false,
-    recommendedAction: IntentHandler.getResponseGuideline("question", stage)
+    recommendedAction: IntentHandler.getResponseGuideline("question", stage),
   });
 });
 
@@ -1275,23 +1345,23 @@ superadminRouter.post("/ats/harvest", async (c) => {
       const sigId = `sig_${crypto.randomUUID().slice(0, 8)}`;
       await c.env.DB.prepare(
         `INSERT INTO crm_ats_signals (id, tenant_id, company_domain, company_name, ats_platform, job_title, job_department, job_location, matched_product, signal_strength, suggested_hook, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
       )
-      .bind(
-        sigId,
-        tenant_id ?? null,
-        `${company_token}.com`,
-        company_token,
-        platform,
-        sig.title,
-        sig.department ?? null,
-        sig.location ?? null,
-        sig.matchedProduct,
-        sig.signalStrength,
-        sig.suggestedHook
-      )
-      .run()
-      .catch(() => {});
+        .bind(
+          sigId,
+          tenant_id ?? null,
+          `${company_token}.com`,
+          company_token,
+          platform,
+          sig.title,
+          sig.department ?? null,
+          sig.location ?? null,
+          sig.matchedProduct,
+          sig.signalStrength,
+          sig.suggestedHook,
+        )
+        .run()
+        .catch(() => {});
     }
   }
 
@@ -1325,9 +1395,7 @@ async function runCohortQuery(db: any, sql: string, limit?: number): Promise<any
   if (!isSafeSelectQuery(trimmed)) {
     throw new Error("SQL de cohorte rechazado por política de seguridad (solo SELECT permitido).");
   }
-  const wrapped = limit
-    ? `SELECT * FROM (${trimmed}) LIMIT ${Math.max(1, Math.min(limit, 1000))}`
-    : `SELECT * FROM (${trimmed})`;
+  const wrapped = limit ? `SELECT * FROM (${trimmed}) LIMIT ${Math.max(1, Math.min(limit, 1000))}` : `SELECT * FROM (${trimmed})`;
   const res = await db.prepare(wrapped).all();
   return res?.results || [];
 }
@@ -1404,10 +1472,7 @@ superadminRouter.post("/cohorts/:id/launch-email", async (c) => {
     const templateId = body?.template_id || body?.template_slug || body?.template;
     if (!templateId) return c.json({ error: "template_id es obligatorio" }, 400);
 
-    const template: any = await c.env.DB
-      .prepare("SELECT * FROM email_templates WHERE id = ? OR slug = ?")
-      .bind(templateId, templateId)
-      .first();
+    const template: any = await c.env.DB.prepare("SELECT * FROM email_templates WHERE id = ? OR slug = ?").bind(templateId, templateId).first();
     if (!template) return c.json({ error: "Plantilla no encontrada" }, 404);
 
     const leads = await runCohortQuery(c.env.DB, cohort.query_sql, body?.limit ? parseInt(body.limit, 10) : 500);
@@ -1416,10 +1481,9 @@ superadminRouter.post("/cohorts/:id/launch-email", async (c) => {
     let contacts: any[] = [];
     if (accountIds.length > 0) {
       const placeholders = accountIds.map(() => "?").join(",");
-      const res = await c.env.DB
-        .prepare(
-          `SELECT c.*, a.name as account_name FROM sales_contacts c LEFT JOIN sales_accounts a ON a.id = c.account_id WHERE c.email IS NOT NULL AND c.email != '' AND c.account_id IN (${placeholders})`
-        )
+      const res = await c.env.DB.prepare(
+        `SELECT c.*, a.name as account_name FROM sales_contacts c LEFT JOIN sales_accounts a ON a.id = c.account_id WHERE c.email IS NOT NULL AND c.email != '' AND c.account_id IN (${placeholders})`,
+      )
         .bind(...accountIds)
         .all();
       contacts = res?.results || [];
@@ -1477,7 +1541,7 @@ superadminRouter.post("/cohorts/:id/launch-email", async (c) => {
                 from: fromEmail.includes("<") ? fromEmail : `ARK Systems <${fromEmail}>`,
                 to: [to],
                 subject,
-                html
+                html,
               }),
             });
             if (resp.ok) {
@@ -1504,7 +1568,7 @@ superadminRouter.post("/cohorts/:id/launch-email", async (c) => {
           try {
             await c.env.DB.prepare(
               `INSERT INTO email_dispatches (id, tenant_id, account_id, contact_id, template_slug, recipient_email, recipient_name, subject, variables_payload_json, status, resend_id, error_message, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
             )
               .bind(
                 dispatchId,
@@ -1518,7 +1582,7 @@ superadminRouter.post("/cohorts/:id/launch-email", async (c) => {
                 JSON.stringify(vars),
                 status,
                 resendId,
-                errorMessage
+                errorMessage,
               )
               .run();
 
@@ -1578,10 +1642,9 @@ superadminRouter.post("/cohorts/:id/launch-voice", async (c) => {
     let contacts: any[] = [];
     if (accountIds.length > 0) {
       const placeholders = accountIds.map(() => "?").join(",");
-      const res = await c.env.DB
-        .prepare(
-          `SELECT c.*, a.name as account_name FROM sales_contacts c LEFT JOIN sales_accounts a ON a.id = c.account_id WHERE c.phone IS NOT NULL AND c.phone != '' AND c.account_id IN (${placeholders})`
-        )
+      const res = await c.env.DB.prepare(
+        `SELECT c.*, a.name as account_name FROM sales_contacts c LEFT JOIN sales_accounts a ON a.id = c.account_id WHERE c.phone IS NOT NULL AND c.phone != '' AND c.account_id IN (${placeholders})`,
+      )
         .bind(...accountIds)
         .all();
       contacts = res?.results || [];
@@ -1594,7 +1657,7 @@ superadminRouter.post("/cohorts/:id/launch-voice", async (c) => {
       const userId = c.get("user")?.sub || null;
       await c.env.DB.prepare(
         `INSERT INTO voice_campaigns (id, tenant_id, name, description, dolor_principal, assistant_id, status, created_by_user_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       )
         .bind(
           campaignId,
@@ -1603,7 +1666,7 @@ superadminRouter.post("/cohorts/:id/launch-voice", async (c) => {
           cohort.description || null,
           body?.dolor_principal || "sat_fiscal_calculo",
           body?.assistant_id || c.env.TELNYX_AI_ASSISTANT_ID || null,
-          userId
+          userId,
         )
         .run();
     }
@@ -1617,7 +1680,7 @@ superadminRouter.post("/cohorts/:id/launch-voice", async (c) => {
       try {
         await c.env.DB.prepare(
           `INSERT INTO voice_campaign_targets (id, campaign_id, tenant_id, account_id, contact_id, despacho_nombre, to_phone, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         )
           .bind(
             targetId,
@@ -1626,7 +1689,7 @@ superadminRouter.post("/cohorts/:id/launch-voice", async (c) => {
             ct.account_id || null,
             ct.id || null,
             ct.account_name || ct.name || "Despacho Prospecto",
-            norm.e164
+            norm.e164,
           )
           .run();
         addedCount++;
@@ -1634,7 +1697,7 @@ superadminRouter.post("/cohorts/:id/launch-voice", async (c) => {
     }
 
     await c.env.DB.prepare(
-      `UPDATE voice_campaigns SET total_targets = (SELECT COUNT(*) FROM voice_campaign_targets WHERE campaign_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      `UPDATE voice_campaigns SET total_targets = (SELECT COUNT(*) FROM voice_campaign_targets WHERE campaign_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
     )
       .bind(campaignId, campaignId)
       .run();
@@ -1642,8 +1705,7 @@ superadminRouter.post("/cohorts/:id/launch-voice", async (c) => {
     // Despachar (simulado si no hay API key)
     const fromNumber = c.env.TELNYX_PHONE_NUMBER || "+525500000000";
     const campaign: any = await c.env.DB.prepare("SELECT * FROM voice_campaigns WHERE id = ?").bind(campaignId).first();
-    const { results } = await c.env.DB
-      .prepare("SELECT * FROM voice_campaign_targets WHERE campaign_id = ? AND status IN ('pending','failed')")
+    const { results } = await c.env.DB.prepare("SELECT * FROM voice_campaign_targets WHERE campaign_id = ? AND status IN ('pending','failed')")
       .bind(campaignId)
       .all();
     const targets = results || [];
@@ -1709,18 +1771,25 @@ superadminRouter.post("/cohorts/:id/launch-voice", async (c) => {
 
       try {
         await c.env.DB.prepare(
-          `UPDATE voice_campaign_targets SET status = ?, call_control_id = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+          `UPDATE voice_campaign_targets SET status = ?, call_control_id = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         )
           .bind(status, callControlId, errorMsg, target.id)
           .run();
       } catch {}
 
-      executionLogs.push({ target_id: target.id, phone: target.to_phone, despacho: target.despacho_nombre, status, call_control_id: callControlId, error: errorMsg });
+      executionLogs.push({
+        target_id: target.id,
+        phone: target.to_phone,
+        despacho: target.despacho_nombre,
+        status,
+        call_control_id: callControlId,
+        error: errorMsg,
+      });
     }
 
     if (targets.length > 0) {
       await c.env.DB.prepare(
-        `UPDATE voice_campaigns SET completed_calls = completed_calls + ?, failed_calls = failed_calls + ?, status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        `UPDATE voice_campaigns SET completed_calls = completed_calls + ?, failed_calls = failed_calls + ?, status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       )
         .bind(completedCount, failedCount, campaignId)
         .run();
@@ -1749,14 +1818,20 @@ superadminRouter.get("/harvest/metrics", async (c) => {
   try {
     const totalAccounts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM sales_accounts").first<any>();
     const byScian = await c.env.DB.prepare("SELECT scian_code, COUNT(*) as cnt FROM sales_accounts WHERE scian_code IS NOT NULL GROUP BY scian_code").all();
-    const bySource = await c.env.DB.prepare("SELECT harvest_source, COUNT(*) as cnt FROM sales_accounts WHERE harvest_source IS NOT NULL GROUP BY harvest_source").all();
+    const bySource = await c.env.DB.prepare(
+      "SELECT harvest_source, COUNT(*) as cnt FROM sales_accounts WHERE harvest_source IS NOT NULL GROUP BY harvest_source",
+    ).all();
     const obsCount = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM sales_observations").first<any>();
-    const topSignals = await c.env.DB.prepare("SELECT signal_code, COUNT(*) as cnt FROM sales_observations GROUP BY signal_code ORDER BY cnt DESC LIMIT 10").all();
+    const topSignals = await c.env.DB.prepare(
+      "SELECT signal_code, COUNT(*) as cnt FROM sales_observations GROUP BY signal_code ORDER BY cnt DESC LIMIT 10",
+    ).all();
     const cohorts = await c.env.DB.prepare("SELECT cohort_id, name, vertical FROM sales_cohorts").all();
     const cohortSizes: any[] = [];
-    for (const ch of (cohorts?.results || [])) {
+    for (const ch of cohorts?.results || []) {
       try {
-        const r = await c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM (${(await c.env.DB.prepare("SELECT query_sql FROM sales_cohorts WHERE cohort_id = ?").bind(ch.cohort_id).first<any>())?.query_sql})`).first<any>();
+        const r = await c.env.DB.prepare(
+          `SELECT COUNT(*) as cnt FROM (${(await c.env.DB.prepare("SELECT query_sql FROM sales_cohorts WHERE cohort_id = ?").bind(ch.cohort_id).first<any>())?.query_sql})`,
+        ).first<any>();
         cohortSizes.push({ cohort_id: ch.cohort_id, name: ch.name, vertical: ch.vertical, size: r?.cnt || 0 });
       } catch {
         cohortSizes.push({ cohort_id: ch.cohort_id, name: ch.name, vertical: ch.vertical, size: 0 });
@@ -1770,12 +1845,14 @@ superadminRouter.get("/harvest/metrics", async (c) => {
     try {
       const pendingRes = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM agent_tasks WHERE status = 'pending'").first<any>();
       pendingTasksCount = pendingRes?.cnt || 0;
-      const runsRes = await c.env.DB.prepare(`
+      const runsRes = await c.env.DB.prepare(
+        `
         SELECT id, lead_id, skill_name, operator, status, started_at, finished_at, error_message
         FROM agent_skill_runs
         ORDER BY started_at DESC
         LIMIT 5
-      `).all<any>();
+      `,
+      ).all<any>();
       recentRuns = runsRes?.results || [];
     } catch {
       // Ignorar si aún no existen tablas en mocks
@@ -1826,11 +1903,9 @@ superadminRouter.get("/agent-skills/tasks", async (c) => {
     params.push(limit);
 
     const stmt = c.env.DB.prepare(query);
-    const { results: tasks } = await (params.length === 3
-      ? stmt.bind(params[0], params[1], params[2])
-      : params.length === 2
-      ? stmt.bind(params[0], params[1])
-      : stmt.bind(params[0])).all();
+    const { results: tasks } = await (
+      params.length === 3 ? stmt.bind(params[0], params[1], params[2]) : params.length === 2 ? stmt.bind(params[0], params[1]) : stmt.bind(params[0])
+    ).all();
 
     return c.json({ success: true, count: tasks ? tasks.length : 0, limit, tasks: tasks || [] });
   } catch (err: any) {
@@ -1860,11 +1935,9 @@ superadminRouter.get("/agent-skills/runs", async (c) => {
     params.push(limit);
 
     const stmt = c.env.DB.prepare(query);
-    const { results: runs } = await (params.length === 3
-      ? stmt.bind(params[0], params[1], params[2])
-      : params.length === 2
-      ? stmt.bind(params[0], params[1])
-      : stmt.bind(params[0])).all();
+    const { results: runs } = await (
+      params.length === 3 ? stmt.bind(params[0], params[1], params[2]) : params.length === 2 ? stmt.bind(params[0], params[1]) : stmt.bind(params[0])
+    ).all();
 
     return c.json({ success: true, count: runs ? runs.length : 0, limit, runs: runs || [] });
   } catch (err: any) {
@@ -1878,16 +1951,28 @@ superadminRouter.get("/agent-skills/lead/:lead_id", async (c) => {
   if (!leadId) return c.json({ error: "lead_id es obligatorio" }, 400);
 
   try {
-    const lead = await c.env.DB.prepare("SELECT id, despacho_nombre, email, tamano, score, conversation_summary, updated_at FROM sales_leads WHERE id = ? LIMIT 1").bind(leadId).first<any>();
+    const lead = await c.env.DB.prepare(
+      "SELECT id, despacho_nombre, email, tamano, score, conversation_summary, updated_at FROM sales_leads WHERE id = ? LIMIT 1",
+    )
+      .bind(leadId)
+      .first<any>();
     if (!lead) return c.json({ error: "Lead no encontrado" }, 404);
 
-    const { results: runs } = await c.env.DB.prepare(`
+    const { results: runs } = await c.env.DB.prepare(
+      `
       SELECT * FROM agent_skill_runs WHERE lead_id = ? ORDER BY started_at DESC LIMIT 50
-    `).bind(leadId).all();
+    `,
+    )
+      .bind(leadId)
+      .all();
 
-    const { results: tasks } = await c.env.DB.prepare(`
+    const { results: tasks } = await c.env.DB.prepare(
+      `
       SELECT * FROM agent_tasks WHERE lead_id = ? ORDER BY created_at DESC LIMIT 50
-    `).bind(leadId).all();
+    `,
+    )
+      .bind(leadId)
+      .all();
 
     return c.json({
       success: true,
@@ -1910,9 +1995,7 @@ superadminRouter.get("/canaco/campaign", async (c) => {
   if (!c.env.DB) return c.json({ error: "DB no disponible" }, 503);
 
   try {
-    let config: any = await c.env.DB
-      .prepare("SELECT * FROM canaco_campaign_config WHERE id = 'camp_canaco_siem_1200' LIMIT 1")
-      .first();
+    let config: any = await c.env.DB.prepare("SELECT * FROM canaco_campaign_config WHERE id = 'camp_canaco_siem_1200' LIMIT 1").first();
 
     if (!config) {
       config = {
@@ -1930,7 +2013,7 @@ superadminRouter.get("/canaco/campaign", async (c) => {
         conversions_siem_total: 0,
         conversions_pro_total: 0,
         dedicated_domain: "siem-canaco.com.mx",
-        domain_cost_mxn: 299.00,
+        domain_cost_mxn: 299.0,
         domain_billing_status: "pendiente_refacturacion",
         from_email: "afiliacion@siem-canaco.com.mx",
         landing_base_url: "https://canacomerida.arksystems.site/registro-siem",
@@ -1939,18 +2022,22 @@ superadminRouter.get("/canaco/campaign", async (c) => {
     }
 
     // Calcular conversiones reales registradas en D1
-    const siemLeads: any = await c.env.DB
-      .prepare("SELECT COUNT(*) as cnt FROM sales_leads WHERE conversation_summary LIKE '%SIEM CANACO%' OR conversation_summary LIKE '%canaco%'")
-      .first().catch(() => ({ cnt: 0 }));
+    const siemLeads: any = await c.env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM sales_leads WHERE conversation_summary LIKE '%SIEM CANACO%' OR conversation_summary LIKE '%canaco%'",
+    )
+      .first()
+      .catch(() => ({ cnt: 0 }));
 
-    const proOpps: any = await c.env.DB
-      .prepare("SELECT COUNT(*) as cnt FROM sales_opportunities WHERE products_interest_json LIKE '%ledger_pro%'")
-      .first().catch(() => ({ cnt: 0 }));
+    const proOpps: any = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM sales_opportunities WHERE products_interest_json LIKE '%ledger_pro%'")
+      .first()
+      .catch(() => ({ cnt: 0 }));
 
     // Despachos de las últimas 24 horas para medir cuota diaria de Resend Free (límite 100/día)
-    const recent24h: any = await c.env.DB
-      .prepare("SELECT COUNT(*) as cnt FROM email_dispatches WHERE template_slug = 'canaco_siem_invitacion' AND created_at >= datetime('now', '-24 hours')")
-      .first().catch(() => ({ cnt: 0 }));
+    const recent24h: any = await c.env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM email_dispatches WHERE template_slug = 'canaco_siem_invitacion' AND created_at >= datetime('now', '-24 hours')",
+    )
+      .first()
+      .catch(() => ({ cnt: 0 }));
 
     const dispatchedToday = recent24h?.cnt || 0;
     const remainingDailyQuota = Math.max(0, (config.daily_batch_limit || 100) - dispatchedToday);
@@ -1976,7 +2063,7 @@ superadminRouter.get("/canaco/campaign", async (c) => {
         provider: "Resend (Tier Gratuito)",
         daily_limit: 100,
         monthly_limit: 3000,
-        cost_usd: 0.00,
+        cost_usd: 0.0,
         cadence_description: "Barrido completo de 1,200 socios cada 12 días (2.5 barridos al mes dentro del límite de 3,000 correos)",
         estimated_savings_usd: "$20 USD / mes ahorrados en infraestructura de email",
       },
@@ -2002,17 +2089,13 @@ superadminRouter.post("/canaco/dispatch-batch", async (c) => {
     const requestedLimit = Math.min(100, Math.max(1, body?.batch_size || 100));
 
     // 1. Obtener o inicializar configuración de campaña
-    let config: any = await c.env.DB
-      .prepare("SELECT * FROM canaco_campaign_config WHERE id = 'camp_canaco_siem_1200' LIMIT 1")
-      .first();
+    let config: any = await c.env.DB.prepare("SELECT * FROM canaco_campaign_config WHERE id = 'camp_canaco_siem_1200' LIMIT 1").first();
 
     const fromEmail = config?.from_email || "afiliacion@siem-canaco.com.mx";
     const landingBaseUrl = config?.landing_base_url || "https://canacomerida.arksystems.site/registro-siem";
 
     // 2. Obtener plantilla
-    const template: any = await c.env.DB
-      .prepare("SELECT * FROM email_templates WHERE slug = 'canaco_siem_invitacion' LIMIT 1")
-      .first();
+    const template: any = await c.env.DB.prepare("SELECT * FROM email_templates WHERE slug = 'canaco_siem_invitacion' LIMIT 1").first();
 
     if (!template) {
       return c.json({ error: "Plantilla 'canaco_siem_invitacion' no encontrada en D1" }, 404);
@@ -2021,8 +2104,7 @@ superadminRouter.post("/canaco/dispatch-batch", async (c) => {
     // 3. Obtener o generar lote de socios a despachar
     let subscribers: any[] = [];
     try {
-      const subsRes = await c.env.DB
-        .prepare("SELECT * FROM canaco_subscribers WHERE status = 'pending' ORDER BY batch_number ASC LIMIT ?")
+      const subsRes = await c.env.DB.prepare("SELECT * FROM canaco_subscribers WHERE status = 'pending' ORDER BY batch_number ASC LIMIT ?")
         .bind(requestedLimit)
         .all();
       subscribers = subsRes?.results || [];
@@ -2103,38 +2185,38 @@ superadminRouter.post("/canaco/dispatch-batch", async (c) => {
       }
 
       // Registrar en email_dispatches
-      await c.env.DB.prepare(`
+      await c.env.DB.prepare(
+        `
         INSERT INTO email_dispatches (
           id, tenant_id, template_slug, recipient_email, recipient_name, subject, variables_payload_json, status, resend_id, error_message, created_at
         ) VALUES (?, 'canaco', 'canaco_siem_invitacion', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      `).bind(
-        dispatchId,
-        to,
-        sub.socio_nombre,
-        subject,
-        JSON.stringify(vars),
-        status,
-        resendId,
-        errorMsg
-      ).run().catch(() => {});
+      `,
+      )
+        .bind(dispatchId, to, sub.socio_nombre, subject, JSON.stringify(vars), status, resendId, errorMsg)
+        .run()
+        .catch(() => {});
 
       // Actualizar estado del suscriptor si existe en tabla
-      await c.env.DB.prepare(`
+      await c.env.DB.prepare(
+        `
         UPDATE canaco_subscribers
         SET status = 'sent', last_sent_at = CURRENT_TIMESTAMP, cycle_number = cycle_number + 1
         WHERE id = ?
-      `).bind(sub.id).run().catch(() => {});
+      `,
+      )
+        .bind(sub.id)
+        .run()
+        .catch(() => {});
 
       results.push({ recipient: to, status, resend_id: resendId, dispatch_id: dispatchId });
     }
 
     // Actualizar contadores del ciclo y campaña en canaco_campaign_config
     const newDay = ((config?.current_day_in_cycle || 1) % 12) + 1;
-    const newCycle = (config?.current_day_in_cycle || 1) >= 12
-      ? (config?.current_cycle || 1) + 1
-      : (config?.current_cycle || 1);
+    const newCycle = (config?.current_day_in_cycle || 1) >= 12 ? (config?.current_cycle || 1) + 1 : config?.current_cycle || 1;
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       UPDATE canaco_campaign_config
       SET dispatched_total = dispatched_total + ?,
           current_day_in_cycle = ?,
@@ -2142,7 +2224,11 @@ superadminRouter.post("/canaco/dispatch-batch", async (c) => {
           last_batch_dispatched_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = 'camp_canaco_siem_1200'
-    `).bind(dispatched, newDay, newCycle).run().catch(() => {});
+    `,
+    )
+      .bind(dispatched, newDay, newCycle)
+      .run()
+      .catch(() => {});
 
     return c.json({
       success: true,
@@ -2165,16 +2251,20 @@ superadminRouter.post("/canaco/domain/bill", async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const newStatus = body?.status || "facturado"; // 'pendiente_refacturacion', 'facturado', 'cobrado'
     const domainName = body?.domain || "siem-canaco.com.mx";
-    const amountMxn = typeof body?.amount_mxn === "number" ? body.amount_mxn : 299.00;
+    const amountMxn = typeof body?.amount_mxn === "number" ? body.amount_mxn : 299.0;
 
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       UPDATE canaco_campaign_config
       SET domain_billing_status = ?,
           domain_cost_mxn = ?,
           dedicated_domain = ?,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = 'camp_canaco_siem_1200'
-    `).bind(newStatus, amountMxn, domainName).run();
+    `,
+    )
+      .bind(newStatus, amountMxn, domainName)
+      .run();
 
     return c.json({
       success: true,

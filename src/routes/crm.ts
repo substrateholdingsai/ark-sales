@@ -33,7 +33,7 @@ crmRouter.post("/import/sheets", requireRole("write"), handleSheetsImport);
 // Acción restringida: solo admin
 crmRouter.get("/admin/users", requireRole("admin"), async (c) => {
   const { results } = await c.env.DB.prepare(
-    "SELECT id, email, name, role, is_active, created_at, updated_at FROM crm_users ORDER BY created_at DESC"
+    "SELECT id, email, name, role, is_active, created_at, updated_at FROM crm_users ORDER BY created_at DESC",
   ).all<any>();
   const audit = new AuditService(c.env.DB);
   await audit.record({
@@ -72,16 +72,16 @@ crmRouter.post("/admin/users", requireRole("admin"), async (c) => {
 // Auditoría: solo admin (lectura)
 crmRouter.get("/audit", requireRole("admin"), async (c) => {
   const limit = Math.min(parseInt(c.req.query("limit") || "50", 10) || 50, 200);
-  const { results } = await c.env.DB.prepare(
-    "SELECT * FROM crm_audit_log ORDER BY created_at DESC LIMIT ?"
-  ).bind(limit).all<any>();
+  const { results } = await c.env.DB.prepare("SELECT * FROM crm_audit_log ORDER BY created_at DESC LIMIT ?").bind(limit).all<any>();
   return c.json({ count: results?.length ?? 0, events: results ?? [] });
 });
 
 // Work inbox
 crmRouter.get("/inbox", async (c) => {
   const db = c.env.DB;
-  const { results: oppRows } = await db.prepare(`
+  const { results: oppRows } = await db
+    .prepare(
+      `
     SELECT 
       o.*,
       MAX(a.created_at) AS last_activity_at,
@@ -92,16 +92,22 @@ crmRouter.get("/inbox", async (c) => {
     WHERE o.stage NOT IN ('ganado', 'perdido')
     GROUP BY o.id
     ORDER BY o.updated_at ASC
-  `).all<any>();
+  `,
+    )
+    .all<any>();
 
   const openOppIds = new Set((oppRows || []).map((o: any) => o.id));
 
   // Cargar tareas vencidas en un solo ciclo (sin N+1)
-  const { results: overdueTasksAll } = await db.prepare(`
+  const { results: overdueTasksAll } = await db
+    .prepare(
+      `
     SELECT * FROM sales_tasks
     WHERE status IN ('pending','in_progress') AND due_date IS NOT NULL AND due_date < CURRENT_TIMESTAMP
       AND opportunity_id IS NOT NULL
-  `).all<any>();
+  `,
+    )
+    .all<any>();
 
   const overdueByOpp = new Map<string, any[]>();
   for (const t of overdueTasksAll || []) {
@@ -129,12 +135,16 @@ crmRouter.get("/inbox", async (c) => {
     }
   }
 
-  const { results: globalOverdue } = await db.prepare(`
+  const { results: globalOverdue } = await db
+    .prepare(
+      `
     SELECT * FROM sales_tasks
     WHERE status IN ('pending','in_progress') AND opportunity_id IS NULL
       AND due_date IS NOT NULL AND due_date < CURRENT_TIMESTAMP
     ORDER BY due_date ASC
-  `).all<any>();
+  `,
+    )
+    .all<any>();
 
   return c.json({ inbox, global_overdue_tasks: globalOverdue || [] });
 });
@@ -144,27 +154,37 @@ crmRouter.get("/search", async (c) => {
   const q = (c.req.query("q") || "").trim();
   if (!q) return c.json({ accounts: [], contacts: [], opportunities: [], activities: [] });
   const like = `%${q}%`;
-  const { results: accounts } = await c.env.DB.prepare(
-    "SELECT id, name, size, city FROM sales_accounts WHERE name LIKE ? OR city LIKE ? LIMIT 20"
-  ).bind(like, like).all<any>();
+  const { results: accounts } = await c.env.DB.prepare("SELECT id, name, size, city FROM sales_accounts WHERE name LIKE ? OR city LIKE ? LIMIT 20")
+    .bind(like, like)
+    .all<any>();
   const { results: contacts } = await c.env.DB.prepare(
-    "SELECT id, account_id, name, email, phone, title FROM sales_contacts WHERE name LIKE ? OR email LIKE ? OR phone LIKE ? LIMIT 20"
-  ).bind(like, like, like).all<any>();
+    "SELECT id, account_id, name, email, phone, title FROM sales_contacts WHERE name LIKE ? OR email LIKE ? OR phone LIKE ? LIMIT 20",
+  )
+    .bind(like, like, like)
+    .all<any>();
   const { results: opportunities } = await c.env.DB.prepare(
-    "SELECT id, account_id, stage, estimated_value, currency FROM sales_opportunities WHERE id LIKE ? OR account_id LIKE ? LIMIT 20"
-  ).bind(like, like).all<any>();
+    "SELECT id, account_id, stage, estimated_value, currency FROM sales_opportunities WHERE id LIKE ? OR account_id LIKE ? LIMIT 20",
+  )
+    .bind(like, like)
+    .all<any>();
   const { results: activities } = await c.env.DB.prepare(
-    "SELECT id, type, content, account_id, opportunity_id, created_at FROM sales_activities WHERE content LIKE ? LIMIT 20"
-  ).bind(like).all<any>();
+    "SELECT id, type, content, account_id, opportunity_id, created_at FROM sales_activities WHERE content LIKE ? LIMIT 20",
+  )
+    .bind(like)
+    .all<any>();
   return c.json({ accounts: accounts || [], contacts: contacts || [], opportunities: opportunities || [], activities: activities || [] });
 });
 
 // Métricas básicas del pipeline
 crmRouter.get("/metrics", async (c) => {
   const db = c.env.DB;
-  const { results: byStage } = await db.prepare(`
+  const { results: byStage } = await db
+    .prepare(
+      `
     SELECT stage, COUNT(*) as count FROM sales_opportunities GROUP BY stage
-  `).all<any>();
+  `,
+    )
+    .all<any>();
 
   const stageCounts: Record<string, number> = {};
   for (const r of byStage || []) stageCounts[(r as any).stage] = (r as any).count;
@@ -175,9 +195,13 @@ crmRouter.get("/metrics", async (c) => {
   const closed = won + lost;
   const conversionRate = closed > 0 ? Math.round((won / closed) * 100) : 0;
 
-  const { results: wonOpps } = await db.prepare(`
+  const { results: wonOpps } = await db
+    .prepare(
+      `
     SELECT created_at, updated_at FROM sales_opportunities WHERE stage = 'ganado'
-  `).all<any>();
+  `,
+    )
+    .all<any>();
   let avgCloseDays = 0;
   if (wonOpps && wonOpps.length > 0) {
     const days = wonOpps.map((o: any) => {
@@ -188,20 +212,32 @@ crmRouter.get("/metrics", async (c) => {
     avgCloseDays = Math.round((days.reduce((a, b) => a + b, 0) / days.length) * 10) / 10;
   }
 
-  const overdueRow: any = await db.prepare(`
+  const overdueRow: any = await db
+    .prepare(
+      `
     SELECT COUNT(*) as n FROM sales_tasks
     WHERE status IN ('pending','in_progress') AND due_date IS NOT NULL AND due_date < CURRENT_TIMESTAMP
-  `).first();
+  `,
+    )
+    .first();
 
-  const { results: openOpps } = await db.prepare(`
+  const { results: openOpps } = await db
+    .prepare(
+      `
     SELECT o.id FROM sales_opportunities o
     WHERE o.stage NOT IN ('ganado','perdido')
       AND NOT EXISTS (SELECT 1 FROM sales_tasks t WHERE t.opportunity_id = o.id AND t.status IN ('pending','in_progress'))
-  `).all<any>();
+  `,
+    )
+    .all<any>();
 
-  const { results: byActivityType } = await db.prepare(`
+  const { results: byActivityType } = await db
+    .prepare(
+      `
     SELECT type, COUNT(*) as count FROM sales_activities GROUP BY type
-  `).all<any>();
+  `,
+    )
+    .all<any>();
   const activityCounts: Record<string, number> = {};
   for (const r of byActivityType || []) activityCounts[(r as any).type] = (r as any).count;
 

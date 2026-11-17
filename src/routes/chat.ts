@@ -54,7 +54,8 @@ chatRouter.post("/", async (c) => {
     // Si es un lead nuevo y viene email, registrar en sales_leads
     if (c.env.DB && (!lead_id || email)) {
       try {
-        await c.env.DB.prepare(`
+        await c.env.DB.prepare(
+          `
           INSERT INTO sales_leads (id, email, despacho_nombre, tamano, especialista_asignado, estado, score, created_at, updated_at)
           VALUES (?, ?, ?, ?, 'intake', 'nuevo', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           ON CONFLICT(id) DO UPDATE SET
@@ -62,12 +63,10 @@ chatRouter.post("/", async (c) => {
             despacho_nombre = coalesce(excluded.despacho_nombre, sales_leads.despacho_nombre),
             tamano = coalesce(excluded.tamano, sales_leads.tamano),
             updated_at = CURRENT_TIMESTAMP
-        `).bind(
-          effectiveLeadId,
-          email || "anonimo@lead.arksystems.site",
-          despacho_nombre || null,
-          tamano || null
-        ).run();
+        `,
+        )
+          .bind(effectiveLeadId, email || "anonimo@lead.arksystems.site", despacho_nombre || null, tamano || null)
+          .run();
         await ensureAccountContactForLead(c.env.DB, { id: effectiveLeadId, email: email || "anonimo@lead.arksystems.site", despacho_nombre, tamano });
       } catch (dbErr) {
         console.error("[chatRouter] Error insertando o actualizando lead en D1:", dbErr);
@@ -102,7 +101,7 @@ chatRouter.post("/", async (c) => {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
-          "Connection": "keep-alive",
+          Connection: "keep-alive",
         },
       });
     }

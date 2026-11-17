@@ -9,7 +9,8 @@ export const mcpRouter = new Hono<{ Bindings: Env }>();
 const MCP_TOOLS = [
   {
     name: "buscar_prospectos_cosechados",
-    description: "Busca y filtra prospectos comerciales cosechados del DENUE e internet por Ark Systems, enriquecidos con teléfonos, WhatsApp, score y señales de dolor comercial.",
+    description:
+      "Busca y filtra prospectos comerciales cosechados del DENUE e internet por Ark Systems, enriquecidos con teléfonos, WhatsApp, score y señales de dolor comercial.",
     inputSchema: {
       type: "object",
       properties: {
@@ -42,7 +43,8 @@ const MCP_TOOLS = [
   },
   {
     name: "exportar_prospectos_hubspot",
-    description: "Exporta prospectos cosechados directamente en el formato JSON nativo de HubSpot CRM (propiedades firstname, lastname, company, phone, mobilephone, email, city, etc.), listos para ser importados o consumidos por Claude en HubSpot.",
+    description:
+      "Exporta prospectos cosechados directamente en el formato JSON nativo de HubSpot CRM (propiedades firstname, lastname, company, phone, mobilephone, email, city, etc.), listos para ser importados o consumidos por Claude en HubSpot.",
     inputSchema: {
       type: "object",
       properties: {
@@ -67,7 +69,8 @@ const MCP_TOOLS = [
   },
   {
     name: "obtener_resumen_plazas",
-    description: "Consulta el inventario en tiempo real de leads cosechados disponibles por plaza geográfica, cobertura de WhatsApp y verticales de negocio en Cloudflare D1.",
+    description:
+      "Consulta el inventario en tiempo real de leads cosechados disponibles por plaza geográfica, cobertura de WhatsApp y verticales de negocio en Cloudflare D1.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -75,7 +78,8 @@ const MCP_TOOLS = [
   },
   {
     name: "sincronizar_leads_a_hubspot",
-    description: "Empuja directamente un lote de prospectos cosechados al CRM de HubSpot del cliente utilizando su token de aplicación privada (HubSpot Private App Access Token).",
+    description:
+      "Empuja directamente un lote de prospectos cosechados al CRM de HubSpot del cliente utilizando su token de aplicación privada (HubSpot Private App Access Token).",
     inputSchema: {
       type: "object",
       required: ["hubspot_access_token"],
@@ -211,9 +215,11 @@ async function consultarLeadsD1(env: Env, args: any, tenantRestringido?: string)
   // Filtro de Plaza
   if (plaza && plaza !== "all") {
     if (plaza === "campeche") {
-      sql += " AND (a.city LIKE '%campeche%' OR a.city LIKE '%carmen%' OR c.phone LIKE '981%' OR c.phone LIKE '938%' OR c.whatsapp LIKE '981%' OR c.whatsapp LIKE '938%')";
+      sql +=
+        " AND (a.city LIKE '%campeche%' OR a.city LIKE '%carmen%' OR c.phone LIKE '981%' OR c.phone LIKE '938%' OR c.whatsapp LIKE '981%' OR c.whatsapp LIKE '938%')";
     } else if (plaza === "cancun") {
-      sql += " AND ((a.city LIKE '%cancun%' OR a.city LIKE '%cancún%' OR a.city LIKE '%benito%' OR a.city LIKE '%quintana%') AND a.city NOT LIKE '%tulum%' AND a.city NOT LIKE '%playa%')";
+      sql +=
+        " AND ((a.city LIKE '%cancun%' OR a.city LIKE '%cancún%' OR a.city LIKE '%benito%' OR a.city LIKE '%quintana%') AND a.city NOT LIKE '%tulum%' AND a.city NOT LIKE '%playa%')";
     } else if (plaza === "riviera_maya" || plaza === "tulum" || plaza === "playa") {
       sql += " AND (a.city LIKE '%tulum%' OR a.city LIKE '%playa%' OR a.city LIKE '%cozumel%' OR a.city LIKE '%solidaridad%')";
     } else if (plaza === "merida") {
@@ -260,8 +266,8 @@ async function consultarLeadsD1(env: Env, args: any, tenantRestringido?: string)
     const parts = rawName.split(" ");
     const firstname = parts[0] || "";
     const lastname = parts.slice(1).join(" ") || "";
-    const wa = (row.whatsapp && row.whatsapp !== "-") ? row.whatsapp : null;
-    const phone = (row.phone && row.phone !== "-") ? row.phone : (wa || null);
+    const wa = row.whatsapp && row.whatsapp !== "-" ? row.whatsapp : null;
+    const phone = row.phone && row.phone !== "-" ? row.phone : wa || null;
 
     return {
       contact_id: row.id,
@@ -274,7 +280,7 @@ async function consultarLeadsD1(env: Env, args: any, tenantRestringido?: string)
       telefono: phone,
       whatsapp: wa,
       whatsapp_link: wa ? `https://wa.me/${wa.replace(/\D/g, "")}` : null,
-      email: (row.email && row.email !== "-") ? row.email : null,
+      email: row.email && row.email !== "-" ? row.email : null,
       especialidad: row.title || "Salud y Medicina",
       score_prospeccion: row.score || 70,
       dolor_comercial: row.dolor_detectado || "interes_expansion",
@@ -333,18 +339,22 @@ async function ejecutarToolMcp(env: Env, name: string, args: any, tenantRestring
   }
 
   if (name === "obtener_resumen_plazas") {
-    const totalStmt = await env.DB.prepare(`
+    const totalStmt = await env.DB.prepare(
+      `
       SELECT 
         COUNT(*) as total_contactos,
         COUNT(CASE WHEN whatsapp IS NOT NULL AND whatsapp != '' AND whatsapp != '-' THEN 1 END) as con_whatsapp,
         COUNT(CASE WHEN email IS NOT NULL AND email != '' AND email != '-' THEN 1 END) as con_email
       FROM sales_contacts
-    `).first<any>();
+    `,
+    ).first<any>();
 
     // Conteos por plaza
-    const accountsStmt = await env.DB.prepare(`
+    const accountsStmt = await env.DB.prepare(
+      `
       SELECT city, COUNT(*) as n FROM sales_accounts GROUP BY city
-    `).all<any>();
+    `,
+    ).all<any>();
 
     const desgloseCiudades: Record<string, number> = {};
     (accountsStmt.results || []).forEach((row: any) => {
@@ -358,13 +368,21 @@ async function ejecutarToolMcp(env: Env, name: string, args: any, tenantRestring
         total_contactos: totalStmt?.total_contactos || 0,
         con_whatsapp_directo: totalStmt?.con_whatsapp || 0,
         con_email_corporativo: totalStmt?.con_email || 0,
-        tasa_cobertura_whatsapp: totalStmt?.total_contactos
-          ? `${Math.round(((totalStmt.con_whatsapp || 0) / totalStmt.total_contactos) * 100)}%`
-          : "0%",
+        tasa_cobertura_whatsapp: totalStmt?.total_contactos ? `${Math.round(((totalStmt.con_whatsapp || 0) / totalStmt.total_contactos) * 100)}%` : "0%",
       },
       plazas_activas: [
-        { plaza: "campeche", nombre: "San Francisco de Campeche & Ciudad del Carmen", estado: "Campeche", vertical: "Clínicas, Especialidades Médicas & Hospitales" },
-        { plaza: "cancun", nombre: "Cancún (Zona Médica & Puerto Cancún)", estado: "Quintana Roo", vertical: "Turismo Médico, Estética, Cirugía Plástica & Dental" },
+        {
+          plaza: "campeche",
+          nombre: "San Francisco de Campeche & Ciudad del Carmen",
+          estado: "Campeche",
+          vertical: "Clínicas, Especialidades Médicas & Hospitales",
+        },
+        {
+          plaza: "cancun",
+          nombre: "Cancún (Zona Médica & Puerto Cancún)",
+          estado: "Quintana Roo",
+          vertical: "Turismo Médico, Estética, Cirugía Plástica & Dental",
+        },
         { plaza: "riviera_maya", nombre: "Playa del Carmen, Tulum & Cozumel", estado: "Quintana Roo", vertical: "Wellness, Dental, Clínicas Internacionales" },
         { plaza: "merida", nombre: "Mérida (Altabrisa & Montejo)", estado: "Yucatán", vertical: "Medicina Especializada, Hospitales & Firmas Contables" },
       ],
@@ -404,7 +422,7 @@ async function ejecutarToolMcp(env: Env, name: string, args: any, tenantRestring
       const resp = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/batch/create", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ inputs }),
@@ -453,7 +471,8 @@ async function procesarMensajeJsonRpc(env: Env, rpc: any, tenantRestringido?: st
           name: "ark-sales-mcp",
           version: "1.0.0",
         },
-        instructions: "Servidor oficial de ARK Systems para acceso de agentes y CRMs (Claude, HubSpot, Cursor) a prospectos comerciales cosechados del DENUE y enriquecidos.",
+        instructions:
+          "Servidor oficial de ARK Systems para acceso de agentes y CRMs (Claude, HubSpot, Cursor) a prospectos comerciales cosechados del DENUE y enriquecidos.",
       },
     };
   }
@@ -603,7 +622,7 @@ mcpRouter.get("/sse", async (c) => {
     headers: {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
-      "Connection": "keep-alive",
+      Connection: "keep-alive",
       "Access-Control-Allow-Origin": "*",
     },
   });
