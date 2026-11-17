@@ -191,6 +191,19 @@ tailwind.config = {
   .toast-in { animation: toastIn 0.25s ease; }
   .modal-backdrop { transition: opacity 0.2s; }
   .modal-content { animation: toastIn 0.2s ease; }
+  .lot { cursor: pointer; transition: fill 0.12s, stroke-width 0.1s; stroke-width: 1.5; }
+  .lot:hover { stroke-width: 2.5; filter: brightness(1.1); }
+  .lot-disponible { fill: #10b981; stroke: #059669; }
+  .lot-apartado { fill: #f59e0b; stroke: #b45309; }
+  .lot-vendido { fill: #ef4444; stroke: #b91c1c; }
+  .lot-bloqueado { fill: #64748b; stroke: #334155; }
+  .lot text { pointer-events: none; user-select: none; }
+  #mp-container { touch-action: pan-x pan-y; }
+  #mp-tooltip {
+    position: fixed; pointer-events: none; padding: 6px 8px; border-radius: 6px;
+    background: #0f172a; border: 1px solid #334155; color: #e2e8f0; font-size: 11px;
+    font-family: 'JetBrains Mono', monospace; z-index: 60; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
 </style>
 </head>
 
@@ -231,6 +244,9 @@ tailwind.config = {
     <a href="#/tareas" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300">
       <i data-lucide="check-square" class="w-4 h-4"></i> Tareas
       <span id="tareasBadge" class="ml-auto badge badge-rojo">0</span>
+    </a>
+    <a href="#/masterplan" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300 hidden" id="navMasterplan">
+      <i data-lucide="layout-grid" class="w-4 h-4"></i> Masterplan Altum
     </a>
     <div id="sidebarSuperAdminDiv" class="pt-4 mt-4 border-t border-slate-800 hidden">
       <a id="sidebarSuperAdminNav" href="#/superadmin" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300">
@@ -579,6 +595,92 @@ tailwind.config = {
       </div>
       <div id="tareasList" class="space-y-2"></div>
     </section>
+
+    <section id="vista-masterplan" class="p-6 space-y-6 hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-bold text-white">Masterplan Altum</h1>
+          <p class="text-xs text-slate-400">Inventario visual de unidades · Altum Mérida · Precios calculados exclusivamente en servidor</p>
+        </div>
+        <button onclick="location.hash='#/dashboard'" class="text-xs font-semibold px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white">← Regresar al CRM</button>
+      </div>
+
+      <div class="flex flex-wrap gap-4 items-center text-xs font-semibold text-slate-300">
+        <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#10b981]"></span> Disponible</span>
+        <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#f59e0b]"></span> Apartado</span>
+        <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#ef4444]"></span> Vendido</span>
+        <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#64748b]"></span> Bloqueado</span>
+        <span class="ml-auto text-[10px] text-slate-500">Haz clic en un lote para abrir detalle y cotizador</span>
+      </div>
+
+      <div id="mpError" class="hidden p-3 rounded bg-rose-900/40 border border-rose-500/40 text-rose-400 text-sm"></div>
+
+      <div id="mp-container" class="w-full max-w-4xl mx-auto overflow-auto border border-slate-800 rounded-lg bg-slate-900/60">
+        <svg id="masterplanSvg" class="block" role="grid" aria-label="Masterplan de unidades Altum Sureste"></svg>
+      </div>
+
+      <p id="mpHint" class="text-xs text-slate-500">Los lotes se agrupan por bloque. El cotizador consulta al servidor; el navegador nunca calcula precios.</p>
+    </section>
+
+    <div id="modalMasterplan" class="fixed inset-0 z-50 hidden" aria-modal="true">
+      <div class="fixed inset-0 bg-black/60 backdrop-blur-sm" onclick="closeMasterplanModal()"></div>
+      <div class="fixed left-[6%] top-[4%] w-[88%] max-w-[700px] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl flex flex-col">
+        <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+          <h2 class="text-lg font-bold text-white" id="mpModalTitle">Unidad</h2>
+          <button onclick="closeMasterplanModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="overflow-y-auto p-6">
+          <div id="mpModalDetail" class="space-y-3 text-sm"></div>
+          <hr class="border-slate-800 my-4">
+          <div class="space-y-3">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Cotizador (sólo servidor)</h3>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">Descuento %</label>
+                <input type="number" id="mpDisc" min="0" max="100" step="0.01" value="0" oninput="cotizadorChanged()" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white focus:border-ark-blue_hi">
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">Enganche %</label>
+                <input type="number" id="mpDown" min="0" max="100" step="0.01" value="0" oninput="cotizadorChanged()" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white focus:border-ark-blue_hi">
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">Mensualidades</label>
+                <input type="number" id="mpMonths" min="0" step="1" value="0" oninput="cotizadorChanged()" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white focus:border-ark-blue_hi">
+                <span class="text-xs text-slate-500">0 = contado</span>
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">Plan de pagos</label>
+                <select id="mpPlan" oninput="cotizadorChanged()" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white focus:border-ark-blue_hi">
+                  <option>Contado</option>
+                  <option>Mensualidades iguales</option>
+                  <option>Enganche y saldo</option>
+                </select>
+              </div>
+            </div>
+            <p id="mpCalcError" class="text-xs text-rose-400 hidden"></p>
+            <div id="mpCalcResult" class="pt-3 space-y-2 text-sm hidden">
+              <div class="flex justify-between text-slate-300"><span>Precio lista:</span><span id="mpList" class="font-mono text-white"></span></div>
+              <div class="flex justify-between text-slate-300"><span>Descuento:</span><span id="mpDiscAmt" class="font-mono text-slate-300"></span></div>
+              <div class="flex justify-between text-ark-blue_hi"><span class="text-slate-300">TOTAL DE VENTA:</span><span id="mpTotal" class="font-mono text-white"></span></div>
+              <div class="flex justify-between text-slate-300"><span>Enganche:</span><span id="mpDownAmt" class="font-mono text-slate-300"></span></div>
+              <div class="flex justify-between text-slate-300"><span>Mensualidad:</span><span id="mpMonthAmt" class="font-mono text-slate-300"></span></div>
+              <div id="mpBreakdown" class="text-xs text-slate-400 space-y-1 font-mono"></div>
+            </div>
+            <div class="pt-4 flex gap-3">
+              <button id="mpSaveQuote" onclick="saveMasterplanQuote()" class="flex-1 bg-ark-blue hover:bg-blue-600 text-white text-sm font-semibold py-2 rounded-lg">Guardar cotización</button>
+              <button id="mpPropose" onclick="prepareProposal()" class="flex-1 border border-slate-600 rounded-lg text-sm font-semibold py-2 text-slate-300 hover:bg-slate-800">Enviar propuesta</button>
+            </div>
+            <p id="mpQuoteSaved" class="text-xs text-emerald_hi mt-2 hidden">Cotización guardada en estado borrador.</p>
+            <div id="mpProposalDraft" class="mt-3 p-3 rounded bg-slate-800 border border-slate-700 hidden">
+              <h4 class="text-xs font-bold text-ark-blue_hi mb-1">Borrador de propuesta (no enviado)</h4>
+              <div id="mpProposalSubject" class="font-mono text-xs text-slate-200 mb-1 break-all"></div>
+              <div id="mpProposalHtml" class="text-xs text-slate-400 break-all whitespace-pre-wrap max-h-48 overflow-y-auto"></div>
+              <p class="text-[10px] text-slate-500 mt-2">Borrador preparado con plantilla propuesta_enterprise. No se envía correo ni WhatsApp. Un envío real requiere dry_run y aprobación de Pavel en el chat.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- ═══════ VISTA: SUPER ADMIN (EXCLUSIVA ADMIN) ═══════ -->
     <section id="vista-superadmin" class="p-6 space-y-6 hidden">
@@ -1434,7 +1536,8 @@ let state = {
   tasks: [],
   metrics: null,
   inbox: [],
-  users: []
+  users: [],
+  isAltum: false
 };
 
 const ETAPAS = [
@@ -1475,10 +1578,212 @@ async function initUser() {
         if (superAdminDiv) superAdminDiv.classList.add('hidden');
         if (topBarBtn) topBarBtn.classList.add('hidden');
       }
+
+      // Visibilidad del vertical Altum: solo tenant Altum y Super Admin
+      const isAltumTenant = isAdmin || (email && String(email).toLowerCase().includes('altum'));
+      state.isAltum = isAltumTenant;
+      const navMasterplan = document.getElementById('navMasterplan');
+      if (navMasterplan) navMasterplan.classList.toggle('hidden', !isAltumTenant);
     }
   } catch(e) {
     console.warn('Error cargando usuario:', e);
   }
+}
+
+// ── MASTERPLAN ALTUM: GRID SVG, DETALLE Y COTIZADOR (cálculo 100 % servidor) ──
+const ALTUM_PROJECT_ID = 're_proj_altum_merida';
+let mpUnitsFlat = [];
+let mpCurrentUnit = null;
+let mpLastCalc = null;
+let mpLastQuoteBody = null;
+let cotizadorTimer = null;
+
+function statusBadge(s) {
+  var map = { disponible: 'badge badge-esmeralda', apartado: 'badge badge-ambar', vendido: 'badge badge-rojo', bloqueado: 'badge badge-azul' };
+  return '<span class="' + (map[s] || 'badge') + '">' + escapeHtml(s) + '</span>';
+}
+
+function lotClass(status) {
+  switch (status) {
+    case 'disponible': return 'lot-disponible';
+    case 'apartado': return 'lot-apartado';
+    case 'vendido': return 'lot-vendido';
+    default: return 'lot-bloqueado';
+  }
+}
+
+async function renderMasterplan() {
+  var errorEl = document.getElementById('mpError');
+  if (errorEl) { errorEl.classList.add('hidden'); errorEl.textContent = ''; }
+  var data = await apiCall('/api/crm/re/projects/' + encodeURIComponent(ALTUM_PROJECT_ID) + '/masterplan');
+  if (!data) {
+    if (errorEl) { errorEl.classList.remove('hidden'); errorEl.textContent = 'No se pudo cargar el masterplan de Altum.'; }
+    return;
+  }
+  drawMasterplanSvg(data);
+}
+
+function drawMasterplanSvg(data) {
+  var svg = document.getElementById('masterplanSvg');
+  if (!svg) return;
+  var blocks = data.blocks || [];
+  mpUnitsFlat = [];
+  var cellW = 100, cellH = 62, gapX = 14, gapY = 10, headerH = 22;
+  var cursorX = 24;
+  var maxH = headerH + 64;
+  var parts = [];
+  var unitIndex = 0;
+  for (var bi = 0; bi < blocks.length; bi++) {
+    var b = blocks[bi];
+    var units = (b.units || []).slice().sort(function (a, c) { return (a.level || 0) - (c.level || 0) || String(a.unit_number || '').localeCompare(String(c.unit_number || '')); });
+    var colW = 4 * cellW + 3 * gapX;
+    parts.push('<rect x="' + cursorX + '" y="20" width="' + colW + '" height="' + headerH + '" rx="4" fill="#1e293b"/>');
+    parts.push('<text x="' + (cursorX + colW / 2) + '" y="36" text-anchor="middle" font-size="11" font-weight="700" fill="#60a5fa" font-family="' + "'JetBrains Mono',monospace" + '">' + escapeHtml(b.block || 'Sin bloque') + '</text>');
+    for (var i = 0; i < units.length; i++) {
+      var u = units[i];
+      mpUnitsFlat.push(u);
+      var row = Math.floor(i / 4);
+      var x = cursorX + (i % 4) * (cellW + gapX);
+      var y = 44 + row * (cellH + gapY);
+      var priceFmt = u.list_price != null ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(u.list_price) : '—';
+      parts.push('<rect class="lot ' + lotClass(u.status) + '" x="' + x + '" y="' + y + '" width="' + cellW + '" height="' + cellH + '" rx="4" onclick="selectLot(' + unitIndex + ')" />');
+      parts.push('<title>' + escapeHtml(b.block || '') + ' · ' + escapeHtml(u.unit_number || '') + ' · Nivel ' + (u.level || '-') + ' · ' + u.area_m2 + ' mÂ² · ' + priceFmt + ' · ' + escapeHtml(u.status) + '</title>');
+      parts.push('<text x="' + (x + cellW / 2) + '" y="' + (y + 21) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#020617">' + escapeHtml(String(u.unit_number || '')) + '</text>');
+      parts.push('<text x="' + (x + cellW / 2) + '" y="' + (y + 35) + '" text-anchor="middle" font-size="9" fill="#334155">' + u.area_m2 + ' mÂ²</text>');
+      unitIndex++;
+    }
+    cursorX += colW + gapX;
+    maxH = Math.max(maxH, 44 + Math.ceil(units.length / 4) * (cellH + gapY) + 20);
+  }
+  svg.setAttribute('viewBox', '0 0 ' + (cursorX + 24) + ' ' + Math.max(maxH, 420));
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '560');
+  svg.innerHTML = parts.join('');
+}
+
+async function selectLot(index) {
+  var u = mpUnitsFlat[index];
+  if (!u) return;
+  await openMasterplanModal(u.id);
+}
+
+async function openMasterplanModal(unitId) {
+  var u = await apiCall('/api/crm/re/units/' + encodeURIComponent(unitId));
+  if (!u) return;
+  mpCurrentUnit = u;
+  document.getElementById('mpModalTitle').textContent = (escapeHtml(u.block || '') + ' ' + escapeHtml(u.unit_number || '')).trim();
+  var priceFmt = u.price_per_m2 != null ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(u.price_per_m2) : '—';
+  var listFmt = u.list_price != null ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(u.list_price) : '—';
+  var rows = [];
+  rows.push('<div class="grid grid-cols-2 gap-2 text-sm">');
+  rows.push('<div><span class="text-slate-500 text-xs">Proyecto</span><div class="text-white">' + escapeHtml(u.project_name || '') + '</div></div>');
+  rows.push('<div><span class="text-slate-500 text-xs">Región</span><div class="text-white">' + escapeHtml(u.project_city || '-') + '</div></div>');
+  rows.push('<div><span class="text-slate-500 text-xs">Bloque / Nivel</span><div class="text-white">' + escapeHtml(u.block || '') + ' / ' + (u.level ?? '-') + '</div></div>');
+  rows.push('<div><span class="text-slate-500 text-xs">Unidad</span><div class="text-white font-mono">' + escapeHtml(u.unit_number || '') + '</div></div>');
+  rows.push('<div><span class="text-slate-500 text-xs">Tipo</span><div class="text-white">' + escapeHtml(u.unit_type || '-') + '</div></div>');
+  rows.push('<div><span class="text-slate-500 text-xs">Superficie</span><div class="text-white">' + u.area_m2 + ' mÂ²</div></div>');
+  rows.push('<div><span class="text-slate-500 text-xs">Precio / mÂ²</span><div class="text-white font-mono">' + priceFmt + '</div></div>');
+  rows.push('<div><span class="text-slate-500 text-xs">Precio lista</span><div class="text-white font-mono">' + listFmt + '</div></div>');
+  rows.push('<div><span class="text-slate-500 text-xs">Estatus</span><div class="text-white font-semibold">' + statusBadge(u.status) + '</div></div>');
+  rows.push('<div><span class="text-slate-500 text-xs">Demo</span><div class="text-white">' + (u.is_demo ? 'Sí (datos de demostración)' : 'No') + '</div></div>');
+  rows.push('</div>');
+  document.getElementById('mpModalDetail').innerHTML = rows.join('');
+  document.getElementById('mpDisc').value = '0';
+  document.getElementById('mpDown').value = '0';
+  document.getElementById('mpMonths').value = '0';
+  document.getElementById('mpPlan').value = 'Contado';
+  document.getElementById('mpCalcResult').classList.add('hidden');
+  document.getElementById('mpCalcError').classList.add('hidden');
+  document.getElementById('mpQuoteSaved').classList.add('hidden');
+  document.getElementById('mpProposalDraft').classList.add('hidden');
+  mpLastCalc = null;
+  mpLastQuoteBody = null;
+  document.getElementById('modalMasterplan').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function closeMasterplanModal() {
+  document.getElementById('modalMasterplan').classList.add('hidden');
+}
+
+function cotizadorChanged() {
+  clearTimeout(cotizadorTimer);
+  cotizadorTimer = setTimeout(runCotizador, 250);
+}
+
+async function runCotizador() {
+  if (!mpCurrentUnit) return;
+  const disc = parseFloat(document.getElementById('mpDisc').value) || 0;
+  const down = parseFloat(document.getElementById('mpDown').value) || 0;
+  const months = parseInt(document.getElementById('mpMonths').value) || 0;
+  const plan = document.getElementById('mpPlan').value;
+  const body = {
+    unit_id: mpCurrentUnit.id,
+    discount_pct: disc,
+    down_payment_pct: down,
+    monthly_count: months,
+    payment_plan: plan === 'Contado' ? null : plan
+  };
+  const res = await apiCall('/api/crm/re/quotes', 'POST', body);
+  if (!res) return;
+  if (res.error) {
+    document.getElementById('mpCalcResult').classList.add('hidden');
+    const eEl = document.getElementById('mpCalcError');
+    eEl.classList.remove('hidden');
+    eEl.textContent = res.error;
+    return;
+  }
+  document.getElementById('mpCalcError').classList.add('hidden');
+  mpLastCalc = res.calculation;
+  mpLastQuoteBody = body;
+  showCalculation(res.calculation);
+}
+
+function showCalculation(c) {
+  var show = function (id, value) { var el = document.getElementById(id); if (el) el.textContent = value; };
+  show('mpList', c.list_price_mxn);
+  show('mpDiscAmt', '-' + c.discount_amount_mxn + ' (' + c.discount_pct + '%)');
+  show('mpTotal', c.total_sale_mxn);
+  show('mpDownAmt', c.down_payment_amount_mxn + ' (' + c.down_payment_pct + '%)');
+  show('mpMonthAmt', c.monthly_count > 0 ? c.monthly_amount_mxn + ' x ' + c.monthly_count : '—');
+  var bd = document.getElementById('mpBreakdown');
+  if (!bd) return;
+  if (c.monthly_count === 0) {
+    bd.innerHTML = '<div style="opacity:0.7">Contado: pago único al contado.</div>';
+  } else {
+    bd.innerHTML = c.monthly_breakdown.map(function (p) { return '<div>Pago ' + p.payment_number + ': ' + p.amount_mxn + '</div>'; }).join('');
+    if (c.remainder_cents > 0) {
+      bd.innerHTML += '<div style="opacity:0.7">Resto de ' + c.remainder_cents + ' centavos asignado a los primeros pagos.</div>';
+    }
+  }
+  document.getElementById('mpCalcResult').classList.remove('hidden');
+}
+
+async function saveMasterplanQuote() {
+  if (!mpLastQuoteBody) return;
+  const res = await apiCall('/api/crm/re/quotes', 'POST', mpLastQuoteBody);
+  if (!res) return;
+  if (res.error) { toast('No se pudo guardar: ' + res.error); return; }
+  document.getElementById('mpQuoteSaved').classList.remove('hidden');
+  toast('Cotización guardada: ' + res.quote.id + ' (borrador)');
+}
+
+async function prepareProposal() {
+  if (!mpCurrentUnit || !mpLastCalc) return;
+  var vars = {
+    contacto_nombre: 'Cliente',
+    propiedad_nombre: (escapeHtml(mpCurrentUnit.block || '') + ' ' + escapeHtml(mpCurrentUnit.unit_number || '')).trim(),
+    region_destino: mpCurrentUnit.project_city || 'Mérida',
+    clabe_stp: '6461 8010 5012 3456 7890',
+    monto_apartado: mpLastCalc.down_payment_amount_mxn,
+    checkout_url: 'https://sales.arksystems.site/checkout/demo'
+  };
+  var preview = await apiCall('/api/internal/email/templates/propuesta_enterprise/preview', 'POST', { variables: vars });
+  if (!preview) return;
+  document.getElementById('mpProposalSubject').textContent = preview.subject || 'Propuesta ALTUM';
+  document.getElementById('mpProposalHtml').innerHTML = preview.html || '';
+  document.getElementById('mpProposalDraft').classList.remove('hidden');
+  toast('Borrador de propuesta preparado (no enviado)');
 }
 
 // ── ROUTER ──
@@ -1507,6 +1812,7 @@ function router() {
   if (vista === 'contactos') renderContactos();
   if (vista === 'tareas') renderTareas();
   if (vista === 'superadmin') renderSuperadmin();
+  if (vista === 'masterplan') renderMasterplan();
 
   lucide.createIcons();
 }

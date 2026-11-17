@@ -32,18 +32,9 @@ export type LeadIngestPayload = {
   };
 };
 
-export type AgentId = "intake" | "riesgo" | "flujo" | "closer";
+export type AgentId = "intake" | "riesgo" | "flujo" | "closer" | "real_estate_closer";
 
-export type ProductKey =
-  | "ledger"
-  | "angel"
-  | "commerce"
-  | "bundle"
-  | "angel_voice"
-  | "angel_whatsapp"
-  | "package_starter"
-  | "package_professional"
-  | string;
+export type ProductKey = "ledger" | "angel" | "commerce" | "bundle" | "angel_voice" | "angel_whatsapp" | "package_starter" | "package_professional" | string;
 
 export type ProductConfig = {
   id: string;
@@ -117,9 +108,7 @@ export type ContactRecord = {
   updated_at: string;
 };
 
-export type OpportunityStage =
-  | "nuevo" | "contactado" | "calificado" | "demo_agendada"
-  | "propuesta_enviada" | "negociacion" | "ganado" | "perdido";
+export type OpportunityStage = "nuevo" | "contactado" | "calificado" | "demo_agendada" | "propuesta_enviada" | "negociacion" | "ganado" | "perdido";
 
 export type OpportunityRecord = {
   id: string;
@@ -266,6 +255,7 @@ export interface Env {
   CONEKTA_API_KEY?: string;
   CONEKTA_WEBHOOK_KEY?: string;
   TEST_RECIPIENT_EMAIL?: string;
+  REAL_ESTATE_PDF_TEMPLATE?: R2Bucket;
 }
 
 export type PaymentOrderStatus = "pending" | "paid" | "expired" | "cancelled" | "failed";
@@ -292,7 +282,6 @@ export interface SalesPaymentOrder {
   created_at: string;
   updated_at: string;
 }
-
 
 export interface EmailTemplate {
   id: string;

@@ -30,28 +30,32 @@ import { adminAssistantRouter } from "./routes/adminAssistant";
 import { ADMIN_ASSISTANT_WIDGET_JS_SOURCE } from "./client/adminAssistantWidget";
 import { getAltumAsset } from "./client/altumAssets";
 import { mcpRouter } from "./routes/mcp";
+import { realEstateRouter } from "./routes/realEstate";
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
 // Middleware CORS
-app.use("*", cors({
-  origin: (origin) => {
-    if (!origin) return "*";
-    if (
-      origin.endsWith(".arksystems.site") ||
-      origin === "https://arksystems.site" ||
-      origin.endsWith(".futuracapital.mx") ||
-      origin === "https://futuracapital.mx" ||
-      /^https?:\/\/localhost(:\d+)?$/.test(origin)
-    ) {
-      return origin;
-    }
-    return "https://arksystems.site";
-  },
-  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-Ark-Internal-Key", "X-StayPuft-Key"],
-  credentials: true,
-}));
+app.use(
+  "*",
+  cors({
+    origin: (origin) => {
+      if (!origin) return "*";
+      if (
+        origin.endsWith(".arksystems.site") ||
+        origin === "https://arksystems.site" ||
+        origin.endsWith(".futuracapital.mx") ||
+        origin === "https://futuracapital.mx" ||
+        /^https?:\/\/localhost(:\d+)?$/.test(origin)
+      ) {
+        return origin;
+      }
+      return "https://arksystems.site";
+    },
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Ark-Internal-Key", "X-StayPuft-Key", "X-Tenant-Id"],
+    credentials: true,
+  }),
+);
 
 // Health check
 app.get("/health", (c) => {
@@ -109,18 +113,7 @@ app.get("/demo", (c) => {
 });
 
 // Landing Page pÃºblica que explica las funciones del proyecto
-const publicLandingPaths = [
-  "/landing",
-  "/landing-page",
-  "/public",
-  "/public-landing",
-  "/features",
-  "/funciones",
-  "/about",
-  "/info",
-  "/project",
-  "/functions",
-];
+const publicLandingPaths = ["/landing", "/landing-page", "/public", "/public-landing", "/features", "/funciones", "/about", "/info", "/project", "/functions"];
 for (const p of publicLandingPaths) {
   app.get(p, (c) => {
     return c.html(renderPublicLandingHtml());
@@ -182,6 +175,7 @@ app.route("/api/internal", internalRouter);
 app.route("/api/crm/voice", telnyxVoiceAiRouter);
 app.route("/api/auth", authRouter);
 app.route("/api/crm", crmRouter);
+app.route("/api/crm/re", realEstateRouter);
 app.route("/api/crm/accounts", crmAccountsRouter);
 app.route("/api/crm/contacts", crmContactsRouter);
 app.route("/api/crm/opportunities", crmOpportunitiesRouter);
@@ -211,7 +205,7 @@ app.get("/superadmin", async (c) => {
   const { authenticated, isAdmin } = await isAdminAuthenticated(c.req.raw, c.env);
   if (!authenticated) return c.html(renderCrmLoginHtml());
   if (!isAdmin) return c.json({ error: "Acceso denegado: Se requiere rol de Super Administrador." }, 403);
-  
+
   // Si la navegación es desde un navegador web (sin Bearer directo en cabecera), redirigir al CRM unificado
   const authHeader = c.req.header("authorization");
   const accept = c.req.header("accept") || "";
@@ -255,8 +249,7 @@ export default {
     ctx.waitUntil(
       outbox.processOutbox().then((stats) => {
         console.log(`[ark-sales cron] Outbox completado. Procesados: ${stats.processed}, Ã‰xitos: ${stats.succeeded}, Fallos: ${stats.failed}`);
-      })
+      }),
     );
   },
 };
-

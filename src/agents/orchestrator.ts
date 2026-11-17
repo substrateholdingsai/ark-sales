@@ -2,6 +2,7 @@ import { Env, ChatMessage, AgentId } from "../types";
 import { SYSTEM_PROMPTS, AGENT_GUARDRAILS } from "./prompts";
 import { ToolExecutor, TOOLS_DEFINITIONS } from "../tools";
 import { FAIL_CLOSED_MESSAGE } from "../catalog/service";
+import { ALTUM_PROJECT_ID } from "../server/realEstate/service";
 
 export interface OrchestrationResult {
   response: string;
@@ -41,16 +42,11 @@ export class AgentOrchestrator {
 
     // 1. Preparar lista de mensajes con el system prompt del agente actual
     const systemPrompt = SYSTEM_PROMPTS[activeAgent] + "\n" + AGENT_GUARDRAILS;
-    const messages: any[] = [
-      { role: "system", content: systemPrompt },
-    ];
+    const messages: any[] = [{ role: "system", content: systemPrompt }];
     if (rollingSummary) {
       messages.push({ role: "system", content: `Antecedentes resumidos de la conversación: ${rollingSummary}` });
     }
-    messages.push(
-      ...history.map((m) => ({ role: m.role, content: m.content })),
-      { role: "user", content: userMessage }
-    );
+    messages.push(...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: userMessage });
 
     const modelName = this.env.AI_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
     const context = {
@@ -83,8 +79,12 @@ export class AgentOrchestrator {
           const parsedCalls = aiResponse.tool_calls.map((call: any) => {
             const toolName = call.name || call.function?.name;
             let args = call.arguments || call.function?.arguments || {};
-            if (typeof args === 'string') {
-              try { args = JSON.parse(args); } catch { args = {}; }
+            if (typeof args === "string") {
+              try {
+                args = JSON.parse(args);
+              } catch {
+                args = {};
+              }
             }
             return { call, toolName, args };
           });
@@ -93,7 +93,7 @@ export class AgentOrchestrator {
             parsedCalls.map(async ({ call, toolName, args }: any) => {
               const toolResult = await this.toolExecutor.execute(toolName, args, context);
               return { call, toolName, args, toolResult };
-            })
+            }),
           );
 
           for (let i = 0; i < results.length; i++) {
@@ -117,7 +117,7 @@ export class AgentOrchestrator {
             const { toolResult } = settled.value;
             toolsCalled.push({ name: toolName, args, result: toolResult });
 
-            if (toolName === 'diagnosticar_despacho' && toolResult?.especialista_asignado) {
+            if (toolName === "diagnosticar_despacho" && toolResult?.especialista_asignado) {
               if (toolResult.especialista_asignado !== activeAgent) {
                 transferredTo = toolResult.especialista_asignado;
                 activeAgent = toolResult.especialista_asignado;
@@ -125,16 +125,16 @@ export class AgentOrchestrator {
             }
 
             messages.push({
-              role: 'assistant',
+              role: "assistant",
               content: null,
               tool_calls: [call],
             });
             messages.push({
-              role: 'tool',
+              role: "tool",
               name: toolName,
               content: JSON.stringify(toolResult),
             });
-          }          // Continúa el loop para que el LLM formule su respuesta final con los datos de las herramientas
+          } // Continúa el loop para que el LLM formule su respuesta final con los datos de las herramientas
           continue;
         }
 
@@ -176,7 +176,7 @@ export class AgentOrchestrator {
   async executeDeterministicFallback(
     agent: AgentId,
     userMessage: string,
-    context: { lead_id: string; leadEmail?: string; despachoNombre?: string; tamano?: string }
+    context: { lead_id: string; leadEmail?: string; despachoNombre?: string; tamano?: string },
   ): Promise<OrchestrationResult> {
     const toolsCalled: { name: string; args: any; result: any }[] = [];
     let currentAgent = agent;
@@ -208,7 +208,6 @@ export class AgentOrchestrator {
         responseText = FAIL_CLOSED_MESSAGE;
       } else {
         const ledger = cat.catalogo?.["ledger"];
-        const bundle = cat.catalogo?.["bundle"];
         responseText = `En ARK blindamos su despacho con ${ledger?.name || "Ark Ledger"} (desde $${ledger?.price_mxn || 399} MXN/mes) con timbrado CFDI 4.0 y sellado SHA-256 inmutable. Como add-on se complementa con Ark Angel (cobranza IA por uso real: Voz $0.25 USD/min y WhatsApp $0.20 USD/msg) o en el Paquete Enterprise integral.`;
       }
     } else if (currentAgent === "flujo") {
@@ -219,8 +218,16 @@ export class AgentOrchestrator {
         responseText = FAIL_CLOSED_MESSAGE;
       } else {
         const angel = cat.catalogo?.["angel"];
-        const bundle = cat.catalogo?.["bundle"];
         responseText = `Para erradicar la morosidad implementamos ${angel?.name || "Ark Angel"} con facturación por uso real (Voz IA a $0.25 USD/min y WhatsApp a $0.20 USD/msg) con Grok Bot y Motor Legal fail-closed incluidos. Para operaciones completas, el Paquete Enterprise integra Ark Ledger y cobranza omnicanal.`;
+      }
+    } else if (currentAgent === "real_estate_closer") {
+      const mp = await this.toolExecutor.execute("consultar_masterplan", { project_id: ALTUM_PROJECT_ID }, context);
+      toolsCalled.push({ name: "consultar_masterplan", args: { project_id: ALTUM_PROJECT_ID }, result: mp });
+      if (mp?.status !== "success") {
+        responseText = FAIL_CLOSED_MESSAGE;
+      } else {
+        const disponible = (mp.blocks || []).reduce((acc: number, b: any) => acc + (b.units || []).filter((u: any) => u.status === "disponible").length, 0);
+        responseText = `Inventario Altum Mérida: ${mp.unit_count || 0} unidades en ${(mp.blocks || []).length} bloques, ${disponible} disponibles para cotizar. Dime qué lote te interesa y preparo la cotización en el servidor.`;
       }
     } else {
       // Closer
@@ -234,7 +241,7 @@ export class AgentOrchestrator {
         const leadDelivered = await this.toolExecutor.execute(
           "entregar_lead",
           { destination: "bundle", score: 95, summary: `Acuerdo Enterprise cerrado para ${context.despachoNombre || "Despacho"}` },
-          context
+          context,
         );
         toolsCalled.push({ name: "entregar_lead", args: { destination: "bundle", score: 95 }, result: leadDelivered });
 
