@@ -30,3 +30,8 @@ __pycache__/
 .pytest_cache/
 harvest_report.json
 scripts/*.sql
+# Kilo (local agent manager state)
+.kilo/
+
+# Generated enrichment run artifacts (contain lead data)
+reports/*.jsonl
