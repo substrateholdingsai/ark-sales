@@ -6,12 +6,10 @@ describe("Validate Client HTML Output", () => {
   it("renderCrmHtml must contain valid JavaScript in all script tags", () => {
     const html = renderCrmHtml();
     expect(html).toContain("<!DOCTYPE html>");
-    
+
     const scriptRegex = /<script>([\s\S]*?)<\/script>/gi;
     let match;
-    let count = 0;
     while ((match = scriptRegex.exec(html)) !== null) {
-      count++;
       const code = match[1];
       expect(() => new Function(code)).not.toThrow();
     }
@@ -78,12 +76,10 @@ describe("Validate Client HTML Output", () => {
   it("renderSuperAdminHtml must contain valid JavaScript in all script tags", () => {
     const html = renderSuperAdminHtml();
     expect(html).toContain("<!DOCTYPE html>");
-    
+
     const scriptRegex = /<script>([\s\S]*?)<\/script>/gi;
     let match;
-    let count = 0;
     while ((match = scriptRegex.exec(html)) !== null) {
-      count++;
       const code = match[1];
       try {
         new Function(code);

@@ -79,7 +79,7 @@ describe("Outbox Pattern & Queue Consumer Resiliency", () => {
           "X-Ark-Contract": "LEAD_INGEST_V3",
           "X-Idempotency-Key": "lead_outbox_test",
         }),
-      })
+      }),
     );
     expect(ackMock).toHaveBeenCalled();
     expect(retryMock).not.toHaveBeenCalled();

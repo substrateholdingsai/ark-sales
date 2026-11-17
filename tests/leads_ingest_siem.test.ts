@@ -30,7 +30,7 @@ describe("Endpoint POST /api/internal/leads/ingest · Altas SIEM CANACO & SalesA
             response: `¡Bienvenido a CANACO! Confirmamos que tu Landing Page en Ark Commerce ya está activa sin costo. Como beneficio exclusivo, cuentas con 20 calculadoras fiscales gratuitas en Ark Ledger con Noah AI. Si necesitas sellado SHA-256 ante el SAT, activa el Plan PRO Despacho ($399 MXN/mes).`,
             tools_called: [],
           }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
+          { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }),
     };
@@ -154,7 +154,7 @@ describe("Endpoint POST /api/internal/leads/ingest · Altas SIEM CANACO & SalesA
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer secret_ark_internal_key",
+        Authorization: "Bearer secret_ark_internal_key",
       },
       body: JSON.stringify(federatedPayload),
     });

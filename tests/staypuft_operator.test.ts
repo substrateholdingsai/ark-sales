@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { internalRouter, normalizeMexicanPhone } from "../src/routes/internal";
 import { superadminRouter } from "../src/routes/superadmin";
 import { authMiddleware } from "../src/auth/middleware";
-import { Env, AgentSkill } from "../src/types";
+import { Env } from "../src/types";
 
 describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad", () => {
   const STAYPUFT_TEST_KEY = "staypuft_secret_live_key_xyz123";
@@ -19,16 +19,16 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
               return leads[id] || null;
             }
             if (query.includes("agent_tasks") && query.includes("status = 'pending'")) {
-              const pending = tasks.find(t => t.status === "pending" && t.retry_count < 3);
+              const pending = tasks.find((t) => t.status === "pending" && t.retry_count < 3);
               return pending || null;
             }
             if (query.includes("agent_tasks") && query.includes("lead_id = ?")) {
-              const found = tasks.find(t => t.lead_id === args[0] && t.skill_name === args[1]);
+              const found = tasks.find((t) => t.lead_id === args[0] && t.skill_name === args[1]);
               return found || null;
             }
             if (query.includes("sales_leads") && query.includes("ORDER BY created_at DESC")) {
               const unresearched = Object.values(leads).find(
-                l => l.despacho_nombre && (!l.conversation_summary || !l.conversation_summary.includes("research"))
+                (l) => l.despacho_nombre && (!l.conversation_summary || !l.conversation_summary.includes("research")),
               );
               return unresearched || null;
             }
@@ -39,7 +39,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
               return { cnt: 45 };
             }
             if (query.includes("COUNT(*) as cnt FROM agent_tasks WHERE status = 'pending'")) {
-              return { cnt: tasks.filter(t => t.status === "pending").length };
+              return { cnt: tasks.filter((t) => t.status === "pending").length };
             }
             if (query.includes("FROM harvest_runs ORDER BY started_at DESC LIMIT 1")) {
               return { run_id: "run_test_01", status: "completed", started_at: "2026-11-05 20:00:00" };
@@ -111,7 +111,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
           method: "GET",
           headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
         },
-        createMockEnv()
+        createMockEnv(),
       );
 
       expect(res.status).toBe(200);
@@ -127,7 +127,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
           method: "GET",
           headers: { "X-StayPuft-Key": "clave_falsa_invalida" },
         },
-        createMockEnv()
+        createMockEnv(),
       );
 
       expect(res.status).toBe(401);
@@ -137,11 +137,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
 
     it("debe rechazar petición sin ninguna clave (401 Unauthorized)", async () => {
       const app = createApp(createMockEnv());
-      const res = await app.request(
-        "/api/internal/skills",
-        { method: "GET" },
-        createMockEnv()
-      );
+      const res = await app.request("/api/internal/skills", { method: "GET" }, createMockEnv());
 
       expect(res.status).toBe(401);
     });
@@ -163,7 +159,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             tamano: "6-20",
           }),
         },
-        createMockEnv()
+        createMockEnv(),
       );
 
       expect(res.status).toBe(200);
@@ -185,7 +181,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
           method: "GET",
           headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -216,7 +212,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
           method: "GET",
           headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -251,7 +247,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             },
           }),
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(400);
@@ -282,7 +278,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             },
           }),
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(400);
@@ -316,7 +312,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             },
           }),
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -353,7 +349,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             error: "Web del despacho no responde / Timeout 30s",
           }),
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -385,7 +381,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             fuentes: ["LinkedIn"],
           }),
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(404);
@@ -424,7 +420,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             resumen: "Despacho con 35 contadores y alta carga tributaria.",
           }),
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -447,7 +443,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
           method: "GET",
           headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -465,7 +461,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
           method: "GET",
           headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -485,7 +481,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
           method: "GET",
           headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -531,7 +527,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             confianza: 95,
           }),
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -552,7 +548,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
           method: "GET",
           headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -572,7 +568,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
           method: "GET",
           headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -684,11 +680,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
       const app = createApp(env);
 
       // 1. Probar despacho
-      const resDespacho = await app.request(
-        "/api/internal/leads/lead_despacho_merida_01",
-        { headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY } },
-        env
-      );
+      const resDespacho = await app.request("/api/internal/leads/lead_despacho_merida_01", { headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY } }, env);
       expect(resDespacho.status).toBe(200);
       const dataDespacho: any = await resDespacho.json();
       expect(dataDespacho.cohort).toBe("ark_ledger_despachos");
@@ -696,11 +688,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
       expect(dataDespacho.lead.whatsapp_valid).toBe(true);
 
       // 2. Probar SOFOM SIPRES con teléfono malformado
-      const resSofom = await app.request(
-        "/api/internal/leads/lead_sipres_1844",
-        { headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY } },
-        env
-      );
+      const resSofom = await app.request("/api/internal/leads/lead_sipres_1844", { headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY } }, env);
       expect(resSofom.status).toBe(200);
       const dataSofom: any = await resSofom.json();
       expect(dataSofom.cohort).toBe("sipres_sofom");
@@ -719,7 +707,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
           method: "GET",
           headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -747,7 +735,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             payload: { domain: "despacho-test.com" },
           }),
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(201);
@@ -797,7 +785,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             template_id: "ark_ledger_invitacion_oficial",
           }),
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);
@@ -831,7 +819,7 @@ describe("Operador StayPuft: Suite de Integración, Seguridad y Observabilidad",
             lead_id: "lead_voice_01",
           }),
         },
-        env
+        env,
       );
 
       expect(res.status).toBe(200);

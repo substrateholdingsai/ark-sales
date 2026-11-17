@@ -35,23 +35,13 @@ describe("Admin AI Assistant & Contact Enrichment Suite", () => {
 
   it("runDeterministicFallback answers database access query gracefully", async () => {
     const mockEnv: any = {};
-    const fallback = await runDeterministicFallback(
-      "Hola! ya tienes acceso a la base de datos?",
-      null,
-      mockEnv,
-      { role: "admin", sub: "u_1" }
-    );
+    const fallback = await runDeterministicFallback("Hola! ya tienes acceso a la base de datos?", null, mockEnv, { role: "admin", sub: "u_1" });
     expect(fallback.reply).toContain("Conectado");
   });
 
   it("runDeterministicFallback answers metrics query gracefully", async () => {
     const mockEnv: any = {};
-    const fallback = await runDeterministicFallback(
-      "Dame las métricas del crm",
-      null,
-      mockEnv,
-      { role: "admin", sub: "u_1" }
-    );
+    const fallback = await runDeterministicFallback("Dame las métricas del crm", null, mockEnv, { role: "admin", sub: "u_1" });
     expect(fallback.reply).toContain("Métricas");
   });
 });

@@ -35,9 +35,7 @@ function createMockConektaDb() {
   ];
   const activities: any[] = [];
   const pendingIngests: any[] = [];
-  const accounts: any[] = [
-    { id: "acc_test_101", name: "Despacho Contable Morales", size: "6-20", city: "CDMX" },
-  ];
+  const accounts: any[] = [{ id: "acc_test_101", name: "Despacho Contable Morales", size: "6-20", city: "CDMX" }];
   const catalog: any[] = [
     {
       id: "cfg_bundle",
@@ -301,7 +299,7 @@ describe("Conekta SPEI STP & Hosted Checkout Suite", () => {
           bundle: true,
           metodo: "spei",
         },
-        { lead_id: "lead_test_101", leadEmail: "director@morales.com", despachoNombre: "Despacho Morales" }
+        { lead_id: "lead_test_101", leadEmail: "director@morales.com", despachoNombre: "Despacho Morales" },
       );
 
       expect(res.status).toBe("success");
@@ -325,7 +323,7 @@ describe("Conekta SPEI STP & Hosted Checkout Suite", () => {
           producto_key: "ledger",
           metodo: "checkout",
         },
-        { lead_id: "lead_test_101" }
+        { lead_id: "lead_test_101" },
       );
 
       expect(res.status).toBe("success");
@@ -395,43 +393,48 @@ describe("Conekta SPEI STP & Hosted Checkout Suite", () => {
     let adminToken: string;
 
     beforeEach(async () => {
-      adminToken = await signJwt(
-        { sub: "usr_admin_1", email: "admin@arksystems.site", role: "admin", name: "Super Admin" },
-        JWT_SECRET
-      );
+      adminToken = await signJwt({ sub: "usr_admin_1", email: "admin@arksystems.site", role: "admin", name: "Super Admin" }, JWT_SECRET);
     });
 
     it("GET /api/superadmin/billing/status retorna resumen de métricas y modo seguro", async () => {
-      const res = await app.request("/api/superadmin/billing/status", {
-        headers: { Authorization: `Bearer ${adminToken}` },
-      }, mockEnv);
+      const res = await app.request(
+        "/api/superadmin/billing/status",
+        {
+          headers: { Authorization: `Bearer ${adminToken}` },
+        },
+        mockEnv,
+      );
 
       expect(res.status).toBe(200);
-      const json = await res.json() as any;
+      const json = (await res.json()) as any;
       expect(json.status).toBe("simulated_mode");
       expect(json.has_api_key).toBe(false);
       expect(json.stats).toBeDefined();
     });
 
     it("POST /api/superadmin/billing/create-order genera orden manual desde consola", async () => {
-      const res = await app.request("/api/superadmin/billing/create-order", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "Content-Type": "application/json",
+      const res = await app.request(
+        "/api/superadmin/billing/create-order",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            account_id: "acc_test_101",
+            customer_name: "Despacho Morales",
+            customer_email: "director@morales.com",
+            amount_mxn: 10000,
+            product_name: "Paquete Enterprise ARK",
+            method: "spei",
+          }),
         },
-        body: JSON.stringify({
-          account_id: "acc_test_101",
-          customer_name: "Despacho Morales",
-          customer_email: "director@morales.com",
-          amount_mxn: 10000,
-          product_name: "Paquete Enterprise ARK",
-          method: "spei",
-        }),
-      }, mockEnv);
+        mockEnv,
+      );
 
       expect(res.status).toBe(200);
-      const json = await res.json() as any;
+      const json = (await res.json()) as any;
       expect(json.success).toBe(true);
       expect(json.paymentMethodType).toBe("spei");
       expect(json.speiClabe).toBeDefined();
@@ -451,38 +454,46 @@ describe("Conekta SPEI STP & Hosted Checkout Suite", () => {
         method: "spei",
       });
 
-      const res = await app.request("/api/superadmin/billing/simulate-paid", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "Content-Type": "application/json",
+      const res = await app.request(
+        "/api/superadmin/billing/simulate-paid",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            conekta_order_id: created.orderId,
+          }),
         },
-        body: JSON.stringify({
-          conekta_order_id: created.orderId,
-        }),
-      }, mockEnv);
+        mockEnv,
+      );
 
       expect(res.status).toBe(200);
-      const json = await res.json() as any;
+      const json = (await res.json()) as any;
       expect(json.success).toBe(true);
       expect(mockDb._opportunities[0].stage).toBe("ganado");
     });
 
     it("POST /webhooks/conekta responde 200 al recibir webhook oficial", async () => {
-      const res = await app.request("/webhooks/conekta", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "charge.paid",
-          data: {
-            object: {
-              id: "chg_123",
-              order_id: "ord_non_existent",
-              status: "paid",
+      const res = await app.request(
+        "/webhooks/conekta",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "charge.paid",
+            data: {
+              object: {
+                id: "chg_123",
+                order_id: "ord_non_existent",
+                status: "paid",
+              },
             },
-          },
-        }),
-      }, mockEnv);
+          }),
+        },
+        mockEnv,
+      );
 
       expect(res.status).toBe(200);
     });

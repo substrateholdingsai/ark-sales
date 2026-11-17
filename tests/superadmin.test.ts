@@ -252,10 +252,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
 
   describe("Seguridad y Control de Acceso RBAC", () => {
     it("debe rechazar solicitudes no autenticadas con 401", async () => {
-      const res = await app.fetch(
-        new Request("http://localhost/api/superadmin/resend/status", { method: "GET" }),
-        env
-      );
+      const res = await app.fetch(new Request("http://localhost/api/superadmin/resend/status", { method: "GET" }), env);
       expect(res.status).toBe(401);
     });
 
@@ -265,7 +262,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
           method: "GET",
           headers: { Authorization: `Bearer ${sellerToken}` },
         }),
-        env
+        env,
       );
       expect(res.status).toBe(403);
     });
@@ -276,7 +273,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
           method: "GET",
           headers: { Authorization: `Bearer ${adminToken}` },
         }),
-        env
+        env,
       );
       expect(res.status).toBe(200);
       const data: any = await res.json();
@@ -301,7 +298,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
           method: "GET",
           headers: { Authorization: `Bearer ${adminToken}` },
         }),
-        env
+        env,
       );
       expect(res.status).toBe(200);
       const data: any = await res.json();
@@ -325,7 +322,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
             },
           }),
         }),
-        env
+        env,
       );
       expect(res.status).toBe(200);
       const data: any = await res.json();
@@ -343,7 +340,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
             Authorization: `Bearer ${adminToken}`,
           },
         }),
-        env
+        env,
       );
       expect(res.status).toBe(200);
       const data: any = await res.json();
@@ -361,7 +358,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
           },
           body: JSON.stringify({ to: "socio@despacho.com" }),
         }),
-        env
+        env,
       );
       expect(res.status).toBe(200);
       const data: any = await res.json();
@@ -390,7 +387,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
             },
           }),
         }),
-        env
+        env,
       );
       expect(res.status).toBe(200);
       const data: any = await res.json();
@@ -415,7 +412,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
             tenant_id: null, // omni-tenant
           }),
         }),
-        env
+        env,
       );
       expect(res.status).toBe(201);
       const data: any = await res.json();
@@ -438,7 +435,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
             dolor_principal: "sat_fiscal_calculo",
           }),
         }),
-        env
+        env,
       );
       const campData: any = await campRes.json();
       const campaignId = campData.campaign.id;
@@ -453,7 +450,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
           },
           body: JSON.stringify({ auto_populate_tenant_id: "all" }),
         }),
-        env
+        env,
       );
       const targetsData: any = await targetsRes.json();
       expect(targetsData.success).toBe(true);
@@ -468,7 +465,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
             "Content-Type": "application/json",
           },
         }),
-        env
+        env,
       );
       expect(dispatchRes.status).toBe(200);
       const dispatchData: any = await dispatchRes.json();
@@ -487,7 +484,7 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
           method: "GET",
           headers: { Authorization: `Bearer ${adminToken}` },
         }),
-        env
+        env,
       );
       expect(res.status).toBe(200);
       const data: any = await res.json();
@@ -502,11 +499,11 @@ describe("Panel Super Admin (Resend Templates & Telnyx Voice Campaigns)", () => 
           method: "GET",
           headers: { Authorization: `Bearer ${adminToken}` },
         }),
-        env
+        env,
       );
       expect(res.status).toBe(200);
       const html = await res.text();
-      expect(html).toContain("ARK <span class=\"text-blue-400\">SUPER ADMIN</span>");
+      expect(html).toContain('ARK <span class="text-blue-400">SUPER ADMIN</span>');
       expect(html).toContain("Resend & Plantillas HTML");
       expect(html).toContain("Campañas de Voz AI Telnyx");
       expect(html).toContain("Vista Multi-Tenant");

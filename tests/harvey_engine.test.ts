@@ -51,7 +51,8 @@ describe("Harvey Sales Engine Suite (Ark Sales)", () => {
 
     it("debe aceptar un correo humano, sobrio y ejecutivo", () => {
       const subject = "Cierre fiscal y conciliación SAT";
-      const body = "Revisé la operación de su despacho. Automatizamos el timbrado CFDI 4.0 y conciliación Anexo 24 con sello SHA-256. ¿Tienen 10 minutos este jueves para ver cómo opera?";
+      const body =
+        "Revisé la operación de su despacho. Automatizamos el timbrado CFDI 4.0 y conciliación Anexo 24 con sello SHA-256. ¿Tienen 10 minutos este jueves para ver cómo opera?";
       const res = PreSendGate.check(subject, body, { emailType: "outreach_1" });
       expect(res.ok).toBe(true);
       expect(res.reasons).toHaveLength(0);
@@ -148,9 +149,9 @@ describe("Harvey Sales Engine Suite (Ark Sales)", () => {
             run: async () => {
               blockedList.add(args[2]);
               return { success: true };
-            }
-          })
-        })
+            },
+          }),
+        }),
       };
 
       const dnc = new DncService(mockDb);

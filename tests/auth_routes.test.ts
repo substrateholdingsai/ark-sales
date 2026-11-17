@@ -113,13 +113,6 @@ function createEnv(db: any): Env {
   } as any;
 }
 
-async function req(path: string, init?: RequestInit, env?: Env) {
-  const e = env ?? createEnv(createMockDb());
-  const url = `http://localhost${path}`;
-  const request = new Request(url, init);
-  return app.fetch(request, e as any);
-}
-
 describe("CRM Auth routes", () => {
   it("blocks unauthenticated access to /api/crm/ping", async () => {
     const db = createMockDb();
@@ -139,7 +132,7 @@ describe("CRM Auth routes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: "admin@test.com", password: "secret123" }),
       }),
-      env as any
+      env as any,
     );
     expect(regRes.status).toBe(201);
 
@@ -150,7 +143,7 @@ describe("CRM Auth routes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: "admin@test.com", password: "secret123" }),
       }),
-      env as any
+      env as any,
     );
     expect(loginRes.status).toBe(200);
     const loginData: any = await loginRes.json();
@@ -161,7 +154,7 @@ describe("CRM Auth routes", () => {
       new Request("http://localhost/api/crm/ping", {
         headers: { Authorization: `Bearer ${loginData.token}` },
       }),
-      env as any
+      env as any,
     );
     expect(pingRes.status).toBe(200);
 
@@ -173,7 +166,7 @@ describe("CRM Auth routes", () => {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${loginData.token}` },
         body: JSON.stringify({ email: "vend@test.com", password: "secret123", role: "vendedor" }),
       }),
-      env as any
+      env as any,
     );
     expect(createUserRes.status).toBe(201);
 
@@ -184,16 +177,16 @@ describe("CRM Auth routes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: "vend@test.com", password: "secret123" }),
       }),
-      env as any
+      env as any,
     );
-    const vendToken = (await loginV.json() as any).token;
+    const vendToken = ((await loginV.json()) as any).token;
 
     // vendedor accessing admin endpoint -> 403
     const forbiddenRes = await app.fetch(
       new Request("http://localhost/api/crm/admin/users", {
         headers: { Authorization: `Bearer ${vendToken}` },
       }),
-      env as any
+      env as any,
     );
     expect(forbiddenRes.status).toBe(403);
 

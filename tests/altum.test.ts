@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { app } from "../src/index";
-import { getAltumAsset, ALTUM_ASSETS } from "../src/client/altumAssets";
+import { getAltumAsset } from "../src/client/altumAssets";
 
 describe("ALTUM Sureste Tenant & Design System Isolation Suite", () => {
   it("debe cargar la página showcase /altum con aislamiento estricto y tokens de diseño", async () => {
@@ -17,14 +17,14 @@ describe("ALTUM Sureste Tenant & Design System Isolation Suite", () => {
     expect(html).toContain("Residencia Montejo Norte");
     expect(html).toContain("Lote Punta Cocos Reserva");
     expect(html).toContain("Macrolote Ribera Bacalar");
-    
+
     // Verifica aislamiento de CSS: clases con prefijo altum y tokens de color
     expect(html).toContain(".altum-theme");
     expect(html).toContain("--altum-cal: #F7F4ED");
     expect(html).toContain("--altum-cenote: #0E6B7A");
     expect(html).toContain("--altum-coral: #C9573F");
     expect(html).toContain("--altum-chukum: #D9C9B0");
-    
+
     // Verifica que no se contaminan selectores globales de Ark
     expect(html).not.toContain("bg-slate-900");
     expect(html).not.toContain("bg-slate-950");

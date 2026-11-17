@@ -99,17 +99,12 @@ describe("Herramientas de IA y Enrutamiento por Dolor", () => {
       const mockEnv = createMockEnv();
       const executor = new ToolExecutor(mockEnv);
 
-      const result = await executor.entregarLead(
-        "bundle",
-        92,
-        "Despacho con 15 contadores que busca automatizar fiscal y cobranza integral.",
-        {
-          lead_id: "lead_test_001",
-          leadEmail: "contacto@garcia.mx",
-          despachoNombre: "García y Asoc",
-          tamano: "6-20",
-        }
-      );
+      const result = await executor.entregarLead("bundle", 92, "Despacho con 15 contadores que busca automatizar fiscal y cobranza integral.", {
+        lead_id: "lead_test_001",
+        leadEmail: "contacto@garcia.mx",
+        despachoNombre: "García y Asoc",
+        tamano: "6-20",
+      });
 
       expect(result.status).toBe("lead_queued");
       const contract: LeadIngestPayload = result.contract;

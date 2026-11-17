@@ -1,10 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import {
-  normalizarTelefonoE164,
-  generarGuionCortesia,
-  dispararLlamadaCortesia,
-  procesarEventoTelnyx,
-} from "../src/voice/telnyx";
+import { normalizarTelefonoE164, generarGuionCortesia, dispararLlamadaCortesia, procesarEventoTelnyx } from "../src/voice/telnyx";
 import { Env } from "../src/types";
 import worker from "../src/index";
 
@@ -105,8 +100,8 @@ describe("Módulo de Voz Telnyx (Llamadas de Cortesía)", () => {
               call_leg_id: "leg_123",
             },
           }),
-          { status: 200 }
-        )
+          { status: 200 },
+        ),
       );
       vi.stubGlobal("fetch", mockFetch);
 
@@ -143,7 +138,7 @@ describe("Módulo de Voz Telnyx (Llamadas de Cortesía)", () => {
           headers: expect.objectContaining({
             Authorization: "Bearer KEY01_mock_telnyx_token",
           }),
-        })
+        }),
       );
 
       vi.unstubAllGlobals();
@@ -193,7 +188,7 @@ describe("Módulo de Voz Telnyx (Llamadas de Cortesía)", () => {
             Authorization: "Bearer KEY01_mock_telnyx_token",
           }),
           body: expect.stringContaining("es-MX"),
-        })
+        }),
       );
 
       vi.unstubAllGlobals();

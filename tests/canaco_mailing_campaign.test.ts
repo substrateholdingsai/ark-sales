@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { app } from "../src/index";
 import { signJwt } from "../src/auth/jwt";
 
@@ -20,7 +20,7 @@ function createMockDb() {
     conversions_siem_total: 0,
     conversions_pro_total: 0,
     dedicated_domain: "siem-canaco.com.mx",
-    domain_cost_mxn: 299.00,
+    domain_cost_mxn: 299.0,
     domain_billing_status: "pendiente_refacturacion",
     from_email: "afiliacion@siem-canaco.com.mx",
     landing_base_url: "https://canacomerida.arksystems.site/registro-siem",
@@ -35,19 +35,15 @@ function createMockDb() {
       slug: "canaco_siem_invitacion",
       category: "onboarding",
       subject: "CANACO: Beneficio Institucional SIEM para {{empresa_nombre}}",
-      html_content: "<h1>Hola {{socio_nombre}}</h1><p>Tu link: <a href=\"{{registration_link}}\">Click</a></p>",
+      html_content: '<h1>Hola {{socio_nombre}}</h1><p>Tu link: <a href="{{registration_link}}">Click</a></p>',
       variables_json: JSON.stringify(["empresa_nombre", "socio_nombre", "registration_link"]),
       is_active: 1,
     },
   ];
 
   const dispatches: any[] = [];
-  const leads: any[] = [
-    { id: "lead_1", email: "socio1@canaco.mx", conversation_summary: "[ALTA SIEM CANACO] Registro validado." },
-  ];
-  const opps: any[] = [
-    { id: "opp_1", products_interest_json: '["ledger_pro"]', estimated_value: 399.00 },
-  ];
+  const leads: any[] = [{ id: "lead_1", email: "socio1@canaco.mx", conversation_summary: "[ALTA SIEM CANACO] Registro validado." }];
+  const opps: any[] = [{ id: "opp_1", products_interest_json: '["ledger_pro"]', estimated_value: 399.0 }];
 
   return {
     _config: campaignConfig,
@@ -126,10 +122,7 @@ describe("Campaña de Mailing CANACO (1,200 socios) · Resend Free Tier & Domini
       ENVIRONMENT: "development",
     };
 
-    adminToken = await signJwt(
-      { sub: "usr_superadmin", email: "admin@arksystems.site", role: "admin" },
-      JWT_SECRET
-    );
+    adminToken = await signJwt({ sub: "usr_superadmin", email: "admin@arksystems.site", role: "admin" }, JWT_SECRET);
   });
 
   it("GET /api/superadmin/canaco/campaign debe reportar métricas de la campaña, ciclo de 12 días y dominio", async () => {
@@ -147,11 +140,11 @@ describe("Campaña de Mailing CANACO (1,200 socios) · Resend Free Tier & Domini
     expect(json.campaign.total_subscribers).toBe(1200);
     expect(json.campaign.daily_batch_limit).toBe(100);
     expect(json.campaign.cycle_days).toBe(12);
-    expect(json.resend_tier.cost_usd).toBe(0.00);
+    expect(json.resend_tier.cost_usd).toBe(0.0);
     expect(json.resend_tier.daily_limit).toBe(100);
     expect(json.resend_tier.cadence_description).toContain("12 días");
     expect(json.dedicated_domain.domain).toBe("siem-canaco.com.mx");
-    expect(json.dedicated_domain.cost_mxn).toBe(299.00);
+    expect(json.dedicated_domain.cost_mxn).toBe(299.0);
     expect(json.dedicated_domain.billing_status).toBe("pendiente_refacturacion");
   });
 
@@ -186,7 +179,7 @@ describe("Campaña de Mailing CANACO (1,200 socios) · Resend Free Tier & Domini
       body: JSON.stringify({
         status: "facturado",
         domain: "siem-canaco.com.mx",
-        amount_mxn: 299.00,
+        amount_mxn: 299.0,
       }),
     });
 
@@ -196,7 +189,7 @@ describe("Campaña de Mailing CANACO (1,200 socios) · Resend Free Tier & Domini
 
     expect(json.success).toBe(true);
     expect(json.billing_status).toBe("facturado");
-    expect(json.amount_mxn).toBe(299.00);
+    expect(json.amount_mxn).toBe(299.0);
     expect(mockEnv.DB._config.domain_billing_status).toBe("facturado");
   });
 });

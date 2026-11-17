@@ -32,25 +32,27 @@ describe("Operador StayPuft: Suite de Herramientas de Correo (Resend) y Fail-Clo
   ];
 
   const sampleLeads: Record<string, any> = {
-    "lead_100": {
+    lead_100: {
       id: "lead_100",
       email: "director@despachofiscal.mx",
       despacho_nombre: "Despacho Fiscal Pérez y Asociados",
       contacto_nombre: "Lic. Roberto Pérez",
     },
-    "lead_no_email": {
+    lead_no_email: {
       id: "lead_no_email",
       email: "",
       despacho_nombre: "Sin Correo SC",
     },
   };
 
-  const createMockDb = (options: {
-    leads?: Record<string, any>;
-    templates?: any[];
-    dispatches?: any[];
-    activities?: any[];
-  } = {}) => {
+  const createMockDb = (
+    options: {
+      leads?: Record<string, any>;
+      templates?: any[];
+      dispatches?: any[];
+      activities?: any[];
+    } = {},
+  ) => {
     const leads = options.leads || { ...sampleLeads };
     const templates = options.templates || [...sampleTemplates];
     const dispatches = options.dispatches || [];
@@ -62,7 +64,7 @@ describe("Operador StayPuft: Suite de Herramientas de Correo (Resend) y Fail-Clo
           first: vi.fn().mockImplementation(async () => {
             // Count queries for rate limits
             if (query.includes("COUNT(*) as cnt FROM email_dispatches") && query.includes("-1 hour")) {
-              const recent = dispatches.filter(d => d._hoursAgo !== undefined && d._hoursAgo < 1);
+              const recent = dispatches.filter((d) => d._hoursAgo !== undefined && d._hoursAgo < 1);
               return { cnt: recent.length };
             }
             if (query.includes("COUNT(*) as cnt FROM email_dispatches") && query.includes("-24 hours")) {
@@ -78,27 +80,27 @@ describe("Operador StayPuft: Suite de Herramientas de Correo (Resend) y Fail-Clo
             }
             if (query.includes("email_templates") && (query.includes("id = ?") || query.includes("slug = ?"))) {
               const idOrSlug = args[0];
-              const t = templates.find(item => (item.id === idOrSlug || item.slug === idOrSlug) && item.is_active === 1);
+              const t = templates.find((item) => (item.id === idOrSlug || item.slug === idOrSlug) && item.is_active === 1);
               return t || null;
             }
             if (query.includes("FROM email_dispatches") && query.includes("template_slug = ?") && query.includes("-24 hours")) {
               const email = args[0];
               const accId = args[1];
               const slug = args[2];
-              const found = dispatches.find(d => (d.recipient_email === email || d.account_id === accId) && d.template_slug === slug);
+              const found = dispatches.find((d) => (d.recipient_email === email || d.account_id === accId) && d.template_slug === slug);
               return found || null;
             }
             return null;
           }),
           all: vi.fn().mockImplementation(async () => {
             if (query.includes("FROM email_templates")) {
-              return { results: templates.filter(t => t.is_active === 1) };
+              return { results: templates.filter((t) => t.is_active === 1) };
             }
             if (query.includes("FROM email_dispatches")) {
               const accountId = args[0];
               const email = args[1];
               const limit = typeof args[2] === "number" ? args[2] : 50;
-              const filtered = dispatches.filter(d => d.account_id === accountId || d.recipient_email === email || d.recipient_email === accountId);
+              const filtered = dispatches.filter((d) => d.account_id === accountId || d.recipient_email === email || d.recipient_email === accountId);
               return { results: filtered.slice(0, limit) };
             }
             return { results: [] };
@@ -240,7 +242,7 @@ describe("Operador StayPuft: Suite de Herramientas de Correo (Resend) y Fail-Clo
         {
           method: "GET",
           headers: { "X-StayPuft-Key": STAYPUFT_TEST_KEY },
-        }
+        },
       );
       expect(res.status).toBe(200);
       const body: any = await res.json();

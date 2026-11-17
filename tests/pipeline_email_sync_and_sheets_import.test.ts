@@ -1,20 +1,27 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { app } from "../src/index";
 import { signJwt } from "../src/auth/jwt";
-import { parseRawSheetsText, normalizeSheetItems, processSheetImport } from "../src/services/sheetsImport";
+import { parseRawSheetsText, processSheetImport } from "../src/services/sheetsImport";
 import { syncEmailDispatchToPipeline } from "../src/routes/superadmin";
 
 const JWT_SECRET = "test-secret-key-sheets-pipeline";
 
 function createMockFullDb() {
   const accounts: any[] = [
-    { id: "acc_demo_1", name: "Despacho Alpha", normalized_name: "despacho alpha", city: "Mérida", origin: "crm", created_at: new Date().toISOString() }
+    { id: "acc_demo_1", name: "Despacho Alpha", normalized_name: "despacho alpha", city: "Mérida", origin: "crm", created_at: new Date().toISOString() },
   ];
-  const contacts: any[] = [
-    { id: "cnt_demo_1", account_id: "acc_demo_1", name: "Lic. Alpha", email: "alpha@despacho.com", phone: "+529991234567" }
-  ];
+  const contacts: any[] = [{ id: "cnt_demo_1", account_id: "acc_demo_1", name: "Lic. Alpha", email: "alpha@despacho.com", phone: "+529991234567" }];
   const opportunities: any[] = [
-    { id: "opp_demo_1", account_id: "acc_demo_1", contact_id: "cnt_demo_1", stage: "calificado", products_interest_json: '["ledger_pro"]', estimated_value: 399, currency: "MXN", created_at: new Date().toISOString() }
+    {
+      id: "opp_demo_1",
+      account_id: "acc_demo_1",
+      contact_id: "cnt_demo_1",
+      stage: "calificado",
+      products_interest_json: '["ledger_pro"]',
+      estimated_value: 399,
+      currency: "MXN",
+      created_at: new Date().toISOString(),
+    },
   ];
   const activities: any[] = [];
   const dispatches: any[] = [];
@@ -25,7 +32,7 @@ function createMockFullDb() {
       subject: "Propuesta Ark Ledger para {{despacho_nombre}}",
       html_content: "<p>Hola {{contacto_nombre}}</p>",
       is_active: 1,
-    }
+    },
   ];
 
   return {
@@ -43,31 +50,31 @@ function createMockFullDb() {
           return {
             async first() {
               if (s.includes("from email_templates where id = ? or slug = ?")) {
-                return templates.find(t => t.id === args[0] || t.slug === args[0]) || null;
+                return templates.find((t) => t.id === args[0] || t.slug === args[0]) || null;
               }
               if (s.includes("from sales_contacts where email = ?")) {
-                return contacts.find(c => c.email === args[0]) || null;
+                return contacts.find((c) => c.email === args[0]) || null;
               }
               if (s.includes("from sales_contacts where account_id = ? and email = ?")) {
-                return contacts.find(c => c.account_id === args[0] && c.email === args[1]) || null;
+                return contacts.find((c) => c.account_id === args[0] && c.email === args[1]) || null;
               }
               if (s.includes("from sales_contacts where account_id = ? and name = ?")) {
-                return contacts.find(c => c.account_id === args[0] && c.name === args[1]) || null;
+                return contacts.find((c) => c.account_id === args[0] && c.name === args[1]) || null;
               }
               if (s.includes("from sales_accounts where normalized_name = ? or name = ?")) {
-                return accounts.find(a => a.normalized_name === args[0] || a.name === args[1]) || null;
+                return accounts.find((a) => a.normalized_name === args[0] || a.name === args[1]) || null;
               }
               if (s.includes("from sales_accounts where id = ?")) {
-                return accounts.find(a => a.id === args[0]) || null;
+                return accounts.find((a) => a.id === args[0]) || null;
               }
               if (s.includes("from sales_opportunities where account_id = ? or contact_id = ?")) {
-                return opportunities.find(o => o.account_id === args[0] || o.contact_id === args[1]) || null;
+                return opportunities.find((o) => o.account_id === args[0] || o.contact_id === args[1]) || null;
               }
               if (s.includes("from sales_opportunities where account_id = ?")) {
-                return opportunities.find(o => o.account_id === args[0]) || null;
+                return opportunities.find((o) => o.account_id === args[0]) || null;
               }
               if (s.includes("from sales_opportunities where contact_id = ?")) {
-                return opportunities.find(o => o.contact_id === args[0]) || null;
+                return opportunities.find((o) => o.contact_id === args[0]) || null;
               }
               if (s.includes("from sales_accounts")) {
                 return { n: accounts.length };
@@ -95,7 +102,7 @@ function createMockFullDb() {
             async run() {
               if (s.includes("update sales_opportunities") && s.includes("propuesta_enviada")) {
                 const oppId = args[args.length - 1];
-                const opp = opportunities.find(o => o.id === oppId);
+                const opp = opportunities.find((o) => o.id === oppId);
                 if (opp) {
                   opp.stage = "propuesta_enviada";
                   opp.products_interest_json = args[0] || '["ledger_pro"]';
@@ -108,7 +115,7 @@ function createMockFullDb() {
                   id: args[0],
                   account_id: args[1],
                   contact_id: args[2],
-                  stage: s.includes("propuesta_enviada") ? "propuesta_enviada" : (args[3] || "calificado"),
+                  stage: s.includes("propuesta_enviada") ? "propuesta_enviada" : args[3] || "calificado",
                   products_interest_json: args[4] || '["ledger_pro"]',
                   estimated_value: args[5] || 399,
                   currency: args[6] || "MXN",
@@ -164,11 +171,11 @@ function createMockFullDb() {
                 return { success: true };
               }
               return { success: true };
-            }
+            },
           };
-        }
+        },
       };
-    }
+    },
   };
 }
 
@@ -239,19 +246,23 @@ describe("Conexión de Disparo de Correos al Pipeline & Importador Google Sheets
 
     it("POST /api/superadmin/templates/:id/send promueve el pipeline en envío individual simulado", async () => {
       const env = { DB: mockDb, CRM_JWT_SECRET: JWT_SECRET, JWT_SECRET, RESEND_API_KEY: "", RESEND_FROM_EMAIL: "ventas@arksystems.site" };
-      const res = await app.request("/api/superadmin/templates/tmpl_test_1/send", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "Content-Type": "application/json",
+      const res = await app.request(
+        "/api/superadmin/templates/tmpl_test_1/send",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            to: "alpha@despacho.com",
+            account_id: "acc_demo_1",
+            contact_id: "cnt_demo_1",
+            variables: { despacho_nombre: "Despacho Alpha", contacto_nombre: "Lic. Alpha" },
+          }),
         },
-        body: JSON.stringify({
-          to: "alpha@despacho.com",
-          account_id: "acc_demo_1",
-          contact_id: "cnt_demo_1",
-          variables: { despacho_nombre: "Despacho Alpha", contacto_nombre: "Lic. Alpha" },
-        }),
-      }, env);
+        env,
+      );
 
       expect(res.status).toBe(200);
       const data = await res.json<any>();
@@ -297,7 +308,7 @@ describe("Conexión de Disparo de Correos al Pipeline & Importador Google Sheets
           email: "roberto@gomez.com",
           telefono: "+525544332211",
           ciudad: "Guadalajara",
-        }
+        },
       ];
 
       const res = await processSheetImport(mockDb, rows, "usr_admin");
@@ -329,24 +340,28 @@ describe("Conexión de Disparo de Correos al Pipeline & Importador Google Sheets
       const env = { DB: mockDb, CRM_JWT_SECRET: JWT_SECRET, JWT_SECRET };
 
       // Caso A: JSON con array items
-      const resJson = await app.request("/api/crm/import/sheets", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${writeToken}`,
-          "Content-Type": "application/json",
+      const resJson = await app.request(
+        "/api/crm/import/sheets",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${writeToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            items: [
+              {
+                despacho_nombre: "Despacho Norte",
+                titular_nombre: "Lic. Norte",
+                email: "norte@fiscal.com",
+                telefono: "8181818181",
+                ciudad: "Monterrey",
+              },
+            ],
+          }),
         },
-        body: JSON.stringify({
-          items: [
-            {
-              despacho_nombre: "Despacho Norte",
-              titular_nombre: "Lic. Norte",
-              email: "norte@fiscal.com",
-              telefono: "8181818181",
-              ciudad: "Monterrey",
-            }
-          ]
-        }),
-      }, env);
+        env,
+      );
 
       expect(resJson.status).toBe(200);
       const dataJson = await resJson.json<any>();
@@ -357,14 +372,18 @@ describe("Conexión de Disparo de Correos al Pipeline & Importador Google Sheets
 
       // Caso B: Raw text TSV copiado de Google Sheets
       const tsvData = `Auditoría Peninsular\tLic. Manuel Peña\tmanuel@peninsular.com\t9991122334\tMérida`;
-      const resTsv = await app.request("/api/crm/import/sheets", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${writeToken}`,
-          "Content-Type": "text/plain",
+      const resTsv = await app.request(
+        "/api/crm/import/sheets",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${writeToken}`,
+            "Content-Type": "text/plain",
+          },
+          body: tsvData,
         },
-        body: tsvData,
-      }, env);
+        env,
+      );
 
       expect(resTsv.status).toBe(200);
       const dataTsv = await resTsv.json<any>();

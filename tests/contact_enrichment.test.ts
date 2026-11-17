@@ -1,12 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  cleanMexicanPhone,
-  extractDoctorSearchTerm,
-  enrichDoctorLead,
-  cleanFirmName,
-  enrichAccountingFirmLead,
-  enrichLeadByVertical,
-} from "../src/services/contactEnrichment";
+import { cleanMexicanPhone, extractDoctorSearchTerm, cleanFirmName, enrichAccountingFirmLead, enrichLeadByVertical } from "../src/services/contactEnrichment";
 
 describe("Contact & Accounting Firm Enrichment Level 2", () => {
   it("cleanMexicanPhone formats valid 10-digit numbers to phone and +52 whatsapp", () => {
@@ -25,7 +18,7 @@ describe("Contact & Accounting Firm Enrichment Level 2", () => {
   it("extractDoctorSearchTerm chooses real doctor name over generic account placeholder", () => {
     expect(extractDoctorSearchTerm("Dr. Daniel Ramos", "CONSULTORIO CIRUGIA")).toBe("Dr. Daniel Ramos");
     expect(extractDoctorSearchTerm("Sin nombre", "CONSULTORIO ONCOLOGICO YAIR BENJAMIN BAAS CABRERA")).toBe(
-      "CONSULTORIO ONCOLOGICO YAIR BENJAMIN BAAS CABRERA"
+      "CONSULTORIO ONCOLOGICO YAIR BENJAMIN BAAS CABRERA",
     );
     expect(extractDoctorSearchTerm("Contacto Corporativo", "Dr. Oliver Franco")).toBe("Dr. Oliver Franco");
   });

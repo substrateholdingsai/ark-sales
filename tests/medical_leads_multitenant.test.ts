@@ -20,10 +20,8 @@ function createMockD1() {
 
   return {
     prepare(sql: string) {
-      let boundArgs: any[] = [];
       return {
         bind(...args: any[]) {
-          boundArgs = args;
           return this;
         },
         async first() {
@@ -41,8 +39,8 @@ function createMockD1() {
         },
         async all() {
           if (sql.includes("FROM sales_contacts c")) {
-            let res = contacts.map(c => {
-              const a = accounts.find(acc => acc.id === c.account_id);
+            let res = contacts.map((c) => {
+              const a = accounts.find((acc) => acc.id === c.account_id);
               return {
                 ...c,
                 account_name: a?.name,
@@ -50,27 +48,27 @@ function createMockD1() {
                 account_origin: "lead",
                 account_scian: a?.scian_code,
                 account_tenant_id: a?.tenant_id,
-                has_proposal_sent: 0
+                has_proposal_sent: 0,
               };
             });
             if (sql.includes("acc_futura_capital") || sql.includes("62%")) {
-              res = res.filter(c => c.account_tenant_id === "acc_futura_capital" || (c.account_scian && c.account_scian.startsWith("62")));
+              res = res.filter((c) => c.account_tenant_id === "acc_futura_capital" || (c.account_scian && c.account_scian.startsWith("62")));
             }
             return { results: res };
           }
           if (sql.includes("sales_accounts")) {
             let res = [...accounts];
             if (sql.includes("acc_futura_capital") || sql.includes("62%")) {
-              res = res.filter(a => a.tenant_id === "acc_futura_capital" || (a.scian_code && a.scian_code.startsWith("62")));
+              res = res.filter((a) => a.tenant_id === "acc_futura_capital" || (a.scian_code && a.scian_code.startsWith("62")));
             } else if (sql.includes("acc_ark_ledger")) {
-              res = res.filter(a => a.tenant_id === "acc_ark_ledger");
+              res = res.filter((a) => a.tenant_id === "acc_ark_ledger");
             }
             return { results: res };
           }
           return { results: [] };
-        }
+        },
       };
-    }
+    },
   };
 }
 
@@ -79,12 +77,15 @@ describe("Medical Leads & Tenant Isolation Suite (Futura Capital)", () => {
   let token: string;
 
   beforeEach(async () => {
-    token = await signJwt({
-      sub: "usr_admin_test",
-      email: "admin@arksystems.site",
-      role: "admin",
-      name: "Admin Tester"
-    }, secret);
+    token = await signJwt(
+      {
+        sub: "usr_admin_test",
+        email: "admin@arksystems.site",
+        role: "admin",
+        name: "Admin Tester",
+      },
+      secret,
+    );
   });
 
   it("resolveTenantId clasifica cualquier SCIAN 62xxxx (médicos) como acc_futura_capital", () => {
@@ -106,7 +107,9 @@ describe("Medical Leads & Tenant Isolation Suite (Futura Capital)", () => {
     const db = {
       prepare(sql: string) {
         return {
-          bind() { return this; },
+          bind() {
+            return this;
+          },
           async all() {
             queries.push(sql);
             return { results: [] };
@@ -114,21 +117,21 @@ describe("Medical Leads & Tenant Isolation Suite (Futura Capital)", () => {
           async first() {
             queries.push(sql);
             return { n: 0 };
-          }
+          },
         };
-      }
+      },
     };
     const env: any = { DB: db, CRM_JWT_SECRET: secret };
-    for (const [path, alias] of [
+    for (const [path] of [
       ["/api/crm/accounts", "sales_accounts"],
-      ["/api/crm/contacts", "a"]
+      ["/api/crm/contacts", "a"],
     ]) {
       for (const tenant of ["acc_futura_capital", "acc_ark_ledger"]) {
         const res = await app.fetch(
           new Request(`https://sales.arksystems.site${path}?tenant=${tenant}`, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` },
           }),
-          env
+          env,
         );
         expect(res.status).toBe(200);
       }
@@ -142,10 +145,10 @@ describe("Medical Leads & Tenant Isolation Suite (Futura Capital)", () => {
       expect(predicate).toContain("LIKE '%inmobiliaria%'");
       expect(predicate).toContain("LIKE '%hermes%'");
       expect(predicate).toContain("LIKE '%vektor%'");
-      const relatedQueries = queries.filter(sql => sql.includes(alias === "a" ? "FROM sales_contacts c" : "FROM sales_accounts"));
+      const relatedQueries = queries.filter((sql) => sql.includes(alias === "a" ? "FROM sales_contacts c" : "FROM sales_accounts"));
       expect(relatedQueries.length).toBeGreaterThanOrEqual(4);
-      expect(relatedQueries.every(sql => sql.includes(predicate))).toBe(true);
-      expect(relatedQueries.some(sql => sql.includes("NOT " + predicate))).toBe(true);
+      expect(relatedQueries.every((sql) => sql.includes(predicate))).toBe(true);
+      expect(relatedQueries.some((sql) => sql.includes("NOT " + predicate))).toBe(true);
     }
   });
 
@@ -153,14 +156,14 @@ describe("Medical Leads & Tenant Isolation Suite (Futura Capital)", () => {
     const mockDb = createMockD1();
     const env: any = {
       DB: mockDb,
-      CRM_JWT_SECRET: secret
+      CRM_JWT_SECRET: secret,
     };
 
     const res = await app.fetch(
       new Request("https://sales.arksystems.site/api/crm/accounts?tenant=acc_futura_capital&limit=50", {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       }),
-      env
+      env,
     );
 
     expect(res.status).toBe(200);
@@ -175,14 +178,14 @@ describe("Medical Leads & Tenant Isolation Suite (Futura Capital)", () => {
     const mockDb = createMockD1();
     const env: any = {
       DB: mockDb,
-      CRM_JWT_SECRET: secret
+      CRM_JWT_SECRET: secret,
     };
 
     const res = await app.fetch(
       new Request("https://sales.arksystems.site/api/crm/contacts?tenant=acc_futura_capital&limit=50", {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       }),
-      env
+      env,
     );
 
     expect(res.status).toBe(200);
@@ -209,21 +212,21 @@ describe("Medical Leads & Tenant Isolation Suite (Futura Capital)", () => {
           async first() {
             queries.push({ sql, params: this.params });
             return { n: 0 };
-          }
+          },
         };
         return statement;
-      }
+      },
     };
     const env: any = { DB: db, CRM_JWT_SECRET: secret };
     const res = await app.fetch(
       new Request("https://sales.arksystems.site/api/crm/contacts?city=merida", {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       }),
-      env
+      env,
     );
 
     expect(res.status).toBe(200);
-    const contactQueries = queries.filter(query => query.sql.includes("FROM sales_contacts c"));
+    const contactQueries = queries.filter((query) => query.sql.includes("FROM sales_contacts c"));
     expect(contactQueries).toHaveLength(2);
     for (const query of contactQueries) {
       expect(query.sql).toContain("a.city LIKE ?");
@@ -238,14 +241,14 @@ describe("Medical Leads & Tenant Isolation Suite (Futura Capital)", () => {
     const mockDb = createMockD1();
     const env: any = {
       DB: mockDb,
-      CRM_JWT_SECRET: secret
+      CRM_JWT_SECRET: secret,
     };
 
     const res = await app.fetch(
       new Request("https://sales.arksystems.site/api/superadmin/tenants/overview?tenant=acc_futura_capital", {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       }),
-      env
+      env,
     );
 
     expect(res.status).toBe(200);

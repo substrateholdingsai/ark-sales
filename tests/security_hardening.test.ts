@@ -23,10 +23,7 @@ describe("Security Hardening & Anti-Abuse Suite", () => {
   });
 
   it("GET /superadmin debe bloquear con 403 a usuarios autenticados con rol 'vendedor'", async () => {
-    const sellerToken = await signJwt(
-      { sub: "usr_vend", email: "vendedor@arksystems.site", role: "vendedor" },
-      TEST_SECRET
-    );
+    const sellerToken = await signJwt({ sub: "usr_vend", email: "vendedor@arksystems.site", role: "vendedor" }, TEST_SECRET);
     const env: any = {
       ENVIRONMENT: "production",
       CRM_JWT_SECRET: TEST_SECRET,
@@ -36,7 +33,7 @@ describe("Security Hardening & Anti-Abuse Suite", () => {
       new Request("http://localhost/superadmin", {
         headers: { Authorization: `Bearer ${sellerToken}` },
       }),
-      env
+      env,
     );
     expect(res.status).toBe(403);
   });
@@ -47,8 +44,12 @@ describe("Security Hardening & Anti-Abuse Suite", () => {
         return {
           bind() {
             return {
-              async first() { return null; },
-              async run() { return { success: true }; },
+              async first() {
+                return null;
+              },
+              async run() {
+                return { success: true };
+              },
             };
           },
         };
@@ -67,7 +68,7 @@ describe("Security Hardening & Anti-Abuse Suite", () => {
           headers: { "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.10" },
           body: JSON.stringify({ email: "admin@arksystems.site", password: "wrong-password" }),
         }),
-        env
+        env,
       );
       expect(r.status).toBe(401);
     }
@@ -79,7 +80,7 @@ describe("Security Hardening & Anti-Abuse Suite", () => {
         headers: { "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.10" },
         body: JSON.stringify({ email: "admin@arksystems.site", password: "wrong-password" }),
       }),
-      env
+      env,
     );
     expect(blocked.status).toBe(429);
   });
@@ -97,7 +98,7 @@ describe("Security Hardening & Anti-Abuse Suite", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ to: "+525512345678" }),
       }),
-      env
+      env,
     );
     expect(unauth.status).toBe(401);
 
@@ -110,7 +111,7 @@ describe("Security Hardening & Anti-Abuse Suite", () => {
         },
         body: JSON.stringify({ to: "+525512345678" }),
       }),
-      env
+      env,
     );
     expect(authInternal.status).toBe(200);
   });
@@ -127,7 +128,7 @@ describe("Security Hardening & Anti-Abuse Suite", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: "test@empresa.com" }),
       }),
-      env
+      env,
     );
     expect(res.status).toBe(401);
   });
@@ -147,7 +148,7 @@ describe("Security Hardening & Anti-Abuse Suite", () => {
           data: { object: { id: "ord_123", payment_status: "paid" } },
         }),
       }),
-      env
+      env,
     );
     expect(res.status).toBe(401);
   });

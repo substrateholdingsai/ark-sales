@@ -186,9 +186,7 @@ describe("StayPuft Cohort Enqueue & Fail-Closed Quarantine Suite", () => {
 
     it("enqueues valid candidates up to limit and filters out invalid/duplicate leads", async () => {
       const insertedTasks: any[] = [];
-      const existingTasks = [
-        { lead_id: "lead_already_done", skill_name: "research_prospect_web" },
-      ];
+      const existingTasks = [{ lead_id: "lead_already_done", skill_name: "research_prospect_web" }];
 
       const candidateRows = [
         // 1. Valid candidate 1
@@ -288,7 +286,7 @@ describe("StayPuft Cohort Enqueue & Fail-Closed Quarantine Suite", () => {
           if (query.includes("agent_tasks") && query.includes("lead_id = ?")) {
             const leadId = params[0];
             const skillName = params[1];
-            const found = existingTasks.find(t => t.lead_id === leadId && t.skill_name === skillName);
+            const found = existingTasks.find((t) => t.lead_id === leadId && t.skill_name === skillName);
             return found || null;
           }
           return null;
@@ -463,7 +461,7 @@ describe("StayPuft Cohort Enqueue & Fail-Closed Quarantine Suite", () => {
     });
 
     it("allows valid lead through to sales_leads with HTTP 201", async () => {
-      const { app, db, quarantineRows, leadsRows } = mockWebhookApp();
+      const { app, db, quarantineRows } = mockWebhookApp();
       const res = await app.fetch(
         new Request("http://localhost/webhooks/ingest", {
           method: "POST",

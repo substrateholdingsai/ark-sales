@@ -78,8 +78,7 @@ function createLeadDb() {
       const s = sql.trim();
       const sl = s.toLowerCase();
       queries.push(s);
-      const isWebsiteQuery =
-        sl.includes("sales_leads") && sl.includes("lower(despacho_nombre) = lower(?)") && sl.includes("limit 100");
+      const isWebsiteQuery = sl.includes("sales_leads") && sl.includes("lower(despacho_nombre) = lower(?)") && sl.includes("limit 100");
       return {
         bind(...args: any[]) {
           return {
@@ -258,7 +257,14 @@ describe("POST /api/internal/leads — alta de lead único (StayPuft)", () => {
       const db = createLeadDb();
       const env = createEnv(db);
       const app = createApp(env);
-      const res = await postLead(app, env, { ...BASE_LEAD, phone: "not-a-phone", email: undefined, website: undefined, instagram: undefined, facebook: undefined });
+      const res = await postLead(app, env, {
+        ...BASE_LEAD,
+        phone: "not-a-phone",
+        email: undefined,
+        website: undefined,
+        instagram: undefined,
+        facebook: undefined,
+      });
 
       expect(res.status).toBe(400);
       expect(db._leads).toHaveLength(0);
@@ -516,7 +522,8 @@ describe("POST /api/internal/leads — alta de lead único (StayPuft)", () => {
         if (res.status === 429) rateLimited = true;
       }
 
-      expect(created).toBe(60);      expect(rateLimited).toBe(true);
+      expect(created).toBe(60);
+      expect(rateLimited).toBe(true);
       expect(lastStatus).toBe(429);
     });
   });

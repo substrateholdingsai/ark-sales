@@ -3,12 +3,8 @@ import { app } from "../src/index";
 import { signJwt } from "../src/auth/jwt";
 
 function createMockDb() {
-  const accounts: any[] = [
-    { id: "acc_1", name: "Despacho Contable Test", size: "1-5", city: "Mérida", origin: "denue" }
-  ];
-  const contacts: any[] = [
-    { id: "ct_1", account_id: "acc_1", name: "Roberto Gómez", email: "roberto@test.com", phone: "+529991112233" }
-  ];
+  const accounts: any[] = [{ id: "acc_1", name: "Despacho Contable Test", size: "1-5", city: "Mérida", origin: "denue" }];
+  const contacts: any[] = [{ id: "ct_1", account_id: "acc_1", name: "Roberto Gómez", email: "roberto@test.com", phone: "+529991112233" }];
   const audit: any[] = [];
 
   return {
@@ -20,10 +16,10 @@ function createMockDb() {
       const createExecution = (args: any[]) => ({
         async first() {
           if (s.includes("from sales_accounts where id = ?")) {
-            return accounts.find(a => a.id === args[0]) || null;
+            return accounts.find((a) => a.id === args[0]) || null;
           }
           if (s.includes("from sales_contacts where id = ?")) {
-            return contacts.find(c => c.id === args[0]) || null;
+            return contacts.find((c) => c.id === args[0]) || null;
           }
           if (s.includes("count(*)") && s.includes("sales_contacts")) {
             return { n: contacts.length };
@@ -33,28 +29,28 @@ function createMockDb() {
         async all() {
           if (s.includes("from sales_contacts")) {
             return {
-              results: contacts.map(c => {
-                const acc = accounts.find(a => a.id === c.account_id);
+              results: contacts.map((c) => {
+                const acc = accounts.find((a) => a.id === c.account_id);
                 return { ...c, account_name: acc?.name, account_city: acc?.city };
-              })
+              }),
             };
           }
           return { results: [] };
         },
         async run() {
           if (s.startsWith("delete from sales_accounts where id = ?")) {
-            const idx = accounts.findIndex(a => a.id === args[0]);
+            const idx = accounts.findIndex((a) => a.id === args[0]);
             if (idx !== -1) accounts.splice(idx, 1);
             return { success: true };
           }
           if (s.startsWith("delete from sales_contacts where id = ?")) {
-            const idx = contacts.findIndex(c => c.id === args[0]);
+            const idx = contacts.findIndex((c) => c.id === args[0]);
             if (idx !== -1) contacts.splice(idx, 1);
             return { success: true };
           }
           if (s.includes("delete from sales_contacts where id in")) {
             for (const id of args) {
-              const idx = contacts.findIndex(c => c.id === id);
+              const idx = contacts.findIndex((c) => c.id === id);
               if (idx !== -1) contacts.splice(idx, 1);
             }
             return { success: true };
@@ -67,7 +63,7 @@ function createMockDb() {
           }
           if (s.startsWith("update sales_contacts")) {
             const id = args[args.length - 1];
-            const c = contacts.find(x => x.id === id);
+            const c = contacts.find((x) => x.id === id);
             if (c) {
               c.name = args[1] !== undefined ? args[1] : c.name;
               c.email = args[2] !== undefined ? args[2] : c.email;
@@ -82,7 +78,7 @@ function createMockDb() {
             return { success: true };
           }
           return { success: true };
-        }
+        },
       });
 
       const execNoArgs = createExecution([]);
@@ -90,9 +86,9 @@ function createMockDb() {
         ...execNoArgs,
         bind(...args: any[]) {
           return createExecution(args);
-        }
+        },
       };
-    }
+    },
   };
 }
 
@@ -111,13 +107,16 @@ describe("CRM Delete & Contact Export Endpoints", () => {
     const env = { DB: db, CRM_JWT_SECRET: secret } as any;
     const token = await signJwt({ sub: "usr_1", email: "admin@ark.test", role: "admin", name: "Admin" }, secret);
 
-    const res = await app.fetch(new Request("http://localhost/api/crm/accounts/acc_1", {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` }
-    }), env);
+    const res = await app.fetch(
+      new Request("http://localhost/api/crm/accounts/acc_1", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
 
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.success).toBe(true);
     expect(body.id).toBe("acc_1");
     expect(db.accounts.length).toBe(0);
@@ -136,13 +135,16 @@ describe("CRM Delete & Contact Export Endpoints", () => {
     const env = { DB: db, CRM_JWT_SECRET: secret } as any;
     const token = await signJwt({ sub: "usr_1", email: "rep@ark.test", role: "vendedor", name: "Sales Rep" }, secret);
 
-    const res = await app.fetch(new Request("http://localhost/api/crm/contacts/ct_1", {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` }
-    }), env);
+    const res = await app.fetch(
+      new Request("http://localhost/api/crm/contacts/ct_1", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
 
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.success).toBe(true);
     expect(body.id).toBe("ct_1");
     expect(db.contacts.length).toBe(0);
@@ -153,12 +155,15 @@ describe("CRM Delete & Contact Export Endpoints", () => {
     const env = { DB: db, CRM_JWT_SECRET: secret } as any;
     const token = await signJwt({ sub: "usr_1", email: "admin@ark.test", role: "admin", name: "Admin" }, secret);
 
-    const res = await app.fetch(new Request("http://localhost/api/crm/contacts?limit=1000", {
-      headers: { Authorization: `Bearer ${token}` }
-    }), env);
+    const res = await app.fetch(
+      new Request("http://localhost/api/crm/contacts?limit=1000", {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
 
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.items.length).toBe(1);
     expect(body.items[0].name).toBe("Roberto Gómez");
     expect(body.items[0].account_name).toBe("Despacho Contable Test");
@@ -170,23 +175,26 @@ describe("CRM Delete & Contact Export Endpoints", () => {
     const env = { DB: db, CRM_JWT_SECRET: secret } as any;
     const token = await signJwt({ sub: "usr_1", email: "rep@ark.test", role: "vendedor", name: "Sales Rep" }, secret);
 
-    const res = await app.fetch(new Request("http://localhost/api/crm/contacts/ct_1", {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        name: "Dr. Yair Benjamín Baas Cabrera",
-        email: "yair.baas@oncologia.com",
-        phone: "+52 999 555 4321",
-        whatsapp: "+52 999 888 7766",
-        title: "Cirujano Oncólogo"
-      })
-    }), env);
+    const res = await app.fetch(
+      new Request("http://localhost/api/crm/contacts/ct_1", {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "Dr. Yair Benjamín Baas Cabrera",
+          email: "yair.baas@oncologia.com",
+          phone: "+52 999 555 4321",
+          whatsapp: "+52 999 888 7766",
+          title: "Cirujano Oncólogo",
+        }),
+      }),
+      env,
+    );
 
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.contact.name).toBe("Dr. Yair Benjamín Baas Cabrera");
     expect(body.contact.email).toBe("yair.baas@oncologia.com");
     expect(body.contact.phone).toBe("+52 999 555 4321");
@@ -197,22 +205,25 @@ describe("CRM Delete & Contact Export Endpoints", () => {
     const db = createMockDb();
     db.contacts.push(
       { id: "ct_2", account_id: "acc_1", name: "Contacto 2", email: "c2@test.com" },
-      { id: "ct_3", account_id: "acc_1", name: "Contacto 3", email: "c3@test.com" }
+      { id: "ct_3", account_id: "acc_1", name: "Contacto 3", email: "c3@test.com" },
     );
     const env = { DB: db, CRM_JWT_SECRET: secret } as any;
     const token = await signJwt({ sub: "usr_1", email: "admin@ark.test", role: "admin", name: "Admin" }, secret);
 
-    const res = await app.fetch(new Request("http://localhost/api/crm/contacts/bulk-delete", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ ids: ["ct_1", "ct_2"] })
-    }), env);
+    const res = await app.fetch(
+      new Request("http://localhost/api/crm/contacts/bulk-delete", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids: ["ct_1", "ct_2"] }),
+      }),
+      env,
+    );
 
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.success).toBe(true);
     expect(body.count).toBe(2);
     expect(db.contacts.length).toBe(1);

@@ -124,7 +124,7 @@ describe("Tenant Onboarding: Futura Capital Partners (0014_tenant_futura_capital
         method: "GET",
         headers: { Origin: "https://futuracapital.mx" },
       }),
-      {} as any
+      {} as any,
     );
     expect(resMain.headers.get("access-control-allow-origin")).toBe("https://futuracapital.mx");
 
@@ -133,7 +133,7 @@ describe("Tenant Onboarding: Futura Capital Partners (0014_tenant_futura_capital
         method: "GET",
         headers: { Origin: "https://partners.futuracapital.mx" },
       }),
-      {} as any
+      {} as any,
     );
     expect(resPartners.headers.get("access-control-allow-origin")).toBe("https://partners.futuracapital.mx");
   });

@@ -162,7 +162,11 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
     });
 
     it("debe retornar el Resumen Ejecutivo completo e historial para Grok Bot", async () => {
-      const res = await app.request("/api/internal/context?lead_id=lead_existente_123", { headers: { "X-Ark-Internal-Key": "test-internal-key" } }, createMockEnv());
+      const res = await app.request(
+        "/api/internal/context?lead_id=lead_existente_123",
+        { headers: { "X-Ark-Internal-Key": "test-internal-key" } },
+        createMockEnv(),
+      );
       expect(res.status).toBe(200);
       const data: any = await res.json();
 
@@ -192,7 +196,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
             },
           }),
         },
-        createMockEnv()
+        createMockEnv(),
       );
 
       expect(res.status).toBe(200);
@@ -217,7 +221,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
             },
           }),
         },
-        createMockEnv()
+        createMockEnv(),
       );
 
       expect(res.status).toBe(400);
@@ -236,7 +240,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
             payload: {},
           }),
         },
-        createMockEnv()
+        createMockEnv(),
       );
 
       expect(res.status).toBe(404);
@@ -251,7 +255,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
       const result = await executor.dispararHabilidadGrok(
         "tag_prospect_on_x",
         { username: "contador_sat_mx", queja_sat: "El portal del SAT volvió a caerse" },
-        { lead_id: "lead_x_01", leadEmail: "contador@sat.com", despachoNombre: "Despacho X" }
+        { lead_id: "lead_x_01", leadEmail: "contador@sat.com", despachoNombre: "Despacho X" },
       );
 
       expect(result.status).toBe("ready_for_grok_execution");
@@ -289,7 +293,7 @@ describe("Sprint 2: Capa de Integración con Grok Bot", () => {
             },
           }),
         },
-        createMockEnv()
+        createMockEnv(),
       );
 
       expect(res.status).toBe(200);

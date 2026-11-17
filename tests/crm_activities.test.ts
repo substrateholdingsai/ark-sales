@@ -4,7 +4,10 @@ import { signJwt } from "../src/auth/jwt";
 
 function createMockDb() {
   const accounts = [{ id: "acc_1" }];
-  const contacts = [{ id: "ct_1", account_id: "acc_1" }, { id: "ct_2", account_id: "acc_2" }];
+  const contacts = [
+    { id: "ct_1", account_id: "acc_1" },
+    { id: "ct_2", account_id: "acc_2" },
+  ];
   const opportunities = [{ id: "opp_1", account_id: "acc_1", contact_id: "ct_1" }];
   const activities: any[] = [];
 
@@ -15,16 +18,16 @@ function createMockDb() {
       const execute = (args: any[] = []) => ({
         async first() {
           if (query.includes("from sales_accounts where id = ?")) {
-            return accounts.find(account => account.id === args[0]) || null;
+            return accounts.find((account) => account.id === args[0]) || null;
           }
           if (query.includes("from sales_contacts where id = ?")) {
-            return contacts.find(contact => contact.id === args[0]) || null;
+            return contacts.find((contact) => contact.id === args[0]) || null;
           }
           if (query.includes("from sales_opportunities where id = ?")) {
-            return opportunities.find(opportunity => opportunity.id === args[0]) || null;
+            return opportunities.find((opportunity) => opportunity.id === args[0]) || null;
           }
           if (query.includes("from sales_activities a") && query.includes("where a.id = ?")) {
-            const activity = activities.find(item => item.id === args[0]);
+            const activity = activities.find((item) => item.id === args[0]);
             return activity ? { ...activity, author_name: "Vendedor" } : null;
           }
           return null;
@@ -33,20 +36,20 @@ function createMockDb() {
           if (query.includes("from sales_activities a")) {
             let results = activities;
             if (query.includes("a.contact_id = ?")) {
-              results = results.filter(activity => activity.contact_id === args[0]);
+              results = results.filter((activity) => activity.contact_id === args[0]);
             }
             if (query.includes("a.type = ?")) {
               const typeIndex = query.includes("a.contact_id = ?") ? 1 : 0;
-              results = results.filter(activity => activity.type === args[typeIndex]);
+              results = results.filter((activity) => activity.type === args[typeIndex]);
             }
             const limitIndex = args.length - 2;
             const offset = args[args.length - 1] || 0;
             const limit = args[limitIndex] || 20;
             return {
-              results: results.slice(offset, offset + limit).map(activity => ({
+              results: results.slice(offset, offset + limit).map((activity) => ({
                 ...activity,
-                author_name: "Vendedor"
-              }))
+                author_name: "Vendedor",
+              })),
             };
           }
           return { results: [] };
@@ -63,20 +66,20 @@ function createMockDb() {
               author_user_id: args[6],
               content: args[7],
               metadata_json: args[8],
-              created_at: "2026-11-05 12:00:00"
+              created_at: "2026-11-05 12:00:00",
             });
           }
           return { success: true };
-        }
+        },
       });
 
       return {
         ...execute(),
         bind(...args: any[]) {
           return execute(args);
-        }
+        },
       };
-    }
+    },
   };
 }
 
@@ -84,26 +87,29 @@ describe("CRM account notes", () => {
   const secret = "test-secret-1234567890";
 
   async function postActivity(db: ReturnType<typeof createMockDb>, body: Record<string, unknown>, role = "vendedor") {
-    const token = await signJwt(
-      { sub: "usr_1", email: "rep@ark.test", role, name: "Sales Rep" },
-      secret
+    const token = await signJwt({ sub: "usr_1", email: "rep@ark.test", role, name: "Sales Rep" }, secret);
+    return app.fetch(
+      new Request("http://localhost/api/crm/activities", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }),
+      { DB: db, CRM_JWT_SECRET: secret } as any,
     );
-    return app.fetch(new Request("http://localhost/api/crm/activities", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    }), { DB: db, CRM_JWT_SECRET: secret } as any);
   }
 
   it("requires authentication to create notes", async () => {
-    const response = await app.fetch(new Request("http://localhost/api/crm/activities", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "note", account_id: "acc_1", content: "Seguimiento" })
-    }), { DB: createMockDb(), CRM_JWT_SECRET: secret } as any);
+    const response = await app.fetch(
+      new Request("http://localhost/api/crm/activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "note", account_id: "acc_1", content: "Seguimiento" }),
+      }),
+      { DB: createMockDb(), CRM_JWT_SECRET: secret } as any,
+    );
 
     expect(response.status).toBe(401);
   });
@@ -115,11 +121,11 @@ describe("CRM account notes", () => {
       account_id: "acc_1",
       contact_id: "ct_1",
       opportunity_id: "opp_1",
-      content: "  Prefiere que le contactemos por correo.  "
+      content: "  Prefiere que le contactemos por correo.  ",
     });
 
     expect(response.status).toBe(201);
-    const body = await response.json() as any;
+    const body = (await response.json()) as any;
     expect(body.activity.content).toBe("Prefiere que le contactemos por correo.");
     expect(body.activity.account_id).toBe("acc_1");
     expect(body.activity.contact_id).toBe("ct_1");
@@ -134,19 +140,16 @@ describe("CRM account notes", () => {
       type: "note",
       account_id: "acc_1",
       contact_id: "ct_1",
-      content: "Prefiere una llamada por la mañana."
+      content: "Prefiere una llamada por la mañana.",
     });
-    const token = await signJwt(
-      { sub: "usr_1", email: "rep@ark.test", role: "vendedor", name: "Sales Rep" },
-      secret
+    const token = await signJwt({ sub: "usr_1", email: "rep@ark.test", role: "vendedor", name: "Sales Rep" }, secret);
+    const response = await app.fetch(
+      new Request("http://localhost/api/crm/activities?contact_id=ct_1&type=note&limit=50", { headers: { Authorization: `Bearer ${token}` } }),
+      { DB: db, CRM_JWT_SECRET: secret } as any,
     );
-    const response = await app.fetch(new Request(
-      "http://localhost/api/crm/activities?contact_id=ct_1&type=note&limit=50",
-      { headers: { Authorization: `Bearer ${token}` } }
-    ), { DB: db, CRM_JWT_SECRET: secret } as any);
 
     expect(response.status).toBe(200);
-    const body = await response.json() as any;
+    const body = (await response.json()) as any;
     expect(body.items).toHaveLength(1);
     expect(body.items[0].content).toBe("Prefiere una llamada por la mañana.");
     expect(body.items[0].author_name).toBe("Vendedor");
@@ -168,7 +171,7 @@ describe("CRM account notes", () => {
       type: "note",
       account_id: "acc_1",
       contact_id: "ct_2",
-      content: "No debe vincularse"
+      content: "No debe vincularse",
     });
 
     expect(response.status).toBe(400);
@@ -180,7 +183,7 @@ describe("CRM account notes", () => {
     const response = await postActivity(db, {
       type: "note",
       account_id: "acc_1",
-      content: "x".repeat(10001)
+      content: "x".repeat(10001),
     });
 
     expect(response.status).toBe(400);
