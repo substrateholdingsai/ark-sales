@@ -1,4 +1,4 @@
-﻿# Telnyx Voice AI Agents Setup (ark-sales)
+# Telnyx Voice AI Agents Setup (ark-sales)
 
 ## Speech-to-Text (STT)
 - Engine: Deepgram Nova-2
