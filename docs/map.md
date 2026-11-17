@@ -539,7 +539,7 @@ curl -X GET "https://sales.arksystems.site/api/superadmin/harvest/metrics" \
 - [x] Suite completa [`tests/superadmin.test.ts`](file:///c:/Users/PAV/Desktop/e-commerce/ark-sales/tests/superadmin.test.ts) (12/12 tests verdes).
 
 ### Verificación y Calidad de Código
-- [x] Suite de 172 pruebas unitarias e integración en Vitest pasando al 100% (27 suites verdes).\n- [x] Verificación estricta de TypeScript (`npm run typecheck`): **0 errores** (src + tests; verificado 2026-11-05).
+- [x] Suite de 294 pruebas unitarias e integración en Vitest pasando al 100% (33 suites verdes).\n- [x] Verificación estricta de TypeScript (`npm run typecheck`): **0 errores** (src + tests; verificado 2026-11-16).
 - [x] Build y empaquetado de producción (`npm run build` / `wrangler deploy --dry-run`): **Exitoso** (upload ~1020 KiB / gzip ~218 KiB; verificado 2026-11-05).
 
 ---

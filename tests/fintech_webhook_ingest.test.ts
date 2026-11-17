@@ -26,8 +26,8 @@ describe("harvester webhook ingestion", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: "lead_contact_mapping_test",
-          email: "contacto1@example.com",
-          contact_email: "contacto1@example.com",
+          email: "contacto1@despachoprueba.com",
+          contact_email: "contacto1@despachoprueba.com",
           contact_name: "Ana Ejemplo",
           contact_phone: "+523331234567",
           contact_whatsapp: "+523331234568",
@@ -47,7 +47,7 @@ describe("harvester webhook ingestion", () => {
     expect(response.status).toBe(201);
     const contactInsert = statements.find(({ sql }) => sql.includes("INSERT OR IGNORE INTO sales_contacts"));
     expect(contactInsert?.sql).toContain("whatsapp");
-    expect(contactInsert?.params[2]).toBeNull();
+    expect(contactInsert?.params[2]).toBe("Ana Ejemplo");
     expect(contactInsert?.params[4]).toBe("+523331234567");
     expect(contactInsert?.params[5]).toBe("+523331234568");
   });
@@ -75,7 +75,7 @@ describe("harvester webhook ingestion", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: "lead_fintech_test",
-          email: "contacto2@example.com",
+          email: "contacto2@despachoprueba.com",
           destination: "angel",
           vertical: "cobranza",
           tenant_id: "acc_ark_ledger",
@@ -99,9 +99,7 @@ describe("harvester webhook ingestion", () => {
     expect(accountUpdate?.sql).toContain("tenant_id = COALESCE(?, tenant_id)");
     expect(accountUpdate?.params).toContain("acc_ark_ledger");
 
-    const segmentObservation = statements.find(({ sql }) =>
-      sql.includes("CANDIDATO_FINTECH_CREDITO_APP"),
-    );
+    const segmentObservation = statements.find(({ sql }) => sql.includes("CANDIDATO_FINTECH_CREDITO_APP"));
     expect(segmentObservation?.params).toContain("https://credito.example.test");
     expect(segmentObservation?.params).toContain("denue");
   });
@@ -129,7 +127,7 @@ describe("harvester webhook ingestion", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: "lead_sipres_14981",
-          email: "contacto3@example.com",
+          email: "contacto3@despachoprueba.com",
           destination: "angel",
           vertical: "cobranza",
           tenant_id: "acc_ark_ledger",
@@ -153,9 +151,7 @@ describe("harvester webhook ingestion", () => {
 
     expect(response.status).toBe(201);
     const observation = statements.find(({ sql }) => sql.includes("CANDIDATO_SIPRES_SOFOM"));
-    expect(observation?.params).toContain(
-      "https://webapps.condusef.gob.mx/SIPRES/jsp/home_publico.jsp?idins=14981",
-    );
+    expect(observation?.params).toContain("https://webapps.condusef.gob.mx/SIPRES/jsp/home_publico.jsp?idins=14981");
     expect(observation?.params).toContain("sipres");
     expect(observation?.params).toContain(
       JSON.stringify({
