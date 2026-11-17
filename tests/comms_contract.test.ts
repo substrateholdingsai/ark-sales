@@ -64,7 +64,7 @@ function whereFilter(rows: Row[], where: string, params: unknown[] = [], startIn
         const [, col, op] = nullM;
         return op.toUpperCase() === "IS NULL" ? row[col] == null : row[col] != null;
       }
-      const m = cond.match(/^(\w+)\s*(>=|<=|!=|=|>|<|LIKE)\s*(.+)$/i);
+      const m = cond.match(/^([\w.]+)\s*(>=|<=|!=|=|>|<|LIKE)\s*(.+)$/i);
       if (!m) return true;
       const [, col, op, raw] = m;
       const val = raw.trim() === "?" ? params[pIdx++] : parseValue(raw);
@@ -80,7 +80,7 @@ function makeMockDb(tables: Record<string, Row[]> = {}) {
   const data: Record<string, Row[]> = { ...tables };
 
   const prepare = vi.fn((sql: string) => {
-    const sqlTrim = sql.trim();
+    const sqlTrim = sql.trim().replace(/\s+/g, " ");
     const sqlLower = sqlTrim.toLowerCase();
     const isSelect = /^\s*select/i.test(sqlTrim);
     const isInsert = /^\s*insert/i.test(sqlTrim);
@@ -96,13 +96,33 @@ function makeMockDb(tables: Record<string, Row[]> = {}) {
     return {
       bind: vi.fn((...params: unknown[]) => {
         statements.push({ sql: sqlTrim, params });
-        const whereClause = whereClauseRaw;
+        const whereClause = whereClauseRaw.replace(/\s+AND\s+EXISTS\s*\(SELECT[\s\S]*\)$/i, "");
         if (isInsert) {
           insertCalls.push({ sql: sqlTrim, params });
           if (targetTable) {
             if (!data[targetTable]) data[targetTable] = [];
             if (targetTable === "campaign_jobs") {
-              data[targetTable].push({ id: params[0], idempotency_key: params[1] });
+              data[targetTable].push({
+                id: params[0],
+                idempotency_key: params[1],
+                tenant_id: params[2],
+                sender_brand: params[3],
+                channel: params[4],
+                message_payload_json: params[5],
+                audience_payload_json: params[6],
+                schedule_json: params[7],
+                status: "pending_approval",
+              });
+            } else if (targetTable === "campaign_job_targets") {
+              data[targetTable].push({
+                id: params[0],
+                job_id: params[1],
+                tenant_id: params[2],
+                contact_id: params[3],
+                channel: params[4],
+                destination: params[5],
+                status: "pending",
+              });
             } else {
               data[targetTable].push({});
             }
@@ -141,6 +161,14 @@ function makeMockDb(tables: Record<string, Row[]> = {}) {
         if (isSelect && targetTable) {
           const rows = whereFilter(data[targetTable] || [], whereClause, params, 0);
           const countM = sqlLower.match(/count\(*\*\)*/i);
+          if (targetTable === "usage_events" && sqlLower.includes("sum(total_cost_usd)")) {
+            return {
+              first: vi.fn().mockResolvedValue({
+                total_cost_usd: rows.reduce((total, row) => total + Number(row.total_cost_usd || 0), 0),
+                event_count: rows.length,
+              }),
+            };
+          }
           return {
             run: vi.fn().mockResolvedValue({ success: true }),
             first: vi.fn().mockResolvedValue(countM ? { cnt: rows.length } : (rows[0] ?? null)),
@@ -152,7 +180,8 @@ function makeMockDb(tables: Record<string, Row[]> = {}) {
     };
   });
 
-  return { prepare, statements, insertCalls, data };
+  const batch = async (items: Array<{ run: () => Promise<unknown> }>) => Promise.all(items.map((item) => item.run()));
+  return { prepare, batch, statements, insertCalls, data };
 }
 
 const baseEnv: any = {
@@ -189,7 +218,7 @@ const accountRow: Row = { id: "acc_1", tenant_id: "acc_1" };
 const repepVersionRow: Row = { id: "current", list_version: 1, cut_off_date: "2026-10-01", expires_at: nowPlus2h, status: "active" };
 
 describe("Campaigns contract routes", () => {
-  it("dispatch dry_run returns preview_ready with counts + cost", async () => {
+  it("dispatch dry_run returns a pending job with counts + cost", async () => {
     const db = makeMockDb({
       sales_contacts: [contactRow],
       sales_accounts: [accountRow],
@@ -197,6 +226,9 @@ describe("Campaigns contract routes", () => {
       repep_list_version: [repepVersionRow],
       repep_list: [],
       contact_frequency_caps: [],
+      whatsapp_hsm_templates: [
+        { id: "tpl_1", tenant_id: "acc_1", template_name: "tpl_1", template_version: "1", language_code: "es-MX", variables_json: "[]", status: "approved" },
+      ],
     });
     const app = mountCampaignsApp(db);
     const env = { ...baseEnv, DB: db };
@@ -221,7 +253,7 @@ describe("Campaigns contract routes", () => {
     );
     expect(res.status).toBe(200);
     const body: any = await res.json();
-    expect(body.status).toBe("preview_ready");
+    expect(body.status).toBe("pending_approval");
     expect(body.audience_total).toBe(1);
     expect(body.would_send).toBe(1);
     expect(body.excluded_by_rule).toEqual([]);
@@ -231,7 +263,7 @@ describe("Campaigns contract routes", () => {
     expect(body.cost_estimate.total_usd).toBe(0.2);
     expect(body.preview_ttl).toBeTruthy();
     const inserts = db.insertCalls.filter((i: any) => i.sql.includes("INSERT INTO campaign_jobs"));
-    expect(inserts.length).toBe(0);
+    expect(inserts.length).toBe(1);
   });
 
   it("dispatch creates job in pending_approval (no send)", async () => {
@@ -242,6 +274,9 @@ describe("Campaigns contract routes", () => {
       repep_list_version: [repepVersionRow],
       repep_list: [],
       contact_frequency_caps: [],
+      whatsapp_hsm_templates: [
+        { id: "tpl_1", tenant_id: "acc_1", template_name: "tpl_1", template_version: "1", language_code: "es-MX", variables_json: "[]", status: "approved" },
+      ],
     });
     const app = mountCampaignsApp(db);
     const env = { ...baseEnv, DB: db };
@@ -301,7 +336,9 @@ describe("Campaigns contract routes", () => {
 
   it("approve flips pending_approval -> approved and checks preview TTL", async () => {
     const db = makeMockDb({
-      campaign_jobs: [{ id: "job_1", status: "pending_approval", preview_ttl: nowPlus2h, tenant_id: "acc_1", channel: "whatsapp", sender_brand: "ARK" }],
+      campaign_jobs: [
+        { id: "job_1", status: "pending_approval", preview_ttl: nowPlus2h, preview_json: "{}", tenant_id: "acc_1", channel: "whatsapp", sender_brand: "ARK" },
+      ],
     });
     const app = mountCampaignsApp(db);
     const env = { ...baseEnv, DB: db };
@@ -386,6 +423,7 @@ describe("Campaigns contract routes", () => {
           sent_at: null,
         },
       ],
+      usage_events: [{ job_id: "job_4", status: "billable", total_cost_usd: 0.2 }],
     });
     const app = mountCampaignsApp(db);
     const env = { ...baseEnv, DB: db };
@@ -435,11 +473,14 @@ describe("processDispatch integration (guardrails -> send -> outcomes + usage_ev
   let fetchMock: any;
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-17T16:30:00Z"));
     fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { id: "msg_1" } }) });
     vi.stubGlobal("fetch", fetchMock);
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -451,7 +492,7 @@ describe("processDispatch integration (guardrails -> send -> outcomes + usage_ev
           status: "approved",
           tenant_id: "acc_1",
           channel: "whatsapp",
-          message_payload_json: JSON.stringify({ template_id: "tpl_1", template_version: "1", language: "es-MX", variables: {} }),
+          message_payload_json: JSON.stringify({ template_id: "hsm_1", template_version: "1", language: "es-MX", variables: {} }),
           schedule_json: JSON.stringify({ start_at: "2026-11-17T16:00:00Z" }),
         },
       ],
@@ -538,7 +579,7 @@ describe("processDispatch integration (guardrails -> send -> outcomes + usage_ev
           status: "approved",
           tenant_id: "acc_1",
           channel: "whatsapp",
-          message_payload_json: JSON.stringify({ template_id: "tpl_draft", template_version: "1", language: "es-MX", variables: {} }),
+          message_payload_json: JSON.stringify({ template_id: "hsm_draft", template_version: "1", language: "es-MX", variables: {} }),
           schedule_json: JSON.stringify({ start_at: "2026-11-17T16:00:00Z" }),
         },
       ],

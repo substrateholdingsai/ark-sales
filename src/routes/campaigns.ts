@@ -50,7 +50,7 @@ campaignsRouter.use("*", async (c, next) => {
 // ------------------------------------------------------------------
 // POST /api/internal/campaigns/dispatch
 // Creates a job in pending_approval (CRM can never create approved).
-// With dry_run: true, runs guardrails read-only and returns preview.
+// With dry_run: true, persists a pending job and returns its preview.
 // ------------------------------------------------------------------
 campaignsRouter.post("/dispatch", async (c) => {
   try {
@@ -61,8 +61,21 @@ campaignsRouter.post("/dispatch", async (c) => {
       return c.json({ error: "job_id, idempotency_key, tenant_id, sender_brand, channel, audience, message are required." }, 400);
     }
 
-    if (!["whatsapp", "sms", "email", "voice"].includes(channel)) {
-      return c.json({ error: "channel must be whatsapp | sms | email | voice." }, 400);
+    if (channel === "sms") return c.json({ error: "SMS_OUT_OF_SCOPE" }, 400);
+    if (channel === "voice") return c.json({ error: "VOICE_NOT_CONFIGURED" }, 400);
+    if (!["whatsapp", "email"].includes(channel)) {
+      return c.json({ error: "channel must be whatsapp | email." }, 400);
+    }
+    if (
+      !["explicit", "filter"].includes(audience.mode) ||
+      (audience.mode === "explicit" &&
+        (!Array.isArray(audience.contact_ids) ||
+          audience.contact_ids.length === 0 ||
+          audience.contact_ids.some((id: unknown) => typeof id !== "string" || !id) ||
+          new Set(audience.contact_ids).size !== audience.contact_ids.length)) ||
+      approval_required !== true
+    ) {
+      return c.json({ error: "Se requiere una audiencia válida sin duplicados y aprobación." }, 400);
     }
 
     if (!c.env.DB) {
@@ -72,10 +85,43 @@ campaignsRouter.post("/dispatch", async (c) => {
     const db = c.env.DB;
     const guardrails = new GuardrailService(db, c.env);
 
+    if (channel === "whatsapp") {
+      try {
+        const hsm = new HsmTemplateService(db);
+        const template = await hsm.getById(message.template_id);
+        if (!template || (template.tenant_id !== null && template.tenant_id !== tenant_id)) {
+          return c.json({ error: "HSM_TEMPLATE_NOT_FOUND" }, 400);
+        }
+        const resolved = await hsm.resolveForSend({
+          tenantId: tenant_id,
+          templateName: template.template_name,
+          templateVersion: template.template_version,
+          languageCode: template.language_code,
+          variables: message.variables || {},
+        });
+        if (resolved.id !== template.id) return c.json({ error: "HSM_TEMPLATE_ID_MISMATCH" }, 400);
+      } catch (error) {
+        return c.json({ error: error instanceof Error ? error.message : "HSM_TEMPLATE_INVALID" }, 400);
+      }
+    }
+
     // Idempotency: check if job already exists
-    const existing = await db.prepare("SELECT id, status FROM campaign_jobs WHERE idempotency_key = ? LIMIT 1").bind(idempotency_key).first<any>();
+    const existing = await db.prepare("SELECT * FROM campaign_jobs WHERE idempotency_key = ? LIMIT 1").bind(idempotency_key).first<any>();
     if (existing) {
-      return c.json({ job_id: existing.id, status: existing.status, message: "Job already exists for this idempotency key." }, 200);
+      if (
+        existing.id !== job_id ||
+        existing.tenant_id !== tenant_id ||
+        existing.sender_brand !== sender_brand ||
+        existing.channel !== channel ||
+        existing.message_payload_json !== JSON.stringify(message) ||
+        existing.audience_payload_json !== JSON.stringify(audience) ||
+        existing.schedule_json !== JSON.stringify(schedule || {})
+      ) {
+        return c.json({ error: "La clave de idempotencia pertenece a otro borrador." }, 409);
+      }
+      if (existing.status !== "pending_approval" || !dry_run) {
+        return c.json({ job_id: existing.id, status: existing.status, message: "Job already exists for this idempotency key." }, 200);
+      }
     }
 
     // Resolve audience contacts from D1 (CRM system of record — contact never moves)
@@ -152,6 +198,54 @@ campaignsRouter.post("/dispatch", async (c) => {
     }
 
     const audienceTotal = contacts.length;
+    if (audience.mode === "explicit" && audienceTotal !== audience.contact_ids.length) {
+      return c.json({ error: "La audiencia contiene contactos inexistentes o de otro tenant." }, 400);
+    }
+
+    const destinationFor = (ct: (typeof contacts)[number]) => (channel === "email" ? ct.email || "" : ct.phone_e164 || "");
+
+    if (!existing) {
+      const now = new Date().toISOString();
+      const statements = [
+        db
+          .prepare(
+            `INSERT INTO campaign_jobs (
+            id, idempotency_key, tenant_id, sender_brand, channel,
+            message_payload_json, audience_payload_json, schedule_json,
+            status, preview_ttl, approval_required, created_by_user_id, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', NULL, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+          )
+          .bind(
+            job_id,
+            idempotency_key,
+            tenant_id,
+            sender_brand,
+            channel,
+            JSON.stringify(message),
+            JSON.stringify(audience),
+            JSON.stringify(schedule || {}),
+            c.get("user") ?? null,
+          ),
+        ...contacts.map((ct) =>
+          db
+            .prepare(
+              `INSERT INTO campaign_job_targets (id, job_id, tenant_id, contact_id, channel, destination, status, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+            )
+            .bind(`tgt_${crypto.randomUUID()}`, job_id, tenant_id, ct.contact_id, channel, destinationFor(ct), now, now),
+        ),
+      ];
+      await db.batch(statements);
+    } else {
+      const saved = await db
+        .prepare("SELECT contact_id, destination FROM campaign_job_targets WHERE job_id = ? ORDER BY created_at ASC")
+        .bind(job_id)
+        .all<any>();
+      const targets = new Map((saved.results || []).map((target: any) => [target.contact_id, target.destination]));
+      if (targets.size !== contacts.length || contacts.some((ct) => targets.get(ct.contact_id) !== destinationFor(ct))) {
+        return c.json({ error: "La audiencia cambió. Crea un trabajo nuevo." }, 409);
+      }
+    }
 
     // ------------------------------------------------------------------
     // DRY RUN / PREVIEW: evaluate guardrails read-only, return counts
@@ -207,74 +301,33 @@ campaignsRouter.post("/dispatch", async (c) => {
       // Preview TTL: 2 hours from now
       const previewTtl = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
-      return c.json(
-        {
-          job_id,
-          status: "preview_ready",
-          preview_ttl: previewTtl,
-          audience_total: audienceTotal,
-          would_send: wouldSend,
-          excluded_by_rule: excluded,
-          deferred,
-          cost_estimate: costEstimate,
-        },
-        200,
-      );
+      const preview = {
+        job_id,
+        status: "pending_approval",
+        preview_ttl: previewTtl,
+        audience_total: audienceTotal,
+        would_send: wouldSend,
+        excluded_by_rule: excluded,
+        deferred,
+        cost_estimate: costEstimate,
+      };
+      const update = await db
+        .prepare("UPDATE campaign_jobs SET preview_ttl = ?, preview_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending_approval'")
+        .bind(previewTtl, JSON.stringify(preview), job_id)
+        .run();
+      if (!update.meta.changes) return c.json({ error: "El trabajo ya no está pendiente." }, 409);
+      return c.json(preview, 200);
     }
 
     // ------------------------------------------------------------------
     // Real dispatch: create job in pending_approval
     // ------------------------------------------------------------------
-    const now = new Date().toISOString();
-
-    // Preview TTL (2 hours from creation)
-    const previewTtl = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-
-    await db
-      .prepare(
-        `
-      INSERT INTO campaign_jobs (
-        id, idempotency_key, tenant_id, sender_brand, channel,
-        message_payload_json, audience_payload_json, schedule_json,
-        status, preview_ttl, approval_required, created_by_user_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `,
-      )
-      .bind(
-        job_id,
-        idempotency_key,
-        tenant_id,
-        sender_brand,
-        channel,
-        JSON.stringify(message || {}),
-        JSON.stringify(audience || {}),
-        JSON.stringify(schedule || {}),
-        previewTtl,
-        approval_required ? 1 : 0,
-        c.get("user") ?? null,
-      )
-      .run();
-
-    // Insert targets as pending (not yet evaluated — evaluation happens at dispatch time)
-    for (const ct of contacts) {
-      const targetId = `tgt_${crypto.randomUUID()}`;
-      await db
-        .prepare(
-          `
-        INSERT INTO campaign_job_targets (id, job_id, tenant_id, contact_id, channel, destination, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `,
-        )
-        .bind(targetId, job_id, tenant_id, ct.contact_id, channel, ct.phone_e164 || ct.email || "", now);
-    }
-
     return c.json(
       {
         job_id,
         status: "pending_approval",
-        previewTtl,
         audience_total: audienceTotal,
-        message: "Job created in pending_approval. Requires approval before dispatch.",
+        message: "Job created in pending_approval. A preview is required before approval.",
       },
       201,
     );
@@ -391,15 +444,19 @@ campaignsRouter.post("/:job_id/approve", async (c) => {
     }
 
     // Preview TTL check
-    if (job.preview_ttl && new Date(job.preview_ttl) < new Date()) {
+    const expiresAt = typeof job.preview_ttl === "string" ? Date.parse(job.preview_ttl) : NaN;
+    if (!job.preview_json || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       return c.json({ error: "Preview expirado. Re-previsualizar y volver a aprobar." }, 409);
     }
 
     const now = new Date().toISOString();
-    await db
-      .prepare(`UPDATE campaign_jobs SET status = 'approved', approved_by_user_id = ?, approved_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-      .bind(approved_by ?? c.get("user") ?? null, now, jobId)
+    const updated = await db
+      .prepare(
+        `UPDATE campaign_jobs SET status = 'approved', approved_by_user_id = ?, approved_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending_approval' AND preview_ttl = ? AND preview_ttl > ?`,
+      )
+      .bind(approved_by ?? c.get("user") ?? null, now, jobId, job.preview_ttl, now)
       .run();
+    if (!updated.meta.changes) return c.json({ error: "La vista previa cambió o el trabajo ya no está pendiente." }, 409);
 
     return c.json(
       {
@@ -453,7 +510,8 @@ campaignsRouter.post("/:job_id/receipt", async (c) => {
       { sent: 0, excluded: 0, failed: 0, total_cost_usd: 0 },
     );
 
-    summary.total_cost_usd = Math.round((results.reduce((s: number, r: any) => s + (r.cost_usd || 0), 0) + Number.EPSILON) * 100) / 100;
+    const usage = await new UsageEventsService(db).totalForJob(jobId);
+    summary.total_cost_usd = Math.round((usage.totalCostUsd + Number.EPSILON) * 100) / 100;
 
     return c.json(
       {
@@ -462,6 +520,7 @@ campaignsRouter.post("/:job_id/receipt", async (c) => {
         status: job.status,
         results,
         summary,
+        usage: { billable_events: usage.eventCount, total_cost_usd: summary.total_cost_usd },
         message: confirm_received ? "Recibo confirmado por el CRM." : "Recibo disponible para reconciliación del CRM.",
       },
       200,
@@ -577,8 +636,18 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
     const channel = job.channel;
     const unitCost = UNIT_COSTS_USD[channel as keyof typeof UNIT_COSTS_USD] ?? 0;
 
-    // Mark job running
-    await db.prepare("UPDATE campaign_jobs SET status = 'running', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(job.id).run();
+    const scheduleJson = job.schedule_json ? JSON.parse(job.schedule_json) : {};
+    if (scheduleJson.start_at) {
+      const startAt = Date.parse(scheduleJson.start_at);
+      if (!Number.isFinite(startAt)) throw new Error("INVALID_CAMPAIGN_SCHEDULE");
+      if (startAt > Date.now()) continue;
+    }
+
+    const running = await db
+      .prepare("UPDATE campaign_jobs SET status = 'running', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('approved', 'running')")
+      .bind(job.id)
+      .run();
+    if (!running.meta.changes) continue;
 
     // Fetch pending + deferred targets (deferred = quiet-hours retry candidates)
     const targets = await db
@@ -587,6 +656,15 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
       .all<any>();
 
     for (const target of targets.results || []) {
+      const claim = await db
+        .prepare(
+          `UPDATE campaign_job_targets SET status = 'processing', updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status IN ('pending', 'deferred')
+           AND EXISTS (SELECT 1 FROM campaign_jobs WHERE id = ? AND status = 'running')`,
+        )
+        .bind(target.id, job.id)
+        .run();
+      if (!claim.meta.changes) continue;
       processed++;
 
       // G9: tenant re-verification at send time
@@ -600,10 +678,26 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
         continue;
       }
 
-      // Build contact for guardrail evaluation
+      const current = await db
+        .prepare(
+          `SELECT c.phone, c.whatsapp, c.email FROM sales_contacts c
+           JOIN sales_accounts a ON a.id = c.account_id WHERE c.id = ? AND a.tenant_id = ? LIMIT 1`,
+        )
+        .bind(target.contact_id, tenantId)
+        .first<{ phone: string | null; whatsapp: string | null; email: string | null }>();
       const destination = target.destination;
-      const phoneE164 = channel === "email" ? null : destination;
-      const email = channel === "email" ? destination : null;
+      const rawPhone = channel === "whatsapp" ? current?.whatsapp : current?.phone;
+      const normalized = rawPhone ? normalizarTelefonoE164(rawPhone) : null;
+      const phoneE164 = normalized?.valid ? normalized.e164 : null;
+      const email = current?.email ?? null;
+      const currentDestination = channel === "email" ? email : phoneE164;
+      if (!currentDestination || currentDestination !== destination) {
+        await db
+          .prepare(`UPDATE campaign_job_targets SET status = 'excluded', reason = 'destination_changed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+          .bind(target.id)
+          .run();
+        continue;
+      }
 
       const contact: ContactChannel = {
         contact_id: target.contact_id,
@@ -613,9 +707,7 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
       };
 
       // Full guardrail evaluation (read-only checks)
-      const scheduleJson = job.schedule_json ? JSON.parse(job.schedule_json) : {};
-      const sendAt = scheduleJson.start_at || null;
-      const result = await guardrails.evaluateContact(tenantId, contact, sendAt);
+      const result = await guardrails.evaluateContact(tenantId, contact);
 
       if (!result.allowed) {
         // G3 quiet-hours defers (retry in next window) instead of excluding.
@@ -628,12 +720,12 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
       }
 
       // Attempt send
-      let sendResult: { success: boolean; messageId?: string; error?: string; costUsd?: number } = { success: false };
+      let sendResult: { success: boolean; messageId?: string; error?: string; costUsd?: number; simulated?: boolean } = { success: false };
 
       if (channel === "whatsapp") {
         const messageJson = job.message_payload_json ? JSON.parse(job.message_payload_json) : {};
-        const templateName = messageJson.template_id;
-        if (!templateName) {
+        const templateId = messageJson.template_id;
+        if (!templateId) {
           // Fail-closed: no template specified → never send.
           await db
             .prepare(`UPDATE campaign_job_targets SET status = 'failed', reason = 'hsm_template_required', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
@@ -644,13 +736,18 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
         }
         let resolvedTemplate: HsmTemplate | null = null;
         try {
+          const template = await hsm.getById(templateId);
+          if (!template || (template.tenant_id !== null && template.tenant_id !== tenantId)) {
+            throw new Error("HSM_TEMPLATE_NOT_FOUND");
+          }
           resolvedTemplate = await hsm.resolveForSend({
             tenantId: job.tenant_id,
-            templateName,
-            templateVersion: messageJson.template_version || "1",
-            languageCode: messageJson.language || "es-MX",
+            templateName: template.template_name,
+            templateVersion: template.template_version,
+            languageCode: template.language_code,
             variables: messageJson.variables || {},
           });
+          if (resolvedTemplate.id !== template.id) throw new Error("HSM_TEMPLATE_ID_MISMATCH");
         } catch (err: any) {
           // Fail-closed: template not found / not approved / variables missing → never reach Telnyx.
           await db
@@ -701,7 +798,8 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
             });
             if (resp.ok) {
               const data: any = await resp.json();
-              sendResult = { success: true, messageId: data.id };
+              sendResult =
+                typeof data.id === "string" && data.id ? { success: true, messageId: data.id } : { success: false, error: "RESEND_INVALID_RESPONSE" };
             } else {
               sendResult = { success: false, error: `RESEND_${resp.status}`, costUsd: 0 };
             }
@@ -709,11 +807,10 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
             sendResult = { success: false, error: e?.message || "RESEND_ERROR", costUsd: 0 };
           }
         } else {
-          sendResult = { success: true, messageId: `sim_${crypto.randomUUID().slice(0, 8)}` }; // simulated
+          sendResult = { success: false, error: "RESEND_API_KEY_NOT_CONFIGURED", costUsd: 0 };
         }
       } else if (channel === "voice") {
-        // Voice via Telnyx AI (existing outbound-ai pattern)
-        sendResult = { success: true, messageId: `voice_${crypto.randomUUID().slice(0, 8)}` }; // placeholder for voice integration
+        sendResult = { success: false, error: "VOICE_NOT_CONFIGURED", costUsd: 0 };
       } else if (channel === "sms") {
         // SMS out of scope for this build
         sendResult = { success: false, error: "SMS_OUT_OF_SCOPE", costUsd: 0 };
@@ -721,14 +818,7 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
 
       const now = new Date().toISOString();
 
-      if (sendResult.success) {
-        await db
-          .prepare(
-            `UPDATE campaign_job_targets SET status = 'sent', provider_message_id = ?, cost_usd = ?, sent_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          )
-          .bind(sendResult.messageId ?? null, unitCost, now, target.id)
-          .run();
-
+      if (sendResult.success && !sendResult.simulated && sendResult.messageId) {
         // Write usage event (billable)
         await usageEvents.write({
           jobId: job.id,
@@ -740,8 +830,14 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
         });
 
         // Increment frequency cap
-        const weekStart = new Date().toISOString().slice(0, 10);
-        await guardrails.incrementFrequencyCap(tenantId, target.contact_id, channel as ContactChannel["channel"], weekStart);
+        await guardrails.incrementFrequencyCap(tenantId, target.contact_id, channel as ContactChannel["channel"]);
+
+        await db
+          .prepare(
+            `UPDATE campaign_job_targets SET status = 'sent', provider_message_id = ?, cost_usd = ?, sent_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          )
+          .bind(sendResult.messageId, unitCost, now, target.id)
+          .run();
 
         succeeded++;
       } else {
@@ -764,12 +860,13 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
     }
 
     // Check if all targets are done
-    const remaining = await db.prepare("SELECT COUNT(*) as cnt FROM campaign_job_targets WHERE job_id = ? AND status = 'pending'").bind(job.id).first<any>();
+    const remaining = await db
+      .prepare("SELECT COUNT(*) as cnt FROM campaign_job_targets WHERE job_id = ? AND status IN ('pending', 'deferred', 'processing')")
+      .bind(job.id)
+      .first<any>();
 
     if (Number(remaining?.cnt || 0) === 0) {
-      await db.prepare("UPDATE campaign_jobs SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(job.id).run();
-    } else {
-      await db.prepare("UPDATE campaign_jobs SET status = 'paused', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(job.id).run();
+      await db.prepare("UPDATE campaign_jobs SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'running'").bind(job.id).run();
     }
   }
 

@@ -94,7 +94,10 @@ export class WhatsAppService {
       }
 
       const data: any = await response.json();
-      const messageId = data?.data?.id || data?.id || data?.message_id || `wa_${crypto.randomUUID().slice(0, 8)}`;
+      const messageId = data?.data?.id || data?.id || data?.message_id;
+      if (typeof messageId !== "string" || !messageId) {
+        return { success: false, error: "TELNYX_INVALID_RESPONSE", simulated: false };
+      }
 
       return {
         success: true,

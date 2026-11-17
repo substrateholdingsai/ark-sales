@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS campaign_jobs (
   schedule_json TEXT,
   status TEXT NOT NULL DEFAULT 'pending_approval' CHECK (status IN ('pending_approval', 'approved', 'running', 'paused', 'completed', 'cancelled')),
   preview_ttl TEXT,
+  preview_json TEXT,
   approval_required INTEGER NOT NULL DEFAULT 1,
   approved_by_user_id TEXT,
   approved_at TEXT,
@@ -33,7 +34,7 @@ CREATE TABLE IF NOT EXISTS campaign_job_targets (
   contact_id TEXT NOT NULL,
   channel TEXT NOT NULL CHECK (channel IN ('whatsapp', 'sms', 'email', 'voice')),
   destination TEXT NOT NULL, -- phone E.164 or email
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'excluded', 'failed', 'deferred')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'sent', 'delivered', 'excluded', 'failed', 'deferred')),
   reason TEXT,
   provider_message_id TEXT,
   cost_usd REAL DEFAULT 0,

@@ -167,14 +167,16 @@ export class HsmTemplateService {
     }
 
     // Validate supplied variables against variables_json (expected names)
-    let expectedVars: string[] = [];
+    let expectedVars: unknown;
     try {
       expectedVars = JSON.parse(row.variables_json || "[]");
     } catch {
-      expectedVars = [];
+      throw new Error("HSM_TEMPLATE_INVALID_VARIABLES");
     }
-    const providedVars = Object.keys(params.variables || {});
-    const missing = expectedVars.filter((v) => !providedVars.includes(v));
+    if (!Array.isArray(expectedVars) || expectedVars.some((variable) => typeof variable !== "string" || !variable)) {
+      throw new Error("HSM_TEMPLATE_INVALID_VARIABLES");
+    }
+    const missing = expectedVars.filter((variable) => typeof params.variables?.[variable] !== "string" || !params.variables[variable].trim());
     if (missing.length > 0) {
       throw new Error(`HSM_TEMPLATE_MISSING_VARIABLES: ${missing.join(",")}`);
     }

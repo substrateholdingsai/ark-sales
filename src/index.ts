@@ -6,7 +6,7 @@ import { webhookRouter } from "./routes/webhooks";
 import { telnyxRouter } from "./routes/telnyxWebhook";
 import { telnyxVoiceAiRouter } from "./routes/telnyxVoiceAi";
 import { internalRouter } from "./routes/internal";
-import { campaignsRouter } from "./routes/campaigns";
+import { campaignsRouter, processDispatch } from "./routes/campaigns";
 import { authRouter } from "./routes/auth";
 import { crmRouter } from "./routes/crm";
 import { crmAccountsRouter } from "./routes/crmAccounts";
@@ -253,5 +253,6 @@ export default {
         console.log(`[ark-sales cron] Outbox completado. Procesados: ${stats.processed}, Ã‰xitos: ${stats.succeeded}, Fallos: ${stats.failed}`);
       }),
     );
+    ctx.waitUntil(processDispatch(env));
   },
 };

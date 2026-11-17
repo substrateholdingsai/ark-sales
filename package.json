@@ -21,11 +21,13 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241230.0",
+    "@types/sql.js": "^1.4.9",
     "@typescript-eslint/eslint-plugin": "^8.72.2",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.7",
     "prettier": "^3.10.1",
+    "sql.js": "^1.13.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
     "wrangler": "^3.99.0"
