@@ -40,11 +40,7 @@ export function cleanMexicanPhone(raw: string): { phone: string; whatsapp: strin
 }
 
 export function extractDoctorSearchTerm(name?: string, accountName?: string): string {
-  const isGeneric = (str?: string) =>
-    !str ||
-    str === "-" ||
-    str.toLowerCase().includes("sin nombre") ||
-    str.toLowerCase().includes("contacto corporativo");
+  const isGeneric = (str?: string) => !str || str === "-" || str.toLowerCase().includes("sin nombre") || str.toLowerCase().includes("contacto corporativo");
 
   if (!isGeneric(name)) {
     return name!.trim();
@@ -58,13 +54,9 @@ export function extractDoctorSearchTerm(name?: string, accountName?: string): st
   return "";
 }
 
-export async function enrichDoctorLead(params: {
-  name?: string;
-  accountName?: string;
-  city?: string;
-}): Promise<EnrichmentResult> {
+export async function enrichDoctorLead(params: { name?: string; accountName?: string; city?: string }): Promise<EnrichmentResult> {
   const searchTerm = extractDoctorSearchTerm(params.name, params.accountName);
-  const city = (params.city && params.city !== "-") ? params.city : "";
+  const city = params.city && params.city !== "-" ? params.city : "";
   const query = `${searchTerm} ${city} doctoralia mexico`.trim();
 
   const google_search_url = `https://www.google.com/search?q=${encodeURIComponent(`${searchTerm} ${city} telefono whatsapp`.trim())}`;
@@ -199,7 +191,9 @@ export async function enrichDoctorLead(params: {
 
           // Extraer especialidad si no se encontró
           if (!foundTitle) {
-            const specMatch = profileHtml.match(/<span[^>]*class="[^"]*text-muted[^"]*"[^>]*>([^<]*(?:Oncól|Cirug|Médic|Dentist|Oftalm|Pediatr|Ginecol|Cardiól)[^<]*)<\/span>/i);
+            const specMatch = profileHtml.match(
+              /<span[^>]*class="[^"]*text-muted[^"]*"[^>]*>([^<]*(?:Oncól|Cirug|Médic|Dentist|Oftalm|Pediatr|Ginecol|Cardiól)[^<]*)<\/span>/i,
+            );
             if (specMatch) foundTitle = specMatch[1].trim();
           }
         }
@@ -281,22 +275,12 @@ export function cleanFirmName(raw?: string): string {
   return name;
 }
 
-export async function enrichAccountingFirmLead(params: {
-  name?: string;
-  accountName?: string;
-  city?: string;
-}): Promise<AccountingEnrichmentResult> {
-  const isGeneric = (str?: string) =>
-    !str ||
-    str === "-" ||
-    str.toLowerCase().includes("sin nombre") ||
-    str.toLowerCase().includes("contacto corporativo");
+export async function enrichAccountingFirmLead(params: { name?: string; accountName?: string; city?: string }): Promise<AccountingEnrichmentResult> {
+  const isGeneric = (str?: string) => !str || str === "-" || str.toLowerCase().includes("sin nombre") || str.toLowerCase().includes("contacto corporativo");
 
-  const rawName = !isGeneric(params.accountName)
-    ? params.accountName
-    : (!isGeneric(params.name) ? params.name : "");
+  const rawName = !isGeneric(params.accountName) ? params.accountName : !isGeneric(params.name) ? params.name : "";
   const firmName = cleanFirmName(rawName);
-  const city = (params.city && params.city !== "-") ? params.city : "";
+  const city = params.city && params.city !== "-" ? params.city : "";
   const query = `"${firmName}" (socio OR titular OR "contador publico" OR "c.p.") ${city} mexico`.trim();
 
   const google_search_url = `https://www.google.com/search?q=${encodeURIComponent(`${firmName} ${city} socio director contador titular telefono`.trim())}`;
@@ -355,7 +339,8 @@ export async function enrichAccountingFirmLead(params: {
     let sourceUrl = linkedinProfileUrl || "";
 
     // 3. Buscar nombres con títulos profesionales en el HTML/snippet
-    const titularRegex = /(?:C\.?P\.?C?\.?|C\.?P\.?A?\.?|Contador(?:a)? P[uú]blico(?:a)?|Lic\.?|Mtr[ao]\.?|Dr[a]?\.?)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})/i;
+    const titularRegex =
+      /(?:C\.?P\.?C?\.?|C\.?P\.?A?\.?|Contador(?:a)? P[uú]blico(?:a)?|Lic\.?|Mtr[ao]\.?|Dr[a]?\.?)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})/i;
     const nameMatch = searchHtml.match(titularRegex);
     if (nameMatch) {
       titularName = nameMatch[0].trim();
@@ -366,7 +351,8 @@ export async function enrichAccountingFirmLead(params: {
 
     // 4. Buscar nombres seguidos de "- Socio Director", "- Titular", etc.
     if (!titularName) {
-      const partnerPattern = /([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})\s*[-–|,]\s*(?:Socio(?:a)?(?:\s+Director(?:a)?|\s+Fundador(?:a)?|\s+Principal)?|Titular|Director(?:a)? General|Director(?:a)? Fiscal)/i;
+      const partnerPattern =
+        /([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})\s*[-–|,]\s*(?:Socio(?:a)?(?:\s+Director(?:a)?|\s+Fundador(?:a)?|\s+Principal)?|Titular|Director(?:a)? General|Director(?:a)? Fiscal)/i;
       const partnerMatch = searchHtml.match(partnerPattern);
       if (partnerMatch) {
         titularName = partnerMatch[1].trim();
@@ -397,7 +383,10 @@ export async function enrichAccountingFirmLead(params: {
       if (!titularName) {
         const slug = linkedinProfileUrl.split("/in/")[1]?.split("/")[0]?.replace(/[-_]/g, " ");
         if (slug && slug.length > 5 && !slug.includes("company")) {
-          titularName = slug.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+          titularName = slug
+            .split(" ")
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(" ");
         }
       }
     }
@@ -431,13 +420,7 @@ export async function enrichAccountingFirmLead(params: {
   }
 }
 
-export async function enrichLeadByVertical(params: {
-  name?: string;
-  accountName?: string;
-  city?: string;
-  vertical?: string;
-  scian?: string;
-}) {
+export async function enrichLeadByVertical(params: { name?: string; accountName?: string; city?: string; vertical?: string; scian?: string }) {
   const scian = (params.scian || "").trim();
   const text = `${params.accountName || ""} ${params.name || ""} ${params.vertical || ""}`.toLowerCase();
 

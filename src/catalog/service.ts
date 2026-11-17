@@ -26,9 +26,7 @@ export class CatalogService {
         };
       }
 
-      const { results } = await this.db
-        .prepare("SELECT * FROM sales_config WHERE status IN ('active', 'waitlist', 'beta')")
-        .all<ProductConfig>();
+      const { results } = await this.db.prepare("SELECT * FROM sales_config WHERE status IN ('active', 'waitlist', 'beta')").all<ProductConfig>();
 
       if (!results || results.length === 0) {
         return {
@@ -68,10 +66,7 @@ export class CatalogService {
 
   async getProductByKey(productKey: string): Promise<ProductConfig | null> {
     try {
-      const result = await this.db
-        .prepare("SELECT * FROM sales_config WHERE product_key = ? LIMIT 1")
-        .bind(productKey)
-        .first<ProductConfig>();
+      const result = await this.db.prepare("SELECT * FROM sales_config WHERE product_key = ? LIMIT 1").bind(productKey).first<ProductConfig>();
 
       if (!result) return null;
 

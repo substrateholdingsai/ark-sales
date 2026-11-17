@@ -32,7 +32,7 @@ export const BANNED_PHRASES: string[] = [
   "i'm an ai",
   "i am an ai",
   "as a language model",
-  
+
   // Clichés de IA en español
   "en el mundo acelerado de hoy",
   "en el dinámico mundo de hoy",
@@ -79,7 +79,10 @@ export interface GateResult {
 function countWords(text: string): number {
   if (!text) return 0;
   // Limpia tags HTML si los hay para contar palabras reales
-  const clean = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  const clean = text
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!clean) return 0;
   return clean.split(/\s+/).length;
 }
@@ -89,11 +92,7 @@ export class PreSendGate {
    * Revisa determinísticamente un correo antes de ser despachado.
    * Si no pasa las reglas de calidad, bloquea el envío (fail-closed).
    */
-  static check(
-    subject: string,
-    body: string,
-    options: GateOptions = {}
-  ): GateResult {
+  static check(subject: string, body: string, options: GateOptions = {}): GateResult {
     const reasons: string[] = [];
     const autoSanitize = options.autoSanitizeDashes !== false;
     let sSubject = subject || "";
@@ -103,7 +102,10 @@ export class PreSendGate {
     if (EM_DASH_RE.test(sSubject) || EM_DASH_RE.test(sBody)) {
       if (autoSanitize) {
         // Reemplazar em dash por comas o puntos según contexto
-        sSubject = sSubject.replace(EM_DASH_RE, ", ").replace(/\s{2,}/g, " ").trim();
+        sSubject = sSubject
+          .replace(EM_DASH_RE, ", ")
+          .replace(/\s{2,}/g, " ")
+          .trim();
         sBody = sBody.replace(EM_DASH_RE, ", ").replace(/\s{2,}/g, " ");
       } else {
         reasons.push("em_dash_detected: El correo contiene guiones largos (—), un marcador característico de IA.");

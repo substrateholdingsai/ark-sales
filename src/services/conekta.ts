@@ -1,4 +1,3 @@
-import { D1Database } from "@cloudflare/workers-types";
 import { Env, LeadIngestPayload, SalesPaymentOrder } from "../types";
 
 export interface CreateOrderParams {
@@ -102,9 +101,9 @@ export class ConektaService {
         const res = await fetch("https://api.conekta.io/orders", {
           method: "POST",
           headers: {
-            "Accept": "application/vnd.conekta-v2.0.0+json",
+            Accept: "application/vnd.conekta-v2.0.0+json",
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${this.env.CONEKTA_API_KEY}`,
+            Authorization: `Bearer ${this.env.CONEKTA_API_KEY}`,
           },
           body: JSON.stringify(bodyPayload),
         });
@@ -164,7 +163,8 @@ export class ConektaService {
     // Persistir en sales_payment_orders en D1
     if (this.env.DB) {
       try {
-        await this.env.DB.prepare(`
+        await this.env.DB.prepare(
+          `
           INSERT INTO sales_payment_orders (
             id, lead_id, account_id, opportunity_id, contact_id,
             conekta_order_id, amount_cents, currency, status,
@@ -172,50 +172,58 @@ export class ConektaService {
             checkout_url, checkout_id, raw_response_json, metadata_json,
             created_at, updated_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `).bind(
-          internalPaymentId,
-          params.leadId || null,
-          params.accountId || null,
-          params.opportunityId || null,
-          params.contactId || null,
-          conektaOrderId,
-          params.amountCents,
-          currency,
-          params.method,
-          speiClabe || null,
-          speiBank || null,
-          checkoutUrl || null,
-          checkoutId || null,
-          JSON.stringify(rawResponse),
-          JSON.stringify({
-            customerName: params.customerName,
-            customerEmail: params.customerEmail,
-            productName: params.productName,
-            simulated: isSimulated,
-          })
-        ).run();
+        `,
+        )
+          .bind(
+            internalPaymentId,
+            params.leadId || null,
+            params.accountId || null,
+            params.opportunityId || null,
+            params.contactId || null,
+            conektaOrderId,
+            params.amountCents,
+            currency,
+            params.method,
+            speiClabe || null,
+            speiBank || null,
+            checkoutUrl || null,
+            checkoutId || null,
+            JSON.stringify(rawResponse),
+            JSON.stringify({
+              customerName: params.customerName,
+              customerEmail: params.customerEmail,
+              productName: params.productName,
+              simulated: isSimulated,
+            }),
+          )
+          .run();
 
         // Registrar actividad en sales_activities si hay cuenta/lead/oportunidad
         const actId = `act_pay_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
-        const contentDesc = params.method === "spei"
-          ? `Orden Conekta SPEI emitida por $${(params.amountCents / 100).toLocaleString("es-MX", { minimumFractionDigits: 2 })} MXN. CLABE STP: ${speiClabe}`
-          : `Orden Conekta Checkout emitida por $${(params.amountCents / 100).toLocaleString("es-MX", { minimumFractionDigits: 2 })} MXN. Link: ${checkoutUrl}`;
+        const contentDesc =
+          params.method === "spei"
+            ? `Orden Conekta SPEI emitida por $${(params.amountCents / 100).toLocaleString("es-MX", { minimumFractionDigits: 2 })} MXN. CLABE STP: ${speiClabe}`
+            : `Orden Conekta Checkout emitida por $${(params.amountCents / 100).toLocaleString("es-MX", { minimumFractionDigits: 2 })} MXN. Link: ${checkoutUrl}`;
 
-        await this.env.DB.prepare(`
+        await this.env.DB.prepare(
+          `
           INSERT INTO sales_activities (
             id, account_id, contact_id, opportunity_id, lead_id,
 type, author_user_id, content, metadata_json, created_at
           ) VALUES (?, ?, ?, ?, ?, 'note', 'system', ?, ?, CURRENT_TIMESTAMP)
-        `).bind(
-          actId,
-          params.accountId || null,
-          params.contactId || null,
-          params.opportunityId || null,
-          params.leadId || null,
-          contentDesc,
-          JSON.stringify({ internalPaymentId, conektaOrderId, method: params.method })
-        ).run().catch((e) => console.warn("[ConektaService] No se pudo registrar actividad de emisión:", e));
-
+        `,
+        )
+          .bind(
+            actId,
+            params.accountId || null,
+            params.contactId || null,
+            params.opportunityId || null,
+            params.leadId || null,
+            contentDesc,
+            JSON.stringify({ internalPaymentId, conektaOrderId, method: params.method }),
+          )
+          .run()
+          .catch((e) => console.warn("[ConektaService] No se pudo registrar actividad de emisión:", e));
       } catch (dbErr) {
         console.error("[ConektaService] Error persistiendo orden en D1:", dbErr);
       }
@@ -243,7 +251,10 @@ type, author_user_id, content, metadata_json, created_at
    * Actualiza sales_payment_orders a 'paid', mueve sales_opportunities a 'ganado',
    * registra en sales_activities y encola LEAD_INGEST_V3 hacia los hermanos.
    */
-  async processWebhookEvent(payload: any, signatureHeader?: string): Promise<{
+  async processWebhookEvent(
+    payload: any,
+    signatureHeader?: string,
+  ): Promise<{
     success: boolean;
     event?: string;
     orderId?: string;
@@ -276,9 +287,9 @@ type, author_user_id, content, metadata_json, created_at
       }
 
       // 1. Buscar la orden en sales_payment_orders
-      const orderRow = await this.env.DB.prepare(
-        "SELECT * FROM sales_payment_orders WHERE conekta_order_id = ? LIMIT 1"
-      ).bind(conektaOrderId).first<SalesPaymentOrder>();
+      const orderRow = await this.env.DB.prepare("SELECT * FROM sales_payment_orders WHERE conekta_order_id = ? LIMIT 1")
+        .bind(conektaOrderId)
+        .first<SalesPaymentOrder>();
 
       if (!orderRow) {
         console.warn(`[ConektaWebhook] Orden ${conektaOrderId} no encontrada en sales_payment_orders.`);
@@ -286,71 +297,86 @@ type, author_user_id, content, metadata_json, created_at
       }
 
       // 2. Actualizar estado a 'paid'
-      await this.env.DB.prepare(`
+      await this.env.DB.prepare(
+        `
         UPDATE sales_payment_orders
         SET status = 'paid', paid_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(orderRow.id).run();
+      `,
+      )
+        .bind(orderRow.id)
+        .run();
 
       const leadId = orderRow.lead_id;
       let oppId = orderRow.opportunity_id;
 
       // 3. Si no tiene opportunity_id pero tiene lead_id, buscar la oportunidad asociada
       if (!oppId && leadId) {
-        const oppRow = await this.env.DB.prepare(
-          "SELECT id FROM sales_opportunities WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1"
-        ).bind(leadId).first<{ id: string }>();
+        const oppRow = await this.env.DB.prepare("SELECT id FROM sales_opportunities WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1")
+          .bind(leadId)
+          .first<{ id: string }>();
         if (oppRow) oppId = oppRow.id;
       }
 
       // 4. Mover la oportunidad a 'ganado'
       if (oppId) {
-        await this.env.DB.prepare(`
+        await this.env.DB.prepare(
+          `
           UPDATE sales_opportunities
           SET stage = 'ganado', updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(oppId).run();
+        `,
+        )
+          .bind(oppId)
+          .run();
       }
 
       // 5. Mover el lead a 'cerrado' si existe
       if (leadId) {
-        await this.env.DB.prepare(`
+        await this.env.DB.prepare(
+          `
           UPDATE sales_leads
           SET estado = 'cerrado', score = 100, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(leadId).run();
+        `,
+        )
+          .bind(leadId)
+          .run();
       }
 
       // 6. Registrar en sales_activities
       const actId = `act_paid_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
       const montoFormateado = (orderRow.amount_cents / 100).toLocaleString("es-MX", { minimumFractionDigits: 2 });
-      await this.env.DB.prepare(`
+      await this.env.DB.prepare(
+        `
         INSERT INTO sales_activities (
           id, account_id, contact_id, opportunity_id, lead_id,
           type, author_user_id, content, metadata_json, created_at
         ) VALUES (?, ?, ?, ?, ?, 'stage_change', 'system', ?, ?, CURRENT_TIMESTAMP)
-      `).bind(
-        actId,
-        orderRow.account_id,
-        orderRow.contact_id,
-        oppId || null,
-        leadId || null,
-        `Pago confirmado vía Conekta (${orderRow.payment_method_type.toUpperCase()}) por $${montoFormateado} ${orderRow.currency}. Oportunidad avanzada a etapa 'ganado'.`,
-        JSON.stringify({
-          conekta_order_id: conektaOrderId,
-          amount_cents: orderRow.amount_cents,
-          currency: orderRow.currency,
-          payment_method: orderRow.payment_method_type,
-          spei_clabe: orderRow.spei_clabe,
-        })
-      ).run().catch((e) => console.warn("[ConektaWebhook] Error registrando actividad:", e));
+      `,
+      )
+        .bind(
+          actId,
+          orderRow.account_id,
+          orderRow.contact_id,
+          oppId || null,
+          leadId || null,
+          `Pago confirmado vía Conekta (${orderRow.payment_method_type.toUpperCase()}) por $${montoFormateado} ${orderRow.currency}. Oportunidad avanzada a etapa 'ganado'.`,
+          JSON.stringify({
+            conekta_order_id: conektaOrderId,
+            amount_cents: orderRow.amount_cents,
+            currency: orderRow.currency,
+            payment_method: orderRow.payment_method_type,
+            spei_clabe: orderRow.spei_clabe,
+          }),
+        )
+        .run()
+        .catch((e) => console.warn("[ConektaWebhook] Error registrando actividad:", e));
 
       // 7. Encolar LEAD_INGEST_V3 federado si hay leadId
       if (leadId) {
         try {
-          const leadData: any = await this.env.DB.prepare(
-            "SELECT * FROM sales_leads WHERE id = ?"
-          ).bind(leadId).first();
+          const leadData: any = await this.env.DB.prepare("SELECT * FROM sales_leads WHERE id = ?").bind(leadId).first();
 
           if (leadData) {
             const ingestPayload: LeadIngestPayload = {
@@ -372,15 +398,19 @@ type, author_user_id, content, metadata_json, created_at
 
             // Outbox D1
             const outboxId = `outbox_${crypto.randomUUID()}`;
-            await this.env.DB.prepare(`
+            await this.env.DB.prepare(
+              `
               INSERT INTO sales_pending_ingest (id, lead_id, destination, payload_json, status, retries, created_at, updated_at)
               VALUES (?, ?, ?, ?, 'pending', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            `).bind(outboxId, leadId, "bundle", JSON.stringify(ingestPayload)).run();
+            `,
+            )
+              .bind(outboxId, leadId, "bundle", JSON.stringify(ingestPayload))
+              .run();
 
             // Cloudflare Queue
             if (this.env.SALES_INGEST_QUEUE) {
               await this.env.SALES_INGEST_QUEUE.send(ingestPayload).catch((qErr) =>
-                console.warn("[ConektaWebhook] Error encolando en SALES_INGEST_QUEUE:", qErr)
+                console.warn("[ConektaWebhook] Error encolando en SALES_INGEST_QUEUE:", qErr),
               );
             }
           }

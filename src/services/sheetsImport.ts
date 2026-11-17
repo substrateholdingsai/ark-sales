@@ -60,7 +60,12 @@ export function parseRawSheetsText(text: string): ParsedSheetRow[] {
 
   if (hasHeader) {
     const sep = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : ",";
-    const headerCols = lines[0].split(sep).map((c) => c.trim().toLowerCase().replace(/^["']|["']$/g, ""));
+    const headerCols = lines[0].split(sep).map((c) =>
+      c
+        .trim()
+        .toLowerCase()
+        .replace(/^["']|["']$/g, ""),
+    );
     headerCols.forEach((col, idx) => {
       if (col.includes("despacho") || col.includes("empresa") || col.includes("razon") || col === "nombre") {
         if (colMap.despacho === undefined) colMap.despacho = idx;
@@ -127,7 +132,9 @@ export function normalizeSheetItems(rawItems: any[]): ParsedSheetRow[] {
     if (!row || typeof row !== "object") continue;
     const despacho = String(row.despacho_nombre || row.empresa || row.name || row.razon_social || "").trim();
     const titular = String(row.titular_nombre || row.contacto || row.contact_name || (row.name && row.despacho_nombre ? row.name : "")).trim();
-    const email = String(row.email || row.correo || "").trim().toLowerCase();
+    const email = String(row.email || row.correo || "")
+      .trim()
+      .toLowerCase();
     const telefono = String(row.telefono || row.whatsapp || row.phone || "").trim();
     const ciudad = String(row.ciudad || row.city || "").trim();
 
@@ -147,7 +154,7 @@ export function normalizeSheetItems(rawItems: any[]): ParsedSheetRow[] {
 export async function processSheetImport(
   db: any,
   rows: ParsedSheetRow[],
-  actorUserId?: string | null
+  actorUserId?: string | null,
 ): Promise<{
   success: boolean;
   imported_accounts: number;
@@ -174,7 +181,7 @@ export async function processSheetImport(
       continue;
     }
 
-    const finalDespachoName = despacho || (titular ? `Despacho ${titular}` : (email ? `Despacho ${email.split("@")[0]}` : "Despacho Prospecto"));
+    const finalDespachoName = despacho || (titular ? `Despacho ${titular}` : email ? `Despacho ${email.split("@")[0]}` : "Despacho Prospecto");
     const finalTitularName = titular || "Socio / Titular";
 
     try {
@@ -184,33 +191,42 @@ export async function processSheetImport(
 
       let existingAcc: any = null;
       try {
-        existingAcc = await db.prepare(
-          "SELECT id, city FROM sales_accounts WHERE normalized_name = ? OR name = ? LIMIT 1"
-        ).bind(normalized, finalDespachoName).first();
+        existingAcc = await db
+          .prepare("SELECT id, city FROM sales_accounts WHERE normalized_name = ? OR name = ? LIMIT 1")
+          .bind(normalized, finalDespachoName)
+          .first();
       } catch {}
 
       if (existingAcc) {
         accountId = existingAcc.id;
         if (ciudad && !existingAcc.city) {
           try {
-            await db.prepare("UPDATE sales_accounts SET city = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-              .bind(ciudad, accountId)
-              .run();
+            await db.prepare("UPDATE sales_accounts SET city = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(ciudad, accountId).run();
           } catch {}
         }
       } else {
         accountId = `acc_${crypto.randomUUID().slice(0, 8)}`;
         try {
-          await db.prepare(`
+          await db
+            .prepare(
+              `
             INSERT INTO sales_accounts (id, name, normalized_name, city, origin, tenant_id, duplicate_review_status, created_at, updated_at)
             VALUES (?, ?, ?, ?, 'google_sheets', 'acc_ark_ledger', 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          `).bind(accountId, finalDespachoName, normalized, ciudad || null).run();
+          `,
+            )
+            .bind(accountId, finalDespachoName, normalized, ciudad || null)
+            .run();
         } catch {
           // Fallback en caso de que la columna tenant_id aún no esté en el schema
-          await db.prepare(`
+          await db
+            .prepare(
+              `
             INSERT INTO sales_accounts (id, name, normalized_name, city, origin, duplicate_review_status, created_at, updated_at)
             VALUES (?, ?, ?, ?, 'google_sheets', 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          `).bind(accountId, finalDespachoName, normalized, ciudad || null).run();
+          `,
+            )
+            .bind(accountId, finalDespachoName, normalized, ciudad || null)
+            .run();
         }
         importedAccounts++;
       }
@@ -221,14 +237,16 @@ export async function processSheetImport(
 
       try {
         if (email) {
-          existingContact = await db.prepare(
-            "SELECT id, phone, whatsapp FROM sales_contacts WHERE account_id = ? AND email = ? LIMIT 1"
-          ).bind(accountId, email).first();
+          existingContact = await db
+            .prepare("SELECT id, phone, whatsapp FROM sales_contacts WHERE account_id = ? AND email = ? LIMIT 1")
+            .bind(accountId, email)
+            .first();
         }
         if (!existingContact && titular && titular !== "Socio / Titular") {
-          existingContact = await db.prepare(
-            "SELECT id, phone, whatsapp FROM sales_contacts WHERE account_id = ? AND name = ? LIMIT 1"
-          ).bind(accountId, titular).first();
+          existingContact = await db
+            .prepare("SELECT id, phone, whatsapp FROM sales_contacts WHERE account_id = ? AND name = ? LIMIT 1")
+            .bind(accountId, titular)
+            .first();
         }
       } catch {}
 
@@ -236,37 +254,48 @@ export async function processSheetImport(
         contactId = existingContact.id;
         if (telefono && (!existingContact.phone || !existingContact.whatsapp)) {
           try {
-            await db.prepare(
-              "UPDATE sales_contacts SET phone = COALESCE(phone, ?), whatsapp = COALESCE(whatsapp, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-            ).bind(telefono, telefono, contactId).run();
+            await db
+              .prepare("UPDATE sales_contacts SET phone = COALESCE(phone, ?), whatsapp = COALESCE(whatsapp, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+              .bind(telefono, telefono, contactId)
+              .run();
           } catch {}
         }
       } else {
         contactId = `ct_${crypto.randomUUID().slice(0, 8)}`;
-        await db.prepare(`
+        await db
+          .prepare(
+            `
           INSERT INTO sales_contacts (id, account_id, name, email, phone, whatsapp, title, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, 'Socio / Titular', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `).bind(contactId, accountId, finalTitularName, email || null, telefono || null, telefono || null).run();
+        `,
+          )
+          .bind(contactId, accountId, finalTitularName, email || null, telefono || null, telefono || null)
+          .run();
         importedContacts++;
       }
 
       // 3. sales_opportunities (id: opp_..., stage: 'calificado', products_interest_json: '["ledger_pro"]', estimated_value: 399.0)
       let existingOpp: any = null;
       try {
-        existingOpp = await db.prepare(
-          "SELECT id, stage FROM sales_opportunities WHERE account_id = ? OR contact_id = ? LIMIT 1"
-        ).bind(accountId, contactId).first();
+        existingOpp = await db
+          .prepare("SELECT id, stage FROM sales_opportunities WHERE account_id = ? OR contact_id = ? LIMIT 1")
+          .bind(accountId, contactId)
+          .first();
       } catch {}
 
       if (!existingOpp) {
         const oppId = `opp_${crypto.randomUUID().slice(0, 8)}`;
-        await db.prepare(`
+        await db
+          .prepare(
+            `
           INSERT INTO sales_opportunities (id, account_id, contact_id, stage, products_interest_json, estimated_value, currency, created_at, updated_at)
           VALUES (?, ?, ?, 'calificado', '["ledger_pro"]', 399.0, 'MXN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `).bind(oppId, accountId, contactId).run();
+        `,
+          )
+          .bind(oppId, accountId, contactId)
+          .run();
         importedOpportunities++;
       }
-
     } catch (err: any) {
       errors.push({ index: i, error: err.message || "Error procesando registro", row });
     }
@@ -305,9 +334,12 @@ export async function handleSheetsImport(c: any) {
     }
 
     if (!rows.length) {
-      return c.json({
-        error: "No se encontraron filas válidas para importar. Proporciona un JSON con { items: [...] } o texto delimitado por tabuladores o comas.",
-      }, 400);
+      return c.json(
+        {
+          error: "No se encontraron filas válidas para importar. Proporciona un JSON con { items: [...] } o texto delimitado por tabuladores o comas.",
+        },
+        400,
+      );
     }
 
     const userId = c.get("user")?.sub || null;

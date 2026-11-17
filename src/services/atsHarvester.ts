@@ -25,7 +25,10 @@ export class AtsHarvester {
   /**
    * Clasifica un título de vacante contra los productos del ecosistema ARK.
    */
-  static classifyJob(jobTitle: string, dept: string = ""): { product?: "ledger" | "angel" | "altum" | "commerce"; strength: "high" | "medium" | "low"; hook: string } | null {
+  static classifyJob(
+    jobTitle: string,
+    dept: string = "",
+  ): { product?: "ledger" | "angel" | "altum" | "commerce"; strength: "high" | "medium" | "low"; hook: string } | null {
     const text = (jobTitle + " " + dept).toLowerCase();
 
     // 1. Dolor Fiscal y Contable -> Ark Ledger
@@ -33,7 +36,7 @@ export class AtsHarvester {
       return {
         product: "ledger",
         strength: "high",
-        hook: `Vimos que tienen abierta la vacante de '${jobTitle}'. Ark Ledger automatiza el cierre fiscal CFF, conciliación Anexo 24 y timbrado CFDI 4.0 con sello SHA-256 mientras cubren la posición.`
+        hook: `Vimos que tienen abierta la vacante de '${jobTitle}'. Ark Ledger automatiza el cierre fiscal CFF, conciliación Anexo 24 y timbrado CFDI 4.0 con sello SHA-256 mientras cubren la posición.`,
       };
     }
 
@@ -42,7 +45,7 @@ export class AtsHarvester {
       return {
         product: "angel",
         strength: "high",
-        hook: `Detectamos su búsqueda de '${jobTitle}'. Ark Angel despliega agentes de voz con IA y WhatsApp para recuperar cartera vencida y promesas de pago con motor legal fail-closed.`
+        hook: `Detectamos su búsqueda de '${jobTitle}'. Ark Angel despliega agentes de voz con IA y WhatsApp para recuperar cartera vencida y promesas de pago con motor legal fail-closed.`,
       };
     }
 
@@ -51,7 +54,7 @@ export class AtsHarvester {
       return {
         product: "altum",
         strength: "medium",
-        hook: `Notamos su actividad en el sector y región para '${jobTitle}'. ALTUM Sureste ofrece reservas directas y macrolotes con certeza jurídica ante RPP Yucatán/Quintana Roo.`
+        hook: `Notamos su actividad en el sector y región para '${jobTitle}'. ALTUM Sureste ofrece reservas directas y macrolotes con certeza jurídica ante RPP Yucatán/Quintana Roo.`,
       };
     }
 
@@ -60,7 +63,7 @@ export class AtsHarvester {
       return {
         product: "commerce",
         strength: "medium",
-        hook: `Vimos su vacante para '${jobTitle}'. Ark Commerce habilita tienda digital edge-first con pedidos por WhatsApp y checkout SPEI sin comisiones por transacción.`
+        hook: `Vimos su vacante para '${jobTitle}'. Ark Commerce habilita tienda digital edge-first con pedidos por WhatsApp y checkout SPEI sin comisiones por transacción.`,
       };
     }
 
@@ -73,7 +76,7 @@ export class AtsHarvester {
    */
   static async fetchGreenhouse(boardToken: string): Promise<AtsHarvestResult> {
     const url = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(boardToken)}/jobs`;
-    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) {
       throw new Error(`Greenhouse API retornó HTTP ${res.status}`);
     }
@@ -97,7 +100,7 @@ export class AtsHarvester {
           atsSource: "greenhouse",
           matchedProduct: classification.product,
           signalStrength: classification.strength,
-          suggestedHook: classification.hook
+          suggestedHook: classification.hook,
         });
       }
     }
@@ -106,7 +109,7 @@ export class AtsHarvester {
       company: boardToken,
       ats: "greenhouse",
       totalJobs: rawJobs.length,
-      relevantSignals: signals
+      relevantSignals: signals,
     };
   }
 
@@ -116,7 +119,7 @@ export class AtsHarvester {
    */
   static async fetchLever(companyToken: string): Promise<AtsHarvestResult> {
     const url = `https://api.lever.co/v0/postings/${encodeURIComponent(companyToken)}?mode=json`;
-    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) {
       throw new Error(`Lever API retornó HTTP ${res.status}`);
     }
@@ -140,7 +143,7 @@ export class AtsHarvester {
           atsSource: "lever",
           matchedProduct: classification.product,
           signalStrength: classification.strength,
-          suggestedHook: classification.hook
+          suggestedHook: classification.hook,
         });
       }
     }
@@ -149,7 +152,7 @@ export class AtsHarvester {
       company: companyToken,
       ats: "lever",
       totalJobs: rawJobs.length,
-      relevantSignals: signals
+      relevantSignals: signals,
     };
   }
 
@@ -159,7 +162,7 @@ export class AtsHarvester {
    */
   static async fetchAshby(companyToken: string): Promise<AtsHarvestResult> {
     const url = `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(companyToken)}`;
-    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) {
       throw new Error(`Ashby API retornó HTTP ${res.status}`);
     }
@@ -183,7 +186,7 @@ export class AtsHarvester {
           atsSource: "ashby",
           matchedProduct: classification.product,
           signalStrength: classification.strength,
-          suggestedHook: classification.hook
+          suggestedHook: classification.hook,
         });
       }
     }
@@ -192,7 +195,7 @@ export class AtsHarvester {
       company: companyToken,
       ats: "ashby",
       totalJobs: rawJobs.length,
-      relevantSignals: signals
+      relevantSignals: signals,
     };
   }
 }

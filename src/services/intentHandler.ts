@@ -1,14 +1,7 @@
 // Matriz de Intenciones y Escalamiento — Inspirado en Harvey (ethanplusai/harvey)
 // Clasifica respuestas entrantes con salvaguardas deterministas antes de invocar al LLM.
 
-export type IntentType =
-  | "interested"
-  | "objection"
-  | "question"
-  | "wrong_person"
-  | "not_interested"
-  | "unsubscribe"
-  | "escalate";
+export type IntentType = "interested" | "objection" | "question" | "wrong_person" | "not_interested" | "unsubscribe" | "escalate";
 
 export interface IntentAnalysis {
   intent: IntentType;
@@ -21,8 +14,10 @@ export interface IntentAnalysis {
 }
 
 // Expresiones regulares deterministas de alta prioridad (anulan cualquier salida de LLM)
-const OPT_OUT_RE = /\b(desuscribir|dar\s*de\s*baja|baja|remover|removerme|no\s*me\s*interesa\s*m[aá]s|no\s*vuelvas\s*a\s*escribir|unsubscribe|opt\s*out|remove\s*me|leave\s*me\s*alone|stop\s*emailing)\b/i;
-const ESCALATE_RE = /\b(abogad[oa]s?|profeco|condusef|demanda|denuncia|acoso|spam\s*report|reportar|accion\s*legal|acci[oó]n\s*legal|lawyer|attorney|legal\s*action|gdpr|can-spam|harassment)\b/i;
+const OPT_OUT_RE =
+  /\b(desuscribir|dar\s*de\s*baja|baja|remover|removerme|no\s*me\s*interesa\s*m[aá]s|no\s*vuelvas\s*a\s*escribir|unsubscribe|opt\s*out|remove\s*me|leave\s*me\s*alone|stop\s*emailing)\b/i;
+const ESCALATE_RE =
+  /\b(abogad[oa]s?|profeco|condusef|demanda|denuncia|acoso|spam\s*report|reportar|accion\s*legal|acci[oó]n\s*legal|lawyer|attorney|legal\s*action|gdpr|can-spam|harassment)\b/i;
 const NOT_INTERESTED_RE = /\b(no\s*gracias|por\s*ahora\s*no|no\s*estamos\s*interesados?|no\s*nos\s*interesa|not\s*interested|pass\s*for\s*now)\b/i;
 const WRONG_PERSON_RE = /\b(no\s*soy\s*la\s*persona|habla\s*con|el\s*encargado\s*es|escr[ií]bele\s*a|wrong\s*person|reach\s*out\s*to)\b/i;
 
@@ -44,7 +39,7 @@ export class IntentHandler {
         shouldAutoReply: false,
         requiresHumanEscalation: true,
         permanentDnc: false,
-        recommendedAction: "Detener agente inmediatamente y notificar al Administrador de Ark Sales vía alerta/SuperAdmin."
+        recommendedAction: "Detener agente inmediatamente y notificar al Administrador de Ark Sales vía alerta/SuperAdmin.",
       };
     }
 
@@ -57,7 +52,7 @@ export class IntentHandler {
         shouldAutoReply: false,
         requiresHumanEscalation: false,
         permanentDnc: true,
-        recommendedAction: "Agregar contacto a DNC list de por vida. Nunca responder ni reintentar."
+        recommendedAction: "Agregar contacto a DNC list de por vida. Nunca responder ni reintentar.",
       };
     }
 
@@ -70,7 +65,7 @@ export class IntentHandler {
         shouldAutoReply: false,
         requiresHumanEscalation: false,
         permanentDnc: false,
-        recommendedAction: "Cerrar hilo en CRM como no_interesado. No enviar mensajes adicionales."
+        recommendedAction: "Cerrar hilo en CRM como no_interesado. No enviar mensajes adicionales.",
       };
     }
 
@@ -78,12 +73,12 @@ export class IntentHandler {
     if (WRONG_PERSON_RE.test(text)) {
       return {
         intent: "wrong_person",
-        confidence: 0.90,
+        confidence: 0.9,
         deterministic: true,
         shouldAutoReply: true,
         requiresHumanEscalation: false,
         permanentDnc: false,
-        recommendedAction: "Agradecer cortesmente y solicitar el contacto o correo de la persona indicada."
+        recommendedAction: "Agradecer cortesmente y solicitar el contacto o correo de la persona indicada.",
       };
     }
 
