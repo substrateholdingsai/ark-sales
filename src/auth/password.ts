@@ -18,11 +18,7 @@ const ITERATIONS = 100000;
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt, iterations: ITERATIONS, hash: "SHA-256" },
-    keyMaterial,
-    256
-  );
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: ITERATIONS, hash: "SHA-256" }, keyMaterial, 256);
   const hash = new Uint8Array(bits);
   return `pbkdf2$${ITERATIONS}$${b64Encode(salt)}$${b64Encode(hash)}`;
 }
@@ -35,11 +31,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
     const salt = b64Decode(parts[2]);
     const expected = b64Decode(parts[3]);
     const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-    const bits = await crypto.subtle.deriveBits(
-      { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
-      keyMaterial,
-      expected.length * 8
-    );
+    const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations, hash: "SHA-256" }, keyMaterial, expected.length * 8);
     const hash = new Uint8Array(bits);
     if (hash.length !== expected.length) return false;
     let diff = 0;

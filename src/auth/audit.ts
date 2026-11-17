@@ -1,5 +1,3 @@
-import { Env } from "../types";
-
 export type AuditEntry = {
   actor_user_id?: string | null;
   actor_email?: string | null;
@@ -20,7 +18,7 @@ export class AuditService {
       await this.db
         .prepare(
           `INSERT INTO crm_audit_log (id, actor_user_id, actor_email, action, entity_type, entity_id, metadata_json, ip, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
         )
         .bind(
           id,
@@ -30,7 +28,7 @@ export class AuditService {
           entry.entity_type ?? null,
           entry.entity_id ?? null,
           entry.metadata ? JSON.stringify(entry.metadata) : null,
-          entry.ip ?? null
+          entry.ip ?? null,
         )
         .run();
     } catch (err) {
@@ -41,12 +39,7 @@ export class AuditService {
 
 export function clientIp(c: any): string | null {
   try {
-    return (
-      c.req.header("cf-connecting-ip") ||
-      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-      c.req.header("x-real-ip") ||
-      null
-    );
+    return c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || null;
   } catch {
     return null;
   }

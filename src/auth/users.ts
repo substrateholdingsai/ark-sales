@@ -1,4 +1,3 @@
-import { Env } from "../types";
 import { normalizeRole, CrmRole } from "./roles";
 import { hashPassword, verifyPassword } from "./password";
 
@@ -17,10 +16,7 @@ export class UserService {
 
   async findByEmail(email: string): Promise<(CrmUser & { password_hash: string }) | null> {
     if (!this.db) return null;
-    const row = await (this.db as any)
-      .prepare("SELECT * FROM crm_users WHERE email = ? LIMIT 1")
-      .bind(email.trim().toLowerCase())
-      .first();
+    const row = await (this.db as any).prepare("SELECT * FROM crm_users WHERE email = ? LIMIT 1").bind(email.trim().toLowerCase()).first();
     if (!row) return null;
     const role = normalizeRole(row.role);
     if (!role) return null;
@@ -29,7 +25,10 @@ export class UserService {
 
   async findById(id: string): Promise<CrmUser | null> {
     if (!this.db) return null;
-    const row = await (this.db as any).prepare("SELECT id, email, name, role, is_active, created_at, updated_at FROM crm_users WHERE id = ? LIMIT 1").bind(id).first();
+    const row = await (this.db as any)
+      .prepare("SELECT id, email, name, role, is_active, created_at, updated_at FROM crm_users WHERE id = ? LIMIT 1")
+      .bind(id)
+      .first();
     if (!row) return null;
     const role = normalizeRole(row.role);
     if (!role) return null;
@@ -54,7 +53,7 @@ export class UserService {
     await this.db
       .prepare(
         `INSERT INTO crm_users (id, email, password_hash, name, role, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       )
       .bind(id, email, password_hash, params.name ?? null, role)
       .run();
