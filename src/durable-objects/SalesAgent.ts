@@ -65,7 +65,7 @@ export class SalesAgent {
             headers: {
               "Content-Type": "text/event-stream",
               "Cache-Control": "no-cache",
-              "Connection": "keep-alive",
+              Connection: "keep-alive",
             },
           });
         }
@@ -109,13 +109,7 @@ export class SalesAgent {
     return defaultSession;
   }
 
-  async handleChat(params: {
-    message: string;
-    lead_id: string;
-    email?: string;
-    despacho_nombre?: string;
-    tamano?: string;
-  }) {
+  async handleChat(params: { message: string; lead_id: string; email?: string; despacho_nombre?: string; tamano?: string }) {
     const session = await this.getSession();
 
     // Actualizar metadata del lead si viene en el request
@@ -204,10 +198,14 @@ export class SalesAgent {
     if (!this.env.DB) return;
     try {
       const msgId = `conv_${crypto.randomUUID()}`;
-      await this.env.DB.prepare(`
+      await this.env.DB.prepare(
+        `
         INSERT INTO sales_conversations (id, lead_id, agente_id, role, content, metadata_json, timestamp)
         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      `).bind(msgId, msg.lead_id, msg.agente_id, msg.role, msg.content, msg.metadata_json || null).run();
+      `,
+      )
+        .bind(msgId, msg.lead_id, msg.agente_id, msg.role, msg.content, msg.metadata_json || null)
+        .run();
     } catch (err) {
       console.error("[SalesAgent DO] Error guardando conversación en D1:", err);
     }
@@ -216,11 +214,15 @@ export class SalesAgent {
   private async updateLeadSpecialistInD1(leadId: string, specialist: AgentId) {
     if (!this.env.DB) return;
     try {
-      await this.env.DB.prepare(`
+      await this.env.DB.prepare(
+        `
         UPDATE sales_leads 
         SET especialista_asignado = ?, estado = 'en_conversacion', updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(specialist, leadId).run();
+      `,
+      )
+        .bind(specialist, leadId)
+        .run();
     } catch (err) {
       console.error("[SalesAgent DO] Error actualizando especialista en D1:", err);
     }

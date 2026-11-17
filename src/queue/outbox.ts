@@ -24,12 +24,14 @@ export class OutboxProcessor {
 
     try {
       // Buscar leads pendientes con menos de 5 reintentos
-      const { results } = await this.env.DB.prepare(`
+      const { results } = await this.env.DB.prepare(
+        `
         SELECT * FROM sales_pending_ingest
         WHERE (status = 'pending' OR status = 'failed') AND retries < 5
         ORDER BY created_at ASC
         LIMIT 20
-      `).all<PendingIngestRecord>();
+      `,
+      ).all<PendingIngestRecord>();
 
       if (!results || results.length === 0) {
         return { processed: 0, succeeded: 0, failed: 0 };
@@ -43,11 +45,15 @@ export class OutboxProcessor {
           payload = JSON.parse(row.payload_json);
         } catch (e: any) {
           console.error(`[OutboxProcessor] JSON inválido en outbox id ${row.id}:`, e);
-          await this.env.DB.prepare(`
+          await this.env.DB.prepare(
+            `
             UPDATE sales_pending_ingest
             SET status = 'failed', last_error = 'JSON_CORRUPTO', updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-          `).bind(row.id).run();
+          `,
+          )
+            .bind(row.id)
+            .run();
           failed++;
           continue;
         }
@@ -56,21 +62,29 @@ export class OutboxProcessor {
 
         if (delivery.success) {
           succeeded++;
-          await this.env.DB.prepare(`
+          await this.env.DB.prepare(
+            `
             UPDATE sales_pending_ingest
             SET status = 'delivered', last_error = NULL, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-          `).bind(row.id).run();
+          `,
+          )
+            .bind(row.id)
+            .run();
         } else {
           failed++;
           const nextRetries = row.retries + 1;
           const newStatus = nextRetries >= 5 ? "failed" : "pending";
 
-          await this.env.DB.prepare(`
+          await this.env.DB.prepare(
+            `
             UPDATE sales_pending_ingest
             SET status = ?, retries = ?, last_error = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-          `).bind(newStatus, nextRetries, delivery.error || "RETRY_FAILED", row.id).run();
+          `,
+          )
+            .bind(newStatus, nextRetries, delivery.error || "RETRY_FAILED", row.id)
+            .run();
         }
       }
     } catch (err) {

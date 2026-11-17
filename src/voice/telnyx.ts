@@ -83,10 +83,7 @@ export function generarGuionCortesia(despachoNombre?: string, industry?: string)
  * Dispara la llamada de cortesía vía Telnyx Call Control API
  * Si TELNYX_API_KEY no está configurada, opera en modo simulado seguro (fail-closed)
  */
-export async function dispararLlamadaCortesia(
-  env: Env,
-  params: CourtesyCallParams
-): Promise<CourtesyCallResult> {
+export async function dispararLlamadaCortesia(env: Env, params: CourtesyCallParams): Promise<CourtesyCallResult> {
   const norm = normalizarTelefonoE164(params.to);
   if (!norm.valid || !norm.e164) {
     return {
@@ -107,23 +104,31 @@ export async function dispararLlamadaCortesia(
     // Registrar actividad en CRM si hay DB
     if (env.DB && (params.leadId || params.accountId)) {
       try {
-        await env.DB.prepare(`
+        await env.DB.prepare(
+          `
           INSERT INTO sales_activities (id, account_id, contact_id, lead_id, type, content)
           VALUES (?, ?, ?, ?, 'call', ?)
-        `).bind(
-          `act_${crypto.randomUUID()}`,
-          params.accountId || null,
-          params.contactId || null,
-          params.leadId || null,
-          `Llamada de cortesía simulada a ${phoneE164}: Mensaje reproducido`
-        ).run();
+        `,
+        )
+          .bind(
+            `act_${crypto.randomUUID()}`,
+            params.accountId || null,
+            params.contactId || null,
+            params.leadId || null,
+            `Llamada de cortesía simulada a ${phoneE164}: Mensaje reproducido`,
+          )
+          .run();
 
         if (params.leadId) {
-          await env.DB.prepare(`
+          await env.DB.prepare(
+            `
             UPDATE sales_leads 
             SET phone = ?, last_call_status = 'simulated', last_call_at = CURRENT_TIMESTAMP
             WHERE id = ?
-          `).bind(phoneE164, params.leadId).run();
+          `,
+          )
+            .bind(phoneE164, params.leadId)
+            .run();
         }
       } catch (dbErr) {
         console.warn("[TelnyxVoice] Error registrando actividad simulada:", dbErr);
@@ -170,7 +175,7 @@ export async function dispararLlamadaCortesia(
     const response = await fetch("https://api.telnyx.com/v2/calls", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${env.TELNYX_API_KEY}`,
+        Authorization: `Bearer ${env.TELNYX_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(telnyxPayload),
@@ -192,22 +197,30 @@ export async function dispararLlamadaCortesia(
     // Registrar en BD
     if (env.DB && params.leadId) {
       try {
-        await env.DB.prepare(`
+        await env.DB.prepare(
+          `
           UPDATE sales_leads 
           SET phone = ?, last_call_status = 'initiated', last_call_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(phoneE164, params.leadId).run();
+        `,
+        )
+          .bind(phoneE164, params.leadId)
+          .run();
 
-        await env.DB.prepare(`
+        await env.DB.prepare(
+          `
           INSERT INTO sales_activities (id, account_id, contact_id, lead_id, type, content)
           VALUES (?, ?, ?, ?, 'call', ?)
-        `).bind(
-          `act_${crypto.randomUUID()}`,
-          params.accountId || null,
-          params.contactId || null,
-          params.leadId,
-          `Llamada de cortesía Telnyx iniciada a ${phoneE164} (ID: ${callControlId})`
-        ).run();
+        `,
+        )
+          .bind(
+            `act_${crypto.randomUUID()}`,
+            params.accountId || null,
+            params.contactId || null,
+            params.leadId,
+            `Llamada de cortesía Telnyx iniciada a ${phoneE164} (ID: ${callControlId})`,
+          )
+          .run();
       } catch (dbErr) {
         console.warn("[TelnyxVoice] Error actualizando BD tras inicio de llamada:", dbErr);
       }
@@ -249,12 +262,7 @@ function base64ToBytes(value: string): Uint8Array | null {
  * Verifica la firma Ed25519 de un webhook de Telnyx.
  * Si no hay publicKey (desarrollo/test), se permite bypass controlado (fail-open solo en development).
  */
-export async function verificarFirmaTelnyx(
-  publicKey: string,
-  signature: string,
-  timestamp: string,
-  bodyText: string
-): Promise<boolean> {
+export async function verificarFirmaTelnyx(publicKey: string, signature: string, timestamp: string, bodyText: string): Promise<boolean> {
   if (!publicKey) {
     return true;
   }
@@ -267,13 +275,7 @@ export async function verificarFirmaTelnyx(
     return false;
   }
   try {
-    const cryptoKey = await crypto.subtle.importKey(
-      "raw",
-      publicKeyBytes,
-      { name: "Ed25519" },
-      false,
-      ["verify"]
-    );
+    const cryptoKey = await crypto.subtle.importKey("raw", publicKeyBytes, { name: "Ed25519" }, false, ["verify"]);
     const encoder = new TextEncoder();
     const message = encoder.encode(`${timestamp}|${bodyText}`);
     return await crypto.subtle.verify("Ed25519", cryptoKey, signatureBytes, message);
@@ -282,10 +284,7 @@ export async function verificarFirmaTelnyx(
   }
 }
 
-export async function procesarEventoTelnyx(
-  env: Env,
-  event: any
-): Promise<{ handled: boolean; action?: string; error?: string }> {
+export async function procesarEventoTelnyx(env: Env, event: any): Promise<{ handled: boolean; action?: string; error?: string }> {
   const eventType = event?.data?.event_type;
   const payload = event?.data?.payload;
 
@@ -314,7 +313,7 @@ export async function procesarEventoTelnyx(
         await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/speak`, {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${env.TELNYX_API_KEY}`,
+            Authorization: `Bearer ${env.TELNYX_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -331,22 +330,30 @@ export async function procesarEventoTelnyx(
     // Registrar en BD
     if (env.DB && clientState.leadId) {
       try {
-        await env.DB.prepare(`
+        await env.DB.prepare(
+          `
           UPDATE sales_leads 
           SET last_call_status = 'answered'
           WHERE id = ?
-        `).bind(clientState.leadId).run();
+        `,
+        )
+          .bind(clientState.leadId)
+          .run();
 
-        await env.DB.prepare(`
+        await env.DB.prepare(
+          `
           INSERT INTO sales_activities (id, account_id, contact_id, lead_id, type, content)
           VALUES (?, ?, ?, ?, 'call', ?)
-        `).bind(
-          `act_${crypto.randomUUID()}`,
-          clientState.accountId || null,
-          clientState.contactId || null,
-          clientState.leadId,
-          "Llamada de cortesía contestada: audio reproducido al cliente"
-        ).run();
+        `,
+        )
+          .bind(
+            `act_${crypto.randomUUID()}`,
+            clientState.accountId || null,
+            clientState.contactId || null,
+            clientState.leadId,
+            "Llamada de cortesía contestada: audio reproducido al cliente",
+          )
+          .run();
       } catch (dbErr) {
         console.warn("[TelnyxWebhook] Error actualizando BD en call.answered:", dbErr);
       }
@@ -362,7 +369,7 @@ export async function procesarEventoTelnyx(
         await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/hangup`, {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${env.TELNYX_API_KEY}`,
+            Authorization: `Bearer ${env.TELNYX_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({}),
@@ -378,11 +385,15 @@ export async function procesarEventoTelnyx(
   if (eventType === "call.hangup") {
     if (env.DB && clientState.leadId) {
       try {
-        await env.DB.prepare(`
+        await env.DB.prepare(
+          `
           UPDATE sales_leads 
           SET last_call_status = 'completed'
           WHERE id = ?
-        `).bind(clientState.leadId).run();
+        `,
+        )
+          .bind(clientState.leadId)
+          .run();
       } catch (dbErr) {
         console.warn("[TelnyxWebhook] Error actualizando estado completed:", dbErr);
       }

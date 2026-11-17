@@ -92,17 +92,20 @@ export class QueueConsumer {
   private async markOutboxStatus(leadId: string, status: "delivered" | "failed" | "pending", error: string | null) {
     if (!this.env.DB) return;
     try {
-      await this.env.DB.prepare(`
+      await this.env.DB.prepare(
+        `
         UPDATE sales_pending_ingest
         SET status = ?,
             retries = CASE WHEN ? = 'delivered' THEN retries ELSE retries + 1 END,
             last_error = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE lead_id = ?
-      `).bind(status, status, error, leadId).run();
+      `,
+      )
+        .bind(status, status, error, leadId)
+        .run();
     } catch (dbErr) {
       console.error("[QueueConsumer] Error actualizando outbox en D1:", dbErr);
     }
   }
 }
-

@@ -1,19 +1,20 @@
-import { AuditService } from "../auth/audit";
-
 export const AUTOMATION_TASK_TITLES = {
   qualifiedLead: "Seguimiento lead calificado",
   demoScheduled: "Preparar demo agendada",
   proposalSent: "Seguimiento propuesta enviada",
 } as const;
 
-export async function ensureAccountContactForLead(db: any, lead: {
-  id: string;
-  email?: string | null;
-  despacho_nombre?: string | null;
-  tamano?: string | null;
-  accountId?: string | null;
-  contactId?: string | null;
-}): Promise<{ accountId: string; contactId: string }> {
+export async function ensureAccountContactForLead(
+  db: any,
+  lead: {
+    id: string;
+    email?: string | null;
+    despacho_nombre?: string | null;
+    tamano?: string | null;
+    accountId?: string | null;
+    contactId?: string | null;
+  },
+): Promise<{ accountId: string; contactId: string }> {
   let accountId = lead.accountId || `acc_${lead.id}`;
   let contactId = lead.contactId || `ct_${lead.id}`;
   if (!db) return { accountId, contactId };
@@ -22,8 +23,7 @@ export async function ensureAccountContactForLead(db: any, lead: {
     if (!lead.accountId) {
       const normalizedName = (lead.despacho_nombre || lead.email || "").toLowerCase().trim();
       if (normalizedName) {
-        const existingAcc: any = await db.prepare("SELECT id FROM sales_accounts WHERE normalized_name = ? LIMIT 1")
-          .bind(normalizedName).first();
+        const existingAcc: any = await db.prepare("SELECT id FROM sales_accounts WHERE normalized_name = ? LIMIT 1").bind(normalizedName).first();
         if (existingAcc?.id) {
           accountId = existingAcc.id;
         }
@@ -32,33 +32,44 @@ export async function ensureAccountContactForLead(db: any, lead: {
 
     // Si no se proporcionó contactId, buscar si ya existe un contacto con este email
     if (!lead.contactId && lead.email && !lead.email.includes("@harvest.arksystems.local")) {
-      const existingCt: any = await db.prepare("SELECT id FROM sales_contacts WHERE LOWER(email) = LOWER(?) LIMIT 1")
-        .bind(lead.email).first();
+      const existingCt: any = await db.prepare("SELECT id FROM sales_contacts WHERE LOWER(email) = LOWER(?) LIMIT 1").bind(lead.email).first();
       if (existingCt?.id) {
         contactId = existingCt.id;
       }
     }
 
-    const stmt1 = db.prepare(`
+    const stmt1 = db
+      .prepare(
+        `
       INSERT INTO sales_accounts (id, name, normalized_name, size, origin, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'lead', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET
         name = COALESCE(excluded.name, sales_accounts.name),
         size = COALESCE(excluded.size, sales_accounts.size),
         updated_at = CURRENT_TIMESTAMP
-    `).bind(accountId, lead.despacho_nombre || lead.email || "Despacho", (lead.despacho_nombre || lead.email || "").toLowerCase().trim(), lead.tamano || null);
+    `,
+      )
+      .bind(accountId, lead.despacho_nombre || lead.email || "Despacho", (lead.despacho_nombre || lead.email || "").toLowerCase().trim(), lead.tamano || null);
 
-    const stmt2 = db.prepare(`
+    const stmt2 = db
+      .prepare(
+        `
       INSERT INTO sales_contacts (id, account_id, email, created_at, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET
         email = COALESCE(excluded.email, sales_contacts.email),
         updated_at = CURRENT_TIMESTAMP
-    `).bind(contactId, accountId, lead.email || null);
+    `,
+      )
+      .bind(contactId, accountId, lead.email || null);
 
-    const stmt3 = db.prepare(`
+    const stmt3 = db
+      .prepare(
+        `
       UPDATE sales_leads SET account_id = ?, contact_id = ? WHERE id = ? AND (account_id IS NULL OR contact_id IS NULL)
-    `).bind(accountId, contactId, lead.id);
+    `,
+      )
+      .bind(accountId, contactId, lead.id);
 
     if (typeof db.batch === "function") {
       await db.batch([stmt1, stmt2, stmt3]);
@@ -78,55 +89,73 @@ async function taskExists(db: any, opts: { leadId?: string; opportunityId?: stri
   try {
     let sql = "SELECT id FROM sales_tasks WHERE title = ?";
     const params: any[] = [opts.title];
-    if (opts.leadId) { sql += " AND lead_id = ?"; params.push(opts.leadId); }
-    if (opts.opportunityId) { sql += " AND opportunity_id = ?"; params.push(opts.opportunityId); }
+    if (opts.leadId) {
+      sql += " AND lead_id = ?";
+      params.push(opts.leadId);
+    }
+    if (opts.opportunityId) {
+      sql += " AND opportunity_id = ?";
+      params.push(opts.opportunityId);
+    }
     sql += " LIMIT 1";
-    const row = await db.prepare(sql).bind(...params).first();
+    const row = await db
+      .prepare(sql)
+      .bind(...params)
+      .first();
     return !!row;
   } catch {
     return false;
   }
 }
 
-export async function ensureTask(db: any, params: {
-  title: string;
-  description?: string | null;
-  leadId?: string | null;
-  accountId?: string | null;
-  contactId?: string | null;
-  opportunityId?: string | null;
-  ownerUserId?: string | null;
-  dueInDays?: number;
-  actorUserId?: string | null;
-}): Promise<void> {
+export async function ensureTask(
+  db: any,
+  params: {
+    title: string;
+    description?: string | null;
+    leadId?: string | null;
+    accountId?: string | null;
+    contactId?: string | null;
+    opportunityId?: string | null;
+    ownerUserId?: string | null;
+    dueInDays?: number;
+    actorUserId?: string | null;
+  },
+): Promise<void> {
   if (!db) return;
   const exists = await taskExists(db, { leadId: params.leadId || undefined, opportunityId: params.opportunityId || undefined, title: params.title });
   if (exists) return;
   const id = `tsk_${crypto.randomUUID()}`;
-  const dueDate = params.dueInDays
-    ? new Date(Date.now() + params.dueInDays * 86400000).toISOString().slice(0, 10)
-    : null;
+  const dueDate = params.dueInDays ? new Date(Date.now() + params.dueInDays * 86400000).toISOString().slice(0, 10) : null;
   try {
-    await db.prepare(`
+    await db
+      .prepare(
+        `
       INSERT INTO sales_tasks (id, account_id, contact_id, opportunity_id, lead_id, title, description, owner_user_id, due_date, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(
-      id,
-      params.accountId ?? null,
-      params.contactId ?? null,
-      params.opportunityId ?? null,
-      params.leadId ?? null,
-      params.title,
-      params.description ?? null,
-      params.ownerUserId ?? null,
-      dueDate
-    ).run();
+    `,
+      )
+      .bind(
+        id,
+        params.accountId ?? null,
+        params.contactId ?? null,
+        params.opportunityId ?? null,
+        params.leadId ?? null,
+        params.title,
+        params.description ?? null,
+        params.ownerUserId ?? null,
+        dueDate,
+      )
+      .run();
   } catch (e) {
     console.warn("[automation] No se pudo crear tarea:", e);
   }
 }
 
-export async function autoTaskOnQualifiedLead(db: any, lead: { id: string; email?: string | null; despacho_nombre?: string | null; tamano?: string | null }): Promise<void> {
+export async function autoTaskOnQualifiedLead(
+  db: any,
+  lead: { id: string; email?: string | null; despacho_nombre?: string | null; tamano?: string | null },
+): Promise<void> {
   const { accountId, contactId } = await ensureAccountContactForLead(db, lead);
   await ensureTask(db, {
     title: AUTOMATION_TASK_TITLES.qualifiedLead,
@@ -138,7 +167,10 @@ export async function autoTaskOnQualifiedLead(db: any, lead: { id: string; email
   });
 }
 
-export async function autoTaskOnDemoScheduled(db: any, params: { opportunityId: string; accountId?: string | null; leadId?: string | null; ownerUserId?: string | null }): Promise<void> {
+export async function autoTaskOnDemoScheduled(
+  db: any,
+  params: { opportunityId: string; accountId?: string | null; leadId?: string | null; ownerUserId?: string | null },
+): Promise<void> {
   await ensureTask(db, {
     title: AUTOMATION_TASK_TITLES.demoScheduled,
     description: "Preparar demo y enviar recordatorio al prospecto.",
@@ -150,7 +182,10 @@ export async function autoTaskOnDemoScheduled(db: any, params: { opportunityId: 
   });
 }
 
-export async function autoTaskOnProposalSent(db: any, params: { opportunityId: string; accountId?: string | null; leadId?: string | null; ownerUserId?: string | null }): Promise<void> {
+export async function autoTaskOnProposalSent(
+  db: any,
+  params: { opportunityId: string; accountId?: string | null; leadId?: string | null; ownerUserId?: string | null },
+): Promise<void> {
   await ensureTask(db, {
     title: AUTOMATION_TASK_TITLES.proposalSent,
     description: "Seguimiento de propuesta enviada y cierre.",
@@ -163,19 +198,22 @@ export async function autoTaskOnProposalSent(db: any, params: { opportunityId: s
 }
 
 // Federated delivery on won: reuse outbox pattern via sales_pending_ingest + queue
-export async function enqueueFederatedOnWon(env: any, params: {
-  leadId: string;
-  destination: "ledger" | "angel" | "commerce" | "bundle";
-  score: number;
-  summary: string;
-  accountContext: { despacho_nombre: string; tamano: string; productos_interes: string[]; dolor_principal: string };
-}): Promise<void> {
+export async function enqueueFederatedOnWon(
+  env: any,
+  params: {
+    leadId: string;
+    destination: "ledger" | "angel" | "commerce" | "bundle";
+    score: number;
+    summary: string;
+    accountContext: { despacho_nombre: string; tamano: string; productos_interes: string[]; dolor_principal: string };
+  },
+): Promise<void> {
   if (!env?.DB) return;
   // Idempotency: check if already pending/delivered for this lead+destination
   try {
-    const existing: any = await env.DB.prepare(
-      "SELECT id FROM sales_pending_ingest WHERE lead_id = ? AND destination = ? LIMIT 1"
-    ).bind(params.leadId, params.destination).first();
+    const existing: any = await env.DB.prepare("SELECT id FROM sales_pending_ingest WHERE lead_id = ? AND destination = ? LIMIT 1")
+      .bind(params.leadId, params.destination)
+      .first();
     if (existing) return;
   } catch {}
 
@@ -185,7 +223,13 @@ export async function enqueueFederatedOnWon(env: any, params: {
     email: "", // filled below if possible
     source_worker: "ark-sales" as const,
     destination: params.destination,
-    vertical: (params.destination === "bundle" ? "bundle" : params.destination === "ledger" ? "fiscal" : params.destination === "angel" ? "cobranza" : "ecommerce") as any,
+    vertical: (params.destination === "bundle"
+      ? "bundle"
+      : params.destination === "ledger"
+        ? "fiscal"
+        : params.destination === "angel"
+          ? "cobranza"
+          : "ecommerce") as any,
     score: params.score,
     conversation_summary: params.summary,
     account_context: params.accountContext,
@@ -200,15 +244,21 @@ export async function enqueueFederatedOnWon(env: any, params: {
 
   const outboxId = `outbox_${crypto.randomUUID()}`;
   try {
-    await env.DB.prepare(`
+    await env.DB.prepare(
+      `
       INSERT INTO sales_pending_ingest (id, lead_id, destination, payload_json, status, retries, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'pending', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(outboxId, params.leadId, params.destination, JSON.stringify(payload)).run();
+    `,
+    )
+      .bind(outboxId, params.leadId, params.destination, JSON.stringify(payload))
+      .run();
   } catch (e) {
     console.warn("[automation] outbox insert failed:", e);
     return;
   }
   if (env.SALES_INGEST_QUEUE) {
-    try { await env.SALES_INGEST_QUEUE.send(payload); } catch {}
+    try {
+      await env.SALES_INGEST_QUEUE.send(payload);
+    } catch {}
   }
 }

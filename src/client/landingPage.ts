@@ -513,8 +513,18 @@ export function renderPublicLandingHtml(): string {
 </html>`;
 }
 
-export function renderLandingPageHtml(): string { return renderPublicLandingHtml(); }
-export function renderFeaturesHtml(): string { return renderPublicLandingHtml(); }
-export function renderFunctionsHtml(): string { return renderPublicLandingHtml(); }
-export function renderPublicLandingPageHtml(): string { return renderPublicLandingHtml(); }
-export function renderLandingHtml(): string { return renderPublicLandingHtml(); }
+export function renderLandingPageHtml(): string {
+  return renderPublicLandingHtml();
+}
+export function renderFeaturesHtml(): string {
+  return renderPublicLandingHtml();
+}
+export function renderFunctionsHtml(): string {
+  return renderPublicLandingHtml();
+}
+export function renderPublicLandingPageHtml(): string {
+  return renderPublicLandingHtml();
+}
+export function renderLandingHtml(): string {
+  return renderPublicLandingHtml();
+}
