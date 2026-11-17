@@ -7,6 +7,7 @@ import { Env } from "../types";
 import { GuardrailService, ContactChannel } from "../services/guardrails";
 import { UsageEventsService, UNIT_COSTS_USD } from "../services/usage";
 import { WhatsAppService } from "../services/whatsapp";
+import { HsmTemplateService, HsmTemplate } from "../services/hsmTemplates";
 import { normalizarTelefonoE164 } from "../voice/telnyx";
 import { interpolateTemplate } from "../routes/superadmin";
 
@@ -283,6 +284,93 @@ campaignsRouter.post("/dispatch", async (c) => {
 });
 
 // ------------------------------------------------------------------
+// HSM template approval flow (G6): submit / approve / reject / list
+// Protected by the same internal-key auth as the rest of /api/internal/campaigns.
+// ------------------------------------------------------------------
+campaignsRouter.post("/templates", async (c) => {
+  try {
+    if (!c.env.DB) return c.json({ error: "D1 no disponible." }, 503);
+    const db = c.env.DB;
+    const hsm = new HsmTemplateService(db);
+    const body = await c.req.json().catch(() => ({}));
+    const { tenant_id, template_name, template_version, language_code, category, components_json, variables_json, created_by_user_id } = body || {};
+
+    if (!template_name || !components_json) {
+      return c.json({ error: "template_name and components_json are required." }, 400);
+    }
+
+    const { id, template } = await hsm.submit({
+      tenantId: tenant_id ?? null,
+      templateName: template_name,
+      templateVersion: template_version ?? undefined,
+      languageCode: language_code ?? undefined,
+      category: category ?? undefined,
+      componentsJson: components_json,
+      variablesJson: variables_json ?? undefined,
+      createdByUserId: c.get("user") ?? created_by_user_id ?? null,
+    });
+
+    return c.json({ id, template, message: "Plantilla HSM creada en estado draft." }, 201);
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error creando plantilla HSM." }, 500);
+  }
+});
+
+campaignsRouter.post("/templates/:template_id/approve", async (c) => {
+  try {
+    if (!c.env.DB) return c.json({ error: "D1 no disponible." }, 503);
+    const db = c.env.DB;
+    const hsm = new HsmTemplateService(db);
+    const templateId = c.req.param("template_id");
+    const body = await c.req.json().catch(() => ({}));
+    const { approved_by } = body || {};
+
+    const template = await hsm.approve(templateId, approved_by ?? c.get("user") ?? null);
+    if (!template) {
+      return c.json({ error: "Plantilla no encontrada o no se puede aprobar (estado actual no admite aprobación)." }, 409);
+    }
+    return c.json({ template_id: template.id, status: template.status, message: "Plantilla HSM aprobada." }, 200);
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error aprobando plantilla HSM." }, 500);
+  }
+});
+
+campaignsRouter.post("/templates/:template_id/reject", async (c) => {
+  try {
+    if (!c.env.DB) return c.json({ error: "D1 no disponible." }, 503);
+    const db = c.env.DB;
+    const hsm = new HsmTemplateService(db);
+    const templateId = c.req.param("template_id");
+    const body = await c.req.json().catch(() => ({}));
+    const { rejected_by } = body || {};
+
+    const template = await hsm.reject(templateId, rejected_by ?? c.get("user") ?? null);
+    if (!template) {
+      return c.json({ error: "Plantilla no encontrada o no se puede rechazar (estado actual no admite rechazo)." }, 409);
+    }
+    return c.json({ template_id: template.id, status: template.status, message: "Plantilla HSM rechazada." }, 200);
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error rechazando plantilla HSM." }, 500);
+  }
+});
+
+campaignsRouter.get("/templates", async (c) => {
+  try {
+    if (!c.env.DB) return c.json({ error: "D1 no disponible." }, 503);
+    const db = c.env.DB;
+    const hsm = new HsmTemplateService(db);
+    const tenant_id = c.req.query("tenant_id") ?? undefined;
+    const status = c.req.query("status") ?? undefined;
+    const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : undefined;
+
+    const templates = await hsm.list({ tenantId: tenant_id, status: status as any, limit });
+    return c.json({ templates, count: templates.length }, 200);
+  } catch (err: any) {
+    return c.json({ error: err?.message || "Error listando plantillas HSM." }, 500);
+  }
+});
+
+// ------------------------------------------------------------------
 // POST /api/internal/campaigns/{job_id}/approve
 // Pavel approves after preview. Fail-closed: only approved jobs dispatch.
 // ------------------------------------------------------------------
@@ -424,14 +512,20 @@ campaignsRouter.get("/:job_id", async (c) => {
 // POST /api/internal/campaigns/{job_id}/pause
 // POST /api/internal/campaigns/{job_id}/resume
 // ------------------------------------------------------------------
-campaignsRouter.post("/:job_id/:action(pause|resume)", async (c) => {
+campaignsRouter.post("/:job_id/pause", async (c) => {
+  return pauseOrResume(c, "pause");
+});
+campaignsRouter.post("/:job_id/resume", async (c) => {
+  return pauseOrResume(c, "resume");
+});
+
+async function pauseOrResume(c: any, action: "pause" | "resume") {
   try {
     const jobId = c.req.param("job_id");
-    const action = c.req.param("action");
     if (!c.env.DB) return c.json({ error: "D1 no disponible." }, 503);
     const db = c.env.DB;
 
-    const job = await db.prepare("SELECT status FROM campaign_jobs WHERE id = ? LIMIT 1").bind(jobId).first<any>();
+    const job = await db.prepare("SELECT status FROM campaign_jobs WHERE id = ? LIMIT 1").bind(jobId).first();
     if (!job) return c.json({ error: "Job no encontrado." }, 404);
 
     let newStatus: string;
@@ -449,7 +543,7 @@ campaignsRouter.post("/:job_id/:action(pause|resume)", async (c) => {
   } catch (err: any) {
     return c.json({ error: err?.message || "Error cambiando estado de campaña." }, 500);
   }
-});
+}
 
 // ------------------------------------------------------------------
 // Dispatch processor: picks up approved jobs, evaluates guardrails,
@@ -462,6 +556,7 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
   const guardrails = new GuardrailService(db, env);
   const usageEvents = new UsageEventsService(db);
   const whatsApp = new WhatsAppService(env);
+  const hsm = new HsmTemplateService(db);
 
   let processed = 0;
   let succeeded = 0;
@@ -485,9 +580,9 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
     // Mark job running
     await db.prepare("UPDATE campaign_jobs SET status = 'running', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(job.id).run();
 
-    // Fetch pending targets
+    // Fetch pending + deferred targets (deferred = quiet-hours retry candidates)
     const targets = await db
-      .prepare("SELECT * FROM campaign_job_targets WHERE job_id = ? AND status = 'pending' ORDER BY created_at ASC")
+      .prepare("SELECT * FROM campaign_job_targets WHERE job_id = ? AND status IN ('pending', 'deferred') ORDER BY created_at ASC")
       .bind(job.id)
       .all<any>();
 
@@ -523,11 +618,13 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
       const result = await guardrails.evaluateContact(tenantId, contact, sendAt);
 
       if (!result.allowed) {
+        // G3 quiet-hours defers (retry in next window) instead of excluding.
+        const status = result.deferred ? "deferred" : "excluded";
         await db
-          .prepare(`UPDATE campaign_job_targets SET status = 'excluded', reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-          .bind(result.reason || "excluded", target.id)
+          .prepare(`UPDATE campaign_job_targets SET status = ?, reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+          .bind(status, result.reason || "excluded", target.id)
           .run();
-        continue; // excluded — no send, no usage event
+        continue; // excluded/deferred — no send, no usage event
       }
 
       // Attempt send
@@ -535,11 +632,39 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
 
       if (channel === "whatsapp") {
         const messageJson = job.message_payload_json ? JSON.parse(job.message_payload_json) : {};
+        const templateName = messageJson.template_id;
+        if (!templateName) {
+          // Fail-closed: no template specified → never send.
+          await db
+            .prepare(`UPDATE campaign_job_targets SET status = 'failed', reason = 'hsm_template_required', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+            .bind(target.id)
+            .run();
+          failed++;
+          continue;
+        }
+        let resolvedTemplate: HsmTemplate | null = null;
+        try {
+          resolvedTemplate = await hsm.resolveForSend({
+            tenantId: job.tenant_id,
+            templateName,
+            templateVersion: messageJson.template_version || "1",
+            languageCode: messageJson.language || "es-MX",
+            variables: messageJson.variables || {},
+          });
+        } catch (err: any) {
+          // Fail-closed: template not found / not approved / variables missing → never reach Telnyx.
+          await db
+            .prepare(`UPDATE campaign_job_targets SET status = 'failed', reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+            .bind(err?.message || "hsm_template_resolution_failed", target.id)
+            .run();
+          failed++;
+          continue;
+        }
         sendResult = await whatsApp.send({
           to: destination,
-          templateName: messageJson.template_id || "default",
-          templateVersion: messageJson.template_version || "1",
-          languageCode: messageJson.language || "es-MX",
+          templateName: resolvedTemplate.template_name,
+          templateVersion: resolvedTemplate.template_version,
+          languageCode: resolvedTemplate.language_code,
           variables: messageJson.variables || {},
           senderBrand: job.sender_brand,
         });
