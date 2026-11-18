@@ -15,6 +15,18 @@ export type CampaignVariables = { user?: string | null; tenant?: string | null }
 
 export const campaignsRouter = new Hono<{ Bindings: Env; Variables: CampaignVariables }>();
 
+export function isCampaignTenantAllowed(env: Env, tenant: unknown): boolean {
+  return (
+    typeof tenant === "string" &&
+    tenant.length > 0 &&
+    (env.CAMPAIGN_ALLOWED_TENANTS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .includes(tenant)
+  );
+}
+
 // ------------------------------------------------------------------
 // Auth middleware: same as /api/internal/* — X-StayPuft-Key / X-Ark-Internal-Key / Bearer
 // ------------------------------------------------------------------
@@ -38,12 +50,35 @@ campaignsRouter.use("*", async (c, next) => {
     user = "staypuft";
   } else if ((expectedService || expectedToken) && (provided === expectedService || provided === expectedToken)) {
     user = "internal_service";
-  } else if ((c.env?.ENVIRONMENT || "development") === "production") {
-    return c.json({ error: "Unauthorized: internal key not configured." }, 401);
+  } else {
+    return c.json({ error: "Unauthorized: invalid or missing internal key." }, 401);
   }
 
   c.set("user", user);
   c.set("tenant", tenant);
+  await next();
+});
+
+campaignsRouter.use("*", async (c, next) => {
+  if (!c.env.DB) return c.json({ error: "D1 no disponible." }, 503);
+  const path = new URL(c.req.url).pathname.split("/").filter(Boolean);
+  const route = path[path.indexOf("campaigns") + 1];
+  let tenantId: unknown;
+  if (route === "dispatch" || (route === "templates" && path.length === path.indexOf("campaigns") + 2 && c.req.method === "POST")) {
+    const body = await c.req.json().catch(() => null);
+    tenantId = body?.tenant_id;
+  } else if (route === "templates" && path.length === path.indexOf("campaigns") + 2) {
+    tenantId = c.req.query("tenant_id");
+  } else if (route === "templates") {
+    const template = await c.env.DB.prepare("SELECT tenant_id FROM whatsapp_hsm_templates WHERE id = ? LIMIT 1")
+      .bind(path[path.indexOf("campaigns") + 2])
+      .first<{ tenant_id: string | null }>();
+    tenantId = template?.tenant_id;
+  } else {
+    const job = await c.env.DB.prepare("SELECT tenant_id FROM campaign_jobs WHERE id = ? LIMIT 1").bind(route).first<{ tenant_id: string }>();
+    tenantId = job?.tenant_id;
+  }
+  if (!isCampaignTenantAllowed(c.env, tenantId)) return c.json({ error: "Tenant de campañas no autorizado." }, 403);
   await next();
 });
 
@@ -65,6 +100,12 @@ campaignsRouter.post("/dispatch", async (c) => {
     if (channel === "voice") return c.json({ error: "VOICE_NOT_CONFIGURED" }, 400);
     if (!["whatsapp", "email"].includes(channel)) {
       return c.json({ error: "channel must be whatsapp | email." }, 400);
+    }
+    if (
+      channel === "email" &&
+      (typeof message.subject !== "string" || typeof message.body !== "string" || /\{\{|\}\}|\{[\w.-]+\}/.test(`${message.subject}\n${message.body}`))
+    ) {
+      return c.json({ error: "El correo no admite variables de contacto." }, 400);
     }
     if (
       !["explicit", "filter"].includes(audience.mode) ||
@@ -253,6 +294,8 @@ campaignsRouter.post("/dispatch", async (c) => {
     if (dry_run) {
       const sendAt = schedule?.start_at || null;
       const excluded: Array<{ contact_id: string; channel: string; reason: string }> = [];
+      const eligibleContactIds: string[] = [];
+      const deferredContactIds: string[] = [];
       let wouldSend = 0;
       let deferred = 0;
 
@@ -287,16 +330,18 @@ campaignsRouter.post("/dispatch", async (c) => {
         if (!result.allowed) {
           if (result.deferred) {
             deferred++;
+            deferredContactIds.push(ct.contact_id);
           } else {
             excluded.push({ contact_id: ct.contact_id, channel, reason: result.reason || "excluded" });
           }
           continue;
         }
         wouldSend++;
+        eligibleContactIds.push(ct.contact_id);
       }
 
       const unitCost = UNIT_COSTS_USD[channel as keyof typeof UNIT_COSTS_USD] ?? 0;
-      const costEstimate = { channel, unit_cost_usd: unitCost, total_usd: Math.round((wouldSend * unitCost + Number.EPSILON) * 100) / 100 };
+      const costEstimate = { channel, unit_cost_usd: unitCost, total_usd: Math.round(((wouldSend + deferred) * unitCost + Number.EPSILON) * 100) / 100 };
 
       // Preview TTL: 2 hours from now
       const previewTtl = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
@@ -304,12 +349,15 @@ campaignsRouter.post("/dispatch", async (c) => {
       const preview = {
         job_id,
         status: "pending_approval",
+        preview_revision: crypto.randomUUID(),
         preview_ttl: previewTtl,
         audience_total: audienceTotal,
         would_send: wouldSend,
         excluded_by_rule: excluded,
         deferred,
         cost_estimate: costEstimate,
+        eligible_contact_ids: eligibleContactIds,
+        deferred_contact_ids: deferredContactIds,
       };
       const update = await db
         .prepare("UPDATE campaign_jobs SET preview_ttl = ?, preview_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending_approval'")
@@ -431,7 +479,7 @@ campaignsRouter.post("/:job_id/approve", async (c) => {
   try {
     const jobId = c.req.param("job_id");
     const body = await c.req.json().catch(() => ({}));
-    const { approved_by } = body || {};
+    const { approved_by, preview_revision } = body || {};
 
     if (!c.env.DB) return c.json({ error: "D1 no disponible." }, 503);
     const db = c.env.DB;
@@ -448,13 +496,17 @@ campaignsRouter.post("/:job_id/approve", async (c) => {
     if (!job.preview_json || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       return c.json({ error: "Preview expirado. Re-previsualizar y volver a aprobar." }, 409);
     }
+    const preview = JSON.parse(job.preview_json);
+    if (typeof preview_revision !== "string" || !preview_revision || preview.preview_revision !== preview_revision) {
+      return c.json({ error: "La vista previa cambió. Revísala antes de aprobar." }, 409);
+    }
 
     const now = new Date().toISOString();
     const updated = await db
       .prepare(
-        `UPDATE campaign_jobs SET status = 'approved', approved_by_user_id = ?, approved_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending_approval' AND preview_ttl = ? AND preview_ttl > ?`,
+        `UPDATE campaign_jobs SET status = 'approved', approved_by_user_id = ?, approved_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending_approval' AND preview_ttl = ? AND preview_ttl > ? AND preview_json = ?`,
       )
-      .bind(approved_by ?? c.get("user") ?? null, now, jobId, job.preview_ttl, now)
+      .bind(approved_by ?? c.get("user") ?? null, now, jobId, job.preview_ttl, now, job.preview_json)
       .run();
     if (!updated.meta.changes) return c.json({ error: "La vista previa cambió o el trabajo ya no está pendiente." }, 409);
 
@@ -633,6 +685,16 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
 
   for (const job of jobs) {
     const tenantId = job.tenant_id;
+    if (!isCampaignTenantAllowed(env, tenantId)) {
+      console.error("[campaigns] Tenant de campañas no autorizado", tenantId);
+      continue;
+    }
+    const preview = job.preview_json ? JSON.parse(job.preview_json) : null;
+    if (!preview || !Array.isArray(preview.eligible_contact_ids) || !Array.isArray(preview.deferred_contact_ids)) {
+      console.error("[campaigns] Falta la audiencia aprobada", job.id);
+      continue;
+    }
+    const approvedContacts = new Set([...preview.eligible_contact_ids, ...preview.deferred_contact_ids]);
     const channel = job.channel;
     const unitCost = UNIT_COSTS_USD[channel as keyof typeof UNIT_COSTS_USD] ?? 0;
 
@@ -667,6 +729,14 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
       if (!claim.meta.changes) continue;
       processed++;
 
+      if (!approvedContacts.has(target.contact_id)) {
+        await db
+          .prepare("UPDATE campaign_job_targets SET status = 'excluded', reason = 'preview_excluded', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .bind(target.id)
+          .run();
+        continue;
+      }
+
       // G9: tenant re-verification at send time
       const tenantOk = await guardrails.verifyTenant(tenantId, target.contact_id);
       if (!tenantOk) {
@@ -680,11 +750,11 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
 
       const current = await db
         .prepare(
-          `SELECT c.phone, c.whatsapp, c.email FROM sales_contacts c
+          `SELECT c.phone, c.whatsapp, c.email, a.origin FROM sales_contacts c
            JOIN sales_accounts a ON a.id = c.account_id WHERE c.id = ? AND a.tenant_id = ? LIMIT 1`,
         )
         .bind(target.contact_id, tenantId)
-        .first<{ phone: string | null; whatsapp: string | null; email: string | null }>();
+        .first<{ phone: string | null; whatsapp: string | null; email: string | null; origin: string | null }>();
       const destination = target.destination;
       const rawPhone = channel === "whatsapp" ? current?.whatsapp : current?.phone;
       const normalized = rawPhone ? normalizarTelefonoE164(rawPhone) : null;
@@ -717,6 +787,42 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
           .bind(status, result.reason || "excluded", target.id)
           .run();
         continue; // excluded/deferred — no send, no usage event
+      }
+
+      if (current?.origin === "ledger_comms" && (!env.LEDGER_API_URL || !env.LEDGER_COMMS_INTERNAL_KEY)) {
+        await db
+          .prepare("UPDATE campaign_job_targets SET status = 'deferred', reason = 'ledger_consent_unavailable', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .bind(target.id)
+          .run();
+        console.error("[campaigns] Falta configuración para verificar consentimiento en Ledger");
+        continue;
+      }
+      if (current?.origin === "ledger_comms" && env.LEDGER_API_URL && env.LEDGER_COMMS_INTERNAL_KEY) {
+        let ledgerConsent: boolean | null = null;
+        try {
+          const consentUrl = new URL("/api/comms/consent", env.LEDGER_API_URL);
+          consentUrl.searchParams.set("tenant_id", tenantId);
+          consentUrl.searchParams.set("contact_id", target.contact_id);
+          const consentResponse = await fetch(consentUrl, { headers: { "X-Ark-Internal-Key": env.LEDGER_COMMS_INTERNAL_KEY } });
+          if (consentResponse.ok) {
+            const consentData: unknown = await consentResponse.json();
+            if (consentData && typeof consentData === "object" && "allowed" in consentData && typeof consentData.allowed === "boolean") {
+              ledgerConsent = consentData.allowed;
+            }
+          }
+        } catch (error) {
+          console.error("[campaigns] Falló la consulta de consentimiento de Ledger", error);
+        }
+        if (ledgerConsent !== true) {
+          const status = ledgerConsent === false ? "excluded" : "deferred";
+          const reason = ledgerConsent === false ? "consent_missing" : "ledger_consent_unavailable";
+          if (ledgerConsent === null) console.error("[campaigns] No se pudo verificar el consentimiento de Ledger");
+          await db
+            .prepare("UPDATE campaign_job_targets SET status = ?, reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+            .bind(status, reason, target.id)
+            .run();
+          continue;
+        }
       }
 
       // Attempt send
@@ -775,7 +881,7 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
 
         // Pre-send gate (existing gate.ts)
         const { PreSendGate } = await import("../services/gate");
-        const gate = PreSendGate.check(subject, html);
+        const gate = PreSendGate.check(subject, html, { autoSanitizeDashes: false });
         if (!gate.ok) {
           await db
             .prepare(`UPDATE campaign_job_targets SET status = 'excluded', reason = 'pre_send_gate', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
@@ -792,8 +898,8 @@ export async function processDispatch(env: Env, jobId?: string): Promise<{ proce
               body: JSON.stringify({
                 from: fromEmail.includes("<") ? fromEmail : `ARK Systems <${fromEmail}>`,
                 to: [destination],
-                subject: gate.sanitizedSubject || subject,
-                html: gate.sanitizedBody || html,
+                subject,
+                text: html,
               }),
             });
             if (resp.ok) {

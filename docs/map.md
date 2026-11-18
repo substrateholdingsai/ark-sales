@@ -1,3 +1,18 @@
+## Comunicaciones CANACO (rama local)
+
+Las rutas de campañas y la ingesta de contactos requieren `CAMPAIGN_ALLOWED_TENANTS`, una
+lista de identificadores exactos separados por comas. Para contactos ingeridos por Ledger,
+el procesador también requiere `LEDGER_API_URL` y el secreto `LEDGER_COMMS_INTERNAL_KEY`,
+igual a `SALES_WORKER_INTERNAL_KEY` de Ledger. Sin verificación de consentimiento vigente
+el destino se difiere; un consentimiento revocado se excluye. La vista previa se aprueba
+por `preview_revision` y conserva los destinatarios autorizados y diferidos. No se admiten
+variables en correos, SMS ni Voice AI.
+
+La prueba entre repositorios se incluye en el gate ejecutado desde Sales con
+`$env:LEDGER_COMMS_PATH='C:\Users\PAV\Desktop\e-commerce\ark-ledger'; npm test`.
+Sin esta variable, Vitest omite esa prueba. Las migraciones y configuraciones de producción
+siguen siendo pasos pendientes; esta rama no las aplica.
+
 ## Lead Harvester (Python)
 - Ubicación: scripts/python/lead_harvester/
 - FASE 1-2: BaseHarvester, DENUE, profiling HTTP, scoring híbrido, ingesta.

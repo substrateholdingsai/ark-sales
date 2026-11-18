@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Env, AgentSkill, LeadExecutiveContext } from "../types";
 import { ensureAccountContactForLead, ensureTask } from "../crm/automation";
 import { internalEmailRouter } from "./internalEmail";
+import { isCampaignTenantAllowed } from "./campaigns";
 
 export type InternalVariables = {
   operator?: "staypuft" | "grok_bot" | "internal_service";
@@ -126,6 +127,68 @@ internalRouter.use("*", async (c, next) => {
 
 // Rutas de Email para Operador StayPuft y Servicios Internos
 internalRouter.route("/email", internalEmailRouter);
+
+internalRouter.post("/leads/comms-ingest", async (c) => {
+  const provided =
+    c.req.header("X-Ark-Internal-Key") ||
+    c.req.header("X-Internal-Token") ||
+    c.req.header("X-StayPuft-Key") ||
+    (c.req.header("Authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!provided || ![c.env.INTERNAL_SERVICE_KEY, c.env.INTERNAL_API_TOKEN, c.env.STAYPUFT_API_KEY].some((key) => key && key === provided)) {
+    return c.json({ error: "Unauthorized: invalid or missing internal key." }, 401);
+  }
+  const body = await c.req.json().catch(() => null);
+  if (
+    !body ||
+    !isCampaignTenantAllowed(c.env, body.tenant_id) ||
+    typeof body.ledger_lead_id !== "string" ||
+    !body.ledger_lead_id ||
+    typeof body.email !== "string" ||
+    !body.email.includes("@") ||
+    typeof body.name !== "string" ||
+    !body.name.trim() ||
+    typeof body.company !== "string" ||
+    !body.company.trim() ||
+    body.consent !== true
+  ) {
+    return c.json({ error: "Tenant, identidad y consentimiento de comunicaciones válidos son requeridos." }, 400);
+  }
+  if (!c.env.DB) return c.json({ error: "D1 no disponible." }, 503);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([body.tenant_id, body.ledger_lead_id])));
+  const id = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const accountId = `comms_acc_${id}`;
+  const contactId = `comms_ct_${id}`;
+  const phone = normalizeMexicanPhone(body.phone);
+  const db = c.env.DB;
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO sales_accounts (id, name, normalized_name, origin, tenant_id)
+       VALUES (?, ?, ?, 'ledger_comms', ?)
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, normalized_name = excluded.normalized_name, updated_at = CURRENT_TIMESTAMP
+       WHERE sales_accounts.tenant_id = excluded.tenant_id`,
+      )
+      .bind(accountId, body.company.trim(), body.company.trim().toLowerCase(), body.tenant_id),
+    db
+      .prepare(
+        `INSERT INTO sales_contacts (id, account_id, name, email, phone, whatsapp, consent_status)
+       VALUES (?, ?, ?, ?, ?, ?, 'opt_in')
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, email = excluded.email, phone = excluded.phone,
+         whatsapp = excluded.whatsapp, consent_status = excluded.consent_status, updated_at = CURRENT_TIMESTAMP
+       WHERE sales_contacts.account_id = excluded.account_id`,
+      )
+      .bind(contactId, accountId, body.name.trim(), body.email.trim().toLowerCase(), phone.telefono, phone.whatsapp),
+  ]);
+  const contact = await db
+    .prepare(
+      `SELECT c.id FROM sales_contacts c JOIN sales_accounts a ON a.id = c.account_id
+     WHERE c.id = ? AND a.tenant_id = ? AND c.account_id = ? LIMIT 1`,
+    )
+    .bind(contactId, body.tenant_id, accountId)
+    .first();
+  if (!contact) return c.json({ error: "No se pudo verificar el contacto del tenant." }, 409);
+  return c.json({ tenant_id: body.tenant_id, ledger_lead_id: body.ledger_lead_id, contact_id: contactId });
+});
 
 /**
  * Ingesta Federada de Leads y Altas de SIEM CANACO (/api/internal/leads/ingest)

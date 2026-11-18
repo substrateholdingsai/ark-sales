@@ -75,16 +75,26 @@ export class GuardrailService {
 
     // Check current active REPEP version
     const versionRow = (await this.db.prepare("SELECT * FROM repep_list_version WHERE id = 'current' AND status = 'active' LIMIT 1").bind().first()) as any;
-    if (!versionRow) {
-      // No active REPEP version -> fail-closed (block all sends)
+    const expiresAt = typeof versionRow?.expires_at === "string" ? Date.parse(versionRow.expires_at) : NaN;
+    const cutOff = typeof versionRow?.cut_off_date === "string" ? Date.parse(versionRow.cut_off_date) : NaN;
+    if (
+      !versionRow ||
+      !Number.isInteger(versionRow.list_version) ||
+      versionRow.list_version < 1 ||
+      !Number.isFinite(expiresAt) ||
+      !Number.isFinite(cutOff) ||
+      cutOff > Date.now() ||
+      expiresAt <= Date.now() ||
+      expiresAt <= cutOff ||
+      expiresAt - cutOff > 35 * 24 * 60 * 60 * 1000
+    ) {
       return { allowed: false, reason: "repep_expired" };
     }
 
-    // Check if this phone is suppressed in the active version
-    const now = new Date().toISOString();
+    // A matching stale entry is not evidence that the contact has opted back in.
     const suppressed = (await this.db
-      .prepare("SELECT id FROM repep_list WHERE phone_hash = ? AND channel = ? AND list_version = ? AND expires_at > ? LIMIT 1")
-      .bind(phoneHash, channel, versionRow.list_version, now)
+      .prepare("SELECT id FROM repep_list WHERE phone_hash = ? AND channel = ? AND list_version = ? LIMIT 1")
+      .bind(phoneHash, channel, versionRow.list_version)
       .first()) as any;
 
     if (suppressed) return { allowed: false, reason: "repep_expired" };

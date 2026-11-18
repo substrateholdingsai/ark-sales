@@ -119,12 +119,38 @@ describe("GuardrailService (Step 1)", () => {
 
     it("allows send when repep_list is empty (no matching suppression)", async () => {
       const db = makeMockDb([
-        { name: "repep_list_version", rows: [{ id: "current", list_version: 1, cut_off_date: "2026-10-01", expires_at: "2026-11-05", status: "active" }] },
+        {
+          name: "repep_list_version",
+          rows: [
+            {
+              id: "current",
+              list_version: 1,
+              cut_off_date: new Date(Date.now() - 86400000).toISOString(),
+              expires_at: new Date(Date.now() + 86400000).toISOString(),
+              status: "active",
+            },
+          ],
+        },
         { name: "repep_list", rows: [] },
       ]);
       const gs = new GuardrailService(db, {} as any);
       const result = await gs.checkRepep("+525512345678", "whatsapp");
       expect(result.allowed).toBe(true);
+    });
+
+    it("blocks expired or invalid active versions and stale matching entries", async () => {
+      for (const expiresAt of ["2020-01-01", "invalid"]) {
+        const db = makeMockDb([{ name: "repep_list_version", rows: [{ list_version: 1, cut_off_date: "2019-12-01", expires_at: expiresAt }] }]);
+        expect((await new GuardrailService(db, {} as any).checkRepep("+525512345678", "whatsapp")).allowed).toBe(false);
+      }
+      const db = makeMockDb([
+        {
+          name: "repep_list_version",
+          rows: [{ list_version: 1, cut_off_date: new Date(Date.now() - 86400000).toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString() }],
+        },
+        { name: "repep_list", rows: [{ id: "stale", expires_at: "2020-01-01" }] },
+      ]);
+      expect((await new GuardrailService(db, {} as any).checkRepep("+525512345678", "whatsapp")).allowed).toBe(false);
     });
   });
 
@@ -231,7 +257,18 @@ describe("GuardrailService (Step 1)", () => {
         { name: "sales_contacts", rows: [{ id: "ct_1", consent_status: "opt_out", contact_preferences_json: null }] },
         { name: "sales_accounts", rows: [{ id: "acc_1", tenant_id: "acc_1" }] },
         { name: "crm_dnc_list", rows: [] },
-        { name: "repep_list_version", rows: [{ id: "current", list_version: 1, cut_off_date: "2026-10-01", expires_at: "2026-11-05", status: "active" }] },
+        {
+          name: "repep_list_version",
+          rows: [
+            {
+              id: "current",
+              list_version: 1,
+              cut_off_date: new Date(Date.now() - 86400000).toISOString(),
+              expires_at: new Date(Date.now() + 86400000).toISOString(),
+              status: "active",
+            },
+          ],
+        },
         { name: "repep_list", rows: [] },
         { name: "contact_frequency_caps", rows: [] },
       ]);
@@ -254,7 +291,18 @@ describe("GuardrailService (Step 1)", () => {
         { name: "sales_contacts", rows: [{ id: "ct_1", consent_status: "opt_in", contact_preferences_json: null }] },
         { name: "sales_accounts", rows: [{ id: "acc_1", tenant_id: "acc_1" }] },
         { name: "crm_dnc_list", rows: [] },
-        { name: "repep_list_version", rows: [{ id: "current", list_version: 1, cut_off_date: "2026-10-01", expires_at: "2026-11-05", status: "active" }] },
+        {
+          name: "repep_list_version",
+          rows: [
+            {
+              id: "current",
+              list_version: 1,
+              cut_off_date: new Date(Date.now() - 86400000).toISOString(),
+              expires_at: new Date(Date.now() + 86400000).toISOString(),
+              status: "active",
+            },
+          ],
+        },
         { name: "repep_list", rows: [] },
         { name: "contact_frequency_caps", rows: [] },
       ]);

@@ -187,6 +187,7 @@ function makeMockDb(tables: Record<string, Row[]> = {}) {
 const baseEnv: any = {
   DB: {} as any,
   STAYPUFT_API_KEY: "test-staypuft-key",
+  CAMPAIGN_ALLOWED_TENANTS: "acc_1",
   ENVIRONMENT: "test",
   TELNYX_API_KEY: "test-telnyx-key",
   TELNYX_PHONE_NUMBER: "+525500000000",
@@ -215,7 +216,13 @@ const contactRow: Row = {
   tenant_id: "acc_1",
 };
 const accountRow: Row = { id: "acc_1", tenant_id: "acc_1" };
-const repepVersionRow: Row = { id: "current", list_version: 1, cut_off_date: "2026-10-01", expires_at: nowPlus2h, status: "active" };
+const repepVersionRow: Row = {
+  id: "current",
+  list_version: 1,
+  cut_off_date: new Date(Date.now() - 86400000).toISOString(),
+  expires_at: nowPlus2h,
+  status: "active",
+};
 
 describe("Campaigns contract routes", () => {
   it("dispatch dry_run returns a pending job with counts + cost", async () => {
@@ -337,7 +344,15 @@ describe("Campaigns contract routes", () => {
   it("approve flips pending_approval -> approved and checks preview TTL", async () => {
     const db = makeMockDb({
       campaign_jobs: [
-        { id: "job_1", status: "pending_approval", preview_ttl: nowPlus2h, preview_json: "{}", tenant_id: "acc_1", channel: "whatsapp", sender_brand: "ARK" },
+        {
+          id: "job_1",
+          status: "pending_approval",
+          preview_ttl: nowPlus2h,
+          preview_json: '{"preview_revision":"rev-1"}',
+          tenant_id: "acc_1",
+          channel: "whatsapp",
+          sender_brand: "ARK",
+        },
       ],
     });
     const app = mountCampaignsApp(db);
@@ -347,7 +362,7 @@ describe("Campaigns contract routes", () => {
       new Request("http://localhost/api/internal/campaigns/job_1/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-StayPuft-Key": "test-staypuft-key" },
-        body: JSON.stringify({ approved_by: "pavel" }),
+        body: JSON.stringify({ approved_by: "pavel", preview_revision: "rev-1" }),
       }),
       env,
     );
@@ -489,6 +504,7 @@ describe("processDispatch integration (guardrails -> send -> outcomes + usage_ev
       campaign_jobs: [
         {
           id: "job_int_1",
+          preview_json: JSON.stringify({ eligible_contact_ids: ["ct_1", "ct_2"], deferred_contact_ids: [] }),
           status: "approved",
           tenant_id: "acc_1",
           channel: "whatsapp",
@@ -576,6 +592,7 @@ describe("processDispatch integration (guardrails -> send -> outcomes + usage_ev
       campaign_jobs: [
         {
           id: "job_hsm",
+          preview_json: JSON.stringify({ eligible_contact_ids: ["ct_1"], deferred_contact_ids: [] }),
           status: "approved",
           tenant_id: "acc_1",
           channel: "whatsapp",
@@ -627,6 +644,7 @@ describe("processDispatch integration (guardrails -> send -> outcomes + usage_ev
       campaign_jobs: [
         {
           id: "job_notpl",
+          preview_json: JSON.stringify({ eligible_contact_ids: ["ct_1"], deferred_contact_ids: [] }),
           status: "approved",
           tenant_id: "acc_1",
           channel: "whatsapp",

@@ -250,6 +250,8 @@ export interface Env {
   INTERNAL_SERVICE_KEY?: string;
   INTERNAL_API_TOKEN?: string;
   STAYPUFT_API_KEY?: string;
+  CAMPAIGN_ALLOWED_TENANTS?: string;
+  LEDGER_COMMS_INTERNAL_KEY?: string;
   WEBHOOK_SECRET?: string;
   ARK_WEBHOOK_SECRET?: string;
   CONEKTA_API_KEY?: string;
